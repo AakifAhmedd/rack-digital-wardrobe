@@ -142,6 +142,32 @@ select, input[type="text"], input[type="number"], input[type="password"] {
 }
 .mini-row:last-child { border-bottom: none; }
 
+/* ---------------- charts ---------------- */
+.chart-svg { width: 100%; height: auto; margin-top: .3rem; }
+.chart-svg .chart-label { font-family: var(--font-body); font-size: 12px; fill: var(--ink-soft); }
+.chart-svg .chart-value { font-family: var(--font-mono); font-size: 11px; fill: var(--ink); }
+.chart-svg .chart-track { fill: var(--canvas); }
+
+/* ---------------- floating action button ---------------- */
+.fab {
+  position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 40;
+  display: flex; align-items: center; gap: .5rem;
+  background: var(--ink); color: var(--accent-ink); border: none; border-radius: 30px;
+  padding: .8rem 1.2rem .8rem 1rem; box-shadow: 0 8px 24px rgba(35,32,27,.3);
+  cursor: pointer; font-size: .88rem; font-weight: 500;
+}
+.fab:hover { background: #38332A; }
+.fab__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--accent); font-size: .85rem;
+}
+.fab.is-busy { opacity: .7; cursor: wait; }
+@media (max-width: 640px) {
+  .fab { right: 1rem; bottom: 1rem; padding: .75rem 1rem .75rem .85rem; }
+  .fab__label { display: none; }
+  .fab__icon { width: 26px; height: 26px; }
+}
+
 .tag-chip {
   display: inline-block; font-family: var(--font-mono); font-size: .72rem;
   background: var(--canvas); border: 1px solid var(--line); border-radius: 20px;
@@ -178,7 +204,15 @@ select, input[type="text"], input[type="number"], input[type="password"] {
 .item-card__stats .mono { font-size: .95rem; font-weight: 600; }
 .item-card__stats small { font-size: .68rem; color: var(--ink-soft); text-transform: lowercase; }
 .item-card__last { font-size: .75rem; margin: 0 0 .7rem; }
-.item-card__actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.item-card__actions { display: flex; flex-direction: column; gap: .5rem; }
+.item-card__actions-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+.btn--wear { width: 100%; padding: .65rem 1rem; font-size: .92rem; }
+.item-card--retired { opacity: .82; background: var(--canvas); }
+.retired-badge {
+  display: inline-block; font-size: .72rem; font-family: var(--font-mono);
+  color: var(--ink-soft); background: var(--surface-raised); border: 1px solid var(--line);
+  border-radius: 20px; padding: .15rem .6rem; margin: .3rem 0 0;
+}
 
 /* ---------------- masters ---------------- */
 .subnav { display: flex; gap: .4rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .75rem; }

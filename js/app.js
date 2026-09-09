@@ -57,6 +57,17 @@ const G = {
   },
 };
 
+/* ---------------- constants ---------------- */
+const GIFTED_TAG_ID = 'tag_gifted';
+const RETIRE_REASONS = [
+  { id: 'donated', label: 'Donated' },
+  { id: 'sold', label: 'Sold' },
+  { id: 'disposed', label: 'Disposed' },
+  { id: 'other', label: 'Other' },
+];
+function activeItems() { return Store.state.items.filter(i => i.status !== 'retired'); }
+function retiredItems() { return Store.state.items.filter(i => i.status === 'retired'); }
+
 /* ---------------- rule engine ---------------- */
 function matchRule(rule, item) {
   if (rule.category && item.categoryId !== rule.category) return false;
@@ -79,7 +90,7 @@ function matchActivity(activity, item) {
 function itemsForActivity(activityId) {
   const act = G.activity(activityId);
   if (!act) return [];
-  return Store.state.items.filter(it => matchActivity(act, it));
+  return activeItems().filter(it => matchActivity(act, it));
 }
 
 /* ---------------- item helpers ---------------- */
@@ -96,9 +107,42 @@ function costPerWear(item) {
   return item.cost / item.wearCount;
 }
 function avgCostPerWear() {
-  const vals = Store.state.items.map(costPerWear).filter(v => v !== null && isFinite(v));
+  const vals = activeItems().map(costPerWear).filter(v => v !== null && isFinite(v));
   if (!vals.length) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+/* ---------------- tiny SVG chart helpers ----------------
+   Hand-rolled, dependency-free, styled with our own tokens
+   rather than a generic charting library's default look. */
+function svgHBarChart(rows, opts = {}) {
+  // rows: [{ label, value, color }]  — value assumed >= 0
+  const width = opts.width || 560;
+  const rowH = 30;
+  const gap = 10;
+  const labelW = opts.labelW || 132;
+  const fmt = opts.format || (v => Math.round(v).toLocaleString());
+  const longestValue = Math.max(...rows.map(r => fmt(r.value).length), 3);
+  const valueW = Math.max(56, longestValue * 7.2 + 14);
+  const barAreaW = width - labelW - valueW;
+  const height = rows.length * (rowH + gap) - gap + 8;
+  const max = Math.max(1, ...rows.map(r => r.value));
+
+  const bars = rows.map((r, i) => {
+    const y = i * (rowH + gap);
+    const w = Math.max(2, (r.value / max) * barAreaW);
+    const color = r.color || 'var(--accent)';
+    return `
+      <text x="0" y="${y + rowH / 2 + 4}" class="chart-label">${esc(r.label)}</text>
+      <rect x="${labelW}" y="${y + 4}" width="${barAreaW}" height="${rowH - 8}" rx="4" class="chart-track"></rect>
+      <rect x="${labelW}" y="${y + 4}" width="${w}" height="${rowH - 8}" rx="4" fill="${color}"></rect>
+      <text x="${labelW + barAreaW + 8}" y="${y + rowH / 2 + 4}" class="chart-value">${esc(fmt(r.value))}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${width} ${Math.max(height, rowH)}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'chart')}">${bars}</svg>`;
+}
+function chartEmpty(msg) {
+  return `<p class="muted" style="padding:.5rem 0;">${esc(msg)}</p>`;
 }
 
 /* ---------------- modal system ---------------- */
@@ -144,7 +188,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Modal.clos
 const TABS = ['dashboard', 'wardrobe', 'masters', 'settings'];
 let activeTab = 'dashboard';
 let activeMasterPanel = 'categories';
-let wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', sort: 'recent' };
+let wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent' };
 
 function switchTab(name) {
   activeTab = name;
@@ -165,10 +209,12 @@ function render() {
    DASHBOARD
    ================================================================ */
 function renderDashboard() {
-  const items = Store.state.items;
+  const allItems = Store.state.items;
+  const items = activeItems();
+  const retired = retiredItems();
   const wrap = el(`<section class="view-section"></section>`);
 
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     wrap.appendChild(el(`
       <div class="empty-state">
         <h2>Your rack is empty</h2>
@@ -176,6 +222,24 @@ function renderDashboard() {
         <button class="btn btn--primary" id="empty-add">Add an item</button>
       </div>`));
     qs('#empty-add', wrap).addEventListener('click', openAddItemModal);
+    appendFab(wrap);
+    return wrap;
+  }
+
+  if (items.length === 0) {
+    wrap.appendChild(el(`
+      <div class="empty-state">
+        <h2>Every item is retired</h2>
+        <p>All ${allItems.length} item${allItems.length === 1 ? '' : 's'} in your rack ${allItems.length === 1 ? 'has' : 'have'} been marked donated, sold, or disposed. Add something new, or review what's retired.</p>
+        <button class="btn btn--primary" id="empty-add">Add an item</button>
+        <button class="btn btn--ghost" id="empty-retired">View retired items</button>
+      </div>`));
+    qs('#empty-add', wrap).addEventListener('click', openAddItemModal);
+    qs('#empty-retired', wrap).addEventListener('click', () => {
+      wardrobeFilters = { ...wardrobeFilters, status: 'retired' };
+      switchTab('wardrobe');
+    });
+    appendFab(wrap);
     return wrap;
   }
 
@@ -184,14 +248,20 @@ function renderDashboard() {
   const totalWears = items.reduce((s, i) => s + (i.wearCount || 0), 0);
   const avgCPW = avgCostPerWear();
 
-  const byCategory = {};
-  const bySubcategory = {};
+  const byCategoryWears = {};
+  const bySubcategoryWears = {};
+  const byCategoryCount = {};
+  const byCategoryCPW = {};
   items.forEach(i => {
-    byCategory[i.categoryId] = (byCategory[i.categoryId] || 0) + (i.wearCount || 0);
-    bySubcategory[i.subcategoryId] = (bySubcategory[i.subcategoryId] || 0) + (i.wearCount || 0);
+    byCategoryWears[i.categoryId] = (byCategoryWears[i.categoryId] || 0) + (i.wearCount || 0);
+    bySubcategoryWears[i.subcategoryId] = (bySubcategoryWears[i.subcategoryId] || 0) + (i.wearCount || 0);
+    byCategoryCount[i.categoryId] = (byCategoryCount[i.categoryId] || 0) + 1;
+    const cpw = costPerWear(i);
+    if (cpw !== null) {
+      (byCategoryCPW[i.categoryId] ||= []).push(cpw);
+    }
   });
-  const topCat = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0];
-  const topSub = Object.entries(bySubcategory).sort((a, b) => b[1] - a[1])[0];
+  const topSub = Object.entries(bySubcategoryWears).sort((a, b) => b[1] - a[1])[0];
 
   const mostWorn = [...items].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0)).slice(0, 5);
   const leastWorn = [...items].sort((a, b) => (a.wearCount || 0) - (b.wearCount || 0)).slice(0, 5);
@@ -205,10 +275,60 @@ function renderDashboard() {
       <div class="stat-card"><span class="stat-card__num">${neverWorn}</span><span class="stat-card__label">Never worn</span></div>
       <div class="stat-card"><span class="stat-card__num">${fmtMoney(totalValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
       <div class="stat-card"><span class="stat-card__num">${avgCPW !== null ? fmtMoney(avgCPW) : '—'}</span><span class="stat-card__label">Avg. cost per wear</span></div>
-      <div class="stat-card"><span class="stat-card__num">${topCat ? esc(G.category(topCat[0]).name) : '—'}</span><span class="stat-card__label">Most-worn category</span></div>
+      <div class="stat-card"><span class="stat-card__num">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span><span class="stat-card__label">Most-worn subcategory</span></div>
     </div>
   `));
 
+  /* ---- charts ---- */
+  const chartCols = el(`<div class="dash-cols"></div>`);
+
+  const wearRows = Object.entries(byCategoryWears)
+    .map(([id, wears]) => ({ label: G.category(id).name, value: wears }))
+    .sort((a, b) => b.value - a.value).slice(0, 8);
+  chartCols.appendChild(el(`
+    <div class="panel">
+      <h3>Wears by category</h3>
+      ${wearRows.some(r => r.value > 0) ? svgHBarChart(wearRows, { color: 'var(--accent)', aria: 'Wears by category' }) : chartEmpty('Log a few wears to see this fill in.')}
+    </div>`));
+
+  const cpwRows = Object.entries(byCategoryCPW)
+    .map(([id, vals]) => ({ label: G.category(id).name, value: vals.reduce((a, b) => a + b, 0) / vals.length }))
+    .sort((a, b) => b.value - a.value).slice(0, 8);
+  chartCols.appendChild(el(`
+    <div class="panel">
+      <h3>Avg. cost per wear by category</h3>
+      ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', format: v => fmtMoney(v), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
+    </div>`));
+
+  const countRows = Object.entries(byCategoryCount)
+    .map(([id, n]) => ({ label: G.category(id).name, value: n }))
+    .sort((a, b) => b.value - a.value).slice(0, 8);
+  chartCols.appendChild(el(`
+    <div class="panel">
+      <h3>Wardrobe composition</h3>
+      ${svgHBarChart(countRows, { color: 'var(--good)', aria: 'Item count by category' })}
+    </div>`));
+
+  if (retired.length) {
+    const reasonCounts = {};
+    retired.forEach(i => { reasonCounts[i.retiredReason || 'other'] = (reasonCounts[i.retiredReason || 'other'] || 0) + 1; });
+    const reasonRows = RETIRE_REASONS.map(r => ({ label: r.label, value: reasonCounts[r.id] || 0 })).filter(r => r.value > 0);
+    const retiredPanel = el(`
+      <div class="panel">
+        <h3>Retired items</h3>
+        ${svgHBarChart(reasonRows, { color: 'var(--ink-soft)', aria: 'Retired items by reason' })}
+        <button class="btn btn--ghost btn--small" id="view-retired" style="margin-top:.6rem;">View ${retired.length} retired item${retired.length === 1 ? '' : 's'}</button>
+      </div>`);
+    qs('#view-retired', retiredPanel).addEventListener('click', () => {
+      wardrobeFilters = { ...wardrobeFilters, status: 'retired' };
+      switchTab('wardrobe');
+    });
+    chartCols.appendChild(retiredPanel);
+  }
+
+  wrap.appendChild(chartCols);
+
+  /* ---- lists ---- */
   const cols = el(`<div class="dash-cols"></div>`);
 
   const mkList = (title, list, renderRow) => {
@@ -241,13 +361,40 @@ function renderDashboard() {
         <button class="btn btn--ghost" id="goto-unused">Review unused items</button>
       </div>`);
     qs('#goto-unused', donate).addEventListener('click', () => {
-      wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', sort: 'least' };
+      wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'least' };
       switchTab('wardrobe');
     });
     wrap.appendChild(donate);
   }
 
+  appendFab(wrap);
   return wrap;
+}
+
+/* floating "push to cloud" button — dashboard only, push-only by design */
+function appendFab(wrap) {
+  const fab = el(`
+    <button class="fab" id="dash-fab" title="Push wardrobe to cloud">
+      <span class="fab__icon">&#8593;</span><span class="fab__label">Push to cloud</span>
+    </button>`);
+  fab.addEventListener('click', async () => {
+    if (!Sync.getToken()) {
+      toast('Add a GitHub token in Settings first', 'warn');
+      return;
+    }
+    fab.classList.add('is-busy');
+    fab.querySelector('.fab__label').textContent = 'Pushing…';
+    try {
+      await Sync.pushToCloud(Store.state);
+      toast('Pushed to cloud');
+    } catch (err) {
+      toast(err.message, 'warn');
+    } finally {
+      fab.classList.remove('is-busy');
+      fab.querySelector('.fab__label').textContent = 'Push to cloud';
+    }
+  });
+  wrap.appendChild(fab);
 }
 
 /* ================================================================
@@ -260,6 +407,11 @@ function renderWardrobe() {
     <div class="wardrobe-block">
       <div class="toolbar">
         <div class="toolbar__filters">
+          <select id="f-status">
+            <option value="active">Active</option>
+            <option value="retired">Retired</option>
+            <option value="all">All</option>
+          </select>
           <select id="f-category"><option value="">All categories</option></select>
           <select id="f-subcategory"><option value="">All subcategories</option></select>
           <select id="f-brand"><option value="">All brands</option></select>
@@ -282,6 +434,8 @@ function renderWardrobe() {
   wrap.appendChild(toolbar);
 
   const s = Store.state;
+  qs('#f-status', toolbar).value = wardrobeFilters.status || 'active';
+
   const catSel = qs('#f-category', toolbar);
   s.categories.forEach(c => catSel.appendChild(el(`<option value="${c.id}">${esc(c.name)}</option>`)));
   catSel.value = wardrobeFilters.category;
@@ -313,6 +467,7 @@ function renderWardrobe() {
 
   qs('#f-sort', toolbar).value = wardrobeFilters.sort;
 
+  qs('#f-status', toolbar).addEventListener('change', (e) => { wardrobeFilters.status = e.target.value; renderItemGrid(); });
   catSel.addEventListener('change', () => { wardrobeFilters.category = catSel.value; wardrobeFilters.subcategory = ''; refreshSubOptions(); renderItemGrid(); });
   subSel.addEventListener('change', () => { wardrobeFilters.subcategory = subSel.value; renderItemGrid(); });
   brandSel.addEventListener('change', () => { wardrobeFilters.brand = brandSel.value; renderItemGrid(); });
@@ -331,6 +486,9 @@ function renderItemGrid() {
   grid.innerHTML = '';
   const f = wardrobeFilters;
   let items = Store.state.items.filter(i => {
+    const status = f.status || 'active';
+    if (status === 'active' && i.status === 'retired') return false;
+    if (status === 'retired' && i.status !== 'retired') return false;
     if (f.category && i.categoryId !== f.category) return false;
     if (f.subcategory && i.subcategoryId !== f.subcategory) return false;
     if (f.brand && i.brandId !== f.brand) return false;
@@ -352,7 +510,8 @@ function renderItemGrid() {
   else items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
   if (!items.length) {
-    grid.appendChild(el(`<p class="muted" style="padding: 2rem 0;">No items match these filters.</p>`));
+    const msg = (f.status === 'retired') ? "No retired items yet." : "No items match these filters.";
+    grid.appendChild(el(`<p class="muted" style="padding: 2rem 0;">${esc(msg)}</p>`));
     return;
   }
   items.forEach(item => grid.appendChild(itemCard(item)));
@@ -364,6 +523,7 @@ function itemCard(item) {
   const sub = G.subcategory(item.subcategoryId);
   const cpw = costPerWear(item);
   const avg = avgCostPerWear();
+  const isRetired = item.status === 'retired';
   let cpwClass = '';
   if (cpw !== null && avg !== null) cpwClass = cpw <= avg ? 'tag-chip--good' : 'tag-chip--warn';
 
@@ -371,8 +531,10 @@ function itemCard(item) {
     ? `background:${color.hex}`
     : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
 
+  const reasonLabel = RETIRE_REASONS.find(r => r.id === item.retiredReason)?.label || 'Retired';
+
   const card = el(`
-    <article class="item-card">
+    <article class="item-card ${isRetired ? 'item-card--retired' : ''}">
       <div class="item-card__hole"></div>
       <div class="item-card__top">
         <span class="swatch" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
@@ -382,6 +544,7 @@ function itemCard(item) {
         </div>
       </div>
       ${item.subtext ? `<p class="item-card__subtext">${esc(item.subtext)}</p>` : ''}
+      ${isRetired ? `<p class="retired-badge">${esc(reasonLabel)} &middot; ${esc(fmtDate(item.retiredAt))}</p>` : ''}
       <div class="item-card__tags">
         ${(item.tags || []).map(tid => `<span class="tag-chip">${esc(G.tag(tid).name)}</span>`).join('')}
       </div>
@@ -392,36 +555,85 @@ function itemCard(item) {
       </div>
       <p class="item-card__last muted">Last worn: ${fmtDate(item.lastWornAt)}</p>
       <div class="item-card__actions">
-        <button class="btn btn--small btn--primary" data-act="wear">+1 Worn</button>
-        <button class="btn btn--small btn--ghost" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
-        <button class="btn btn--small btn--ghost" data-act="edit">Edit</button>
-        <button class="btn btn--small btn--danger-ghost" data-act="delete">Delete</button>
+        ${isRetired ? '' : `<button class="btn btn--primary btn--wear" data-act="wear">+1 Worn</button>`}
+        <div class="item-card__actions-row">
+          ${isRetired
+            ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
+            : `<button class="btn btn--small btn--ghost" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
+               <button class="btn btn--small btn--ghost" data-act="retire">Retire</button>`}
+          <button class="btn btn--small btn--ghost" data-act="edit">Edit</button>
+          <button class="btn btn--small btn--danger-ghost" data-act="delete">Delete</button>
+        </div>
       </div>
     </article>`);
 
-  qs('[data-act="wear"]', card).addEventListener('click', () => {
-    item.wearCount = (item.wearCount || 0) + 1;
-    item.lastWornAt = Date.now();
-    Store.save();
-    renderItemGrid();
-  });
-  qs('[data-act="undo"]', card).addEventListener('click', () => {
-    if (!item.wearCount) return;
-    item.wearCount -= 1;
-    Store.save();
-    renderItemGrid();
-  });
+  if (!isRetired) {
+    qs('[data-act="wear"]', card).addEventListener('click', () => {
+      item.wearCount = (item.wearCount || 0) + 1;
+      item.lastWornAt = Date.now();
+      Store.save();
+      renderItemGrid();
+    });
+    qs('[data-act="undo"]', card).addEventListener('click', () => {
+      if (!item.wearCount) return;
+      item.wearCount -= 1;
+      Store.save();
+      renderItemGrid();
+    });
+    qs('[data-act="retire"]', card).addEventListener('click', () => openRetireModal(item));
+  } else {
+    qs('[data-act="reactivate"]', card).addEventListener('click', () => {
+      item.status = 'active';
+      item.retiredReason = null;
+      item.retiredAt = null;
+      Store.save();
+      render();
+      toast('Item reactivated');
+    });
+  }
   qs('[data-act="edit"]', card).addEventListener('click', () => openItemModal(item));
   qs('[data-act="delete"]', card).addEventListener('click', () => {
-    Modal.confirm(`Remove "${itemTitle(item)}" from your rack? This can't be undone.`, () => {
+    Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear history. This can't be undone.`, () => {
       Store.state.items = Store.state.items.filter(i => i.id !== item.id);
       Store.save();
       render();
-      toast('Item removed');
-    }, { danger: true, yesLabel: 'Delete' });
+      toast('Item deleted');
+    }, { danger: true, yesLabel: 'Delete permanently' });
   });
 
   return card;
+}
+
+function openRetireModal(item) {
+  const body = el(`
+    <form class="form" id="retire-form">
+      <p class="muted">Retiring keeps "${esc(itemTitle(item))}" and its wear history on record, just out of your active rack.</p>
+      <label>Reason
+        <select name="reason">
+          ${RETIRE_REASONS.map(r => `<option value="${r.id}" ${r.id === 'donated' ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="retire-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">Retire item</button>
+      </div>
+    </form>`);
+  Modal.open('Retire item', body, {
+    onMount: (root) => {
+      qs('#retire-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#retire-form', root).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const reason = new FormData(e.target).get('reason');
+        item.status = 'retired';
+        item.retiredReason = reason;
+        item.retiredAt = Date.now();
+        Store.save();
+        Modal.close();
+        render();
+        toast(`Marked as ${RETIRE_REASONS.find(r => r.id === reason).label.toLowerCase()}`);
+      });
+    },
+  });
 }
 
 function openAddItemModal() { openItemModal(null); }
@@ -432,6 +644,7 @@ function openItemModal(existing) {
   const item = existing ? { ...existing } : {
     id: uid('item'), categoryId: '', subcategoryId: '', brandId: '', colorId: '',
     tags: [], subtext: '', cost: '', wearCount: 0, lastWornAt: null, createdAt: Date.now(),
+    status: 'active', retiredReason: null, retiredAt: null,
   };
 
   const body = el(`
@@ -465,13 +678,14 @@ function openItemModal(existing) {
         <div class="tag-check-grid" id="tag-checks"></div>
       </fieldset>
       <div class="form-row">
-        <label>Original cost <span class="muted">(optional)</span>
+        <label><span id="cost-label-text">Original cost</span> <span class="muted">(optional)</span>
           <input type="number" name="cost" min="0" step="0.01" value="${item.cost ?? ''}" placeholder="0.00">
         </label>
         <label>Times worn
           <input type="number" name="wearCount" min="0" step="1" value="${item.wearCount || 0}">
         </label>
       </div>
+      <p class="muted" id="gifted-hint" style="display:none; margin-top:-.6rem;">Tagged as Gifted — enter what it would have cost, so it still shows up in value analytics.</p>
       <div class="form-actions">
         <button type="button" class="btn btn--ghost" id="item-cancel">Cancel</button>
         <button type="submit" class="btn btn--primary">${isEdit ? 'Save changes' : 'Add to rack'}</button>
@@ -513,8 +727,16 @@ function openItemModal(existing) {
 
       refreshSubs();
       refreshTags();
-      catSelect.addEventListener('change', () => { refreshSubs(); refreshTags(); });
-      subSelect.addEventListener('change', refreshTags);
+      catSelect.addEventListener('change', () => { refreshSubs(); refreshTags(); updateGiftedHint(); });
+      subSelect.addEventListener('change', () => { refreshTags(); updateGiftedHint(); });
+
+      function updateGiftedHint() {
+        const isGifted = qsa('#tag-checks input:checked', root).some(cb => cb.value === GIFTED_TAG_ID);
+        qs('#gifted-hint', root).style.display = isGifted ? 'block' : 'none';
+        qs('#cost-label-text', root).textContent = isGifted ? 'Estimated value' : 'Original cost';
+      }
+      qs('#tag-checks', root).addEventListener('change', updateGiftedHint);
+      updateGiftedHint();
 
       qs('#quick-add-brand', root).addEventListener('click', () => {
         const name = prompt('New brand name:');

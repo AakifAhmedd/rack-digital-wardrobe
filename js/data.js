@@ -71,6 +71,7 @@ function defaultTags(categories, subcategories) {
     { name: 'Breathable', cats: ['Shirts', 'Shoes'] },
     { name: 'Stretch', cats: ['Pants', 'Shoes'] },
     { name: 'Leather', cats: ['Shoes', 'Accessories'] },
+    { name: 'Gifted', cats: ['Shirts', 'Pants', 'Shoes', 'Accessories', 'Outerwear'] },
   ];
 
   return defs.map(d => ({
@@ -169,6 +170,19 @@ const Store = {
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
+    s.items.forEach(i => {
+      if (!i.status) i.status = 'active';
+      if (i.retiredReason === undefined) i.retiredReason = null;
+      if (i.retiredAt === undefined) i.retiredAt = null;
+    });
+    // Gifted tag may be missing on wardrobes created before this feature existed.
+    if (!s.tags.find(t => t.id === 'tag_gifted')) {
+      s.tags.push({
+        id: 'tag_gifted', name: 'Gifted',
+        categoryIds: s.categories.map(c => c.id),
+        subcategoryIds: [], custom: false,
+      });
+    }
   },
 
   save() {

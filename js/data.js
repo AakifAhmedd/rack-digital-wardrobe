@@ -21,17 +21,17 @@ function uid(prefix) {
 
 function defaultCategories() {
   const cats = [
-    { name: 'Pants', subs: ['Cargo Pants', 'Chinos', 'Jeans', 'Shorts', 'Formal Trousers', 'Joggers'] },
-    { name: 'Shirts', subs: ['T-Shirts', 'Polo Shirts', 'Collared Shirts', 'Dress Shirts', 'Casual Shirts'] },
-    { name: 'Shoes', subs: ['Running Shoes', 'Casual Shoes', 'Formal Shoes', 'Sandals', 'Sports Shoes'] },
-    { name: 'Outerwear', subs: ['Jackets', 'Hoodies', 'Sweaters'] },
-    { name: 'Accessories', subs: ['Watches', 'Belts', 'Cufflinks', 'Ties', 'Bags', 'Sunglasses', 'Hats'] },
+    { name: 'Pants', icon: 'pants', subs: ['Cargo Pants', 'Chinos', 'Jeans', 'Shorts', 'Formal Trousers', 'Joggers'] },
+    { name: 'Shirts', icon: 'shirt', subs: ['T-Shirts', 'Polo Shirts', 'Collared Shirts', 'Dress Shirts', 'Casual Shirts'] },
+    { name: 'Shoes', icon: 'shoe', subs: ['Running Shoes', 'Casual Shoes', 'Formal Shoes', 'Sandals', 'Sports Shoes'] },
+    { name: 'Outerwear', icon: 'jacket', subs: ['Jackets', 'Hoodies', 'Sweaters'] },
+    { name: 'Accessories', icon: 'bag', subs: ['Watches', 'Belts', 'Cufflinks', 'Ties', 'Bags', 'Sunglasses', 'Hats'] },
   ];
   const categories = [];
   const subcategories = [];
   cats.forEach(c => {
     const catId = 'cat_' + slugify(c.name);
-    categories.push({ id: catId, name: c.name, custom: false });
+    categories.push({ id: catId, name: c.name, icon: c.icon, custom: false });
     c.subs.forEach(s => {
       subcategories.push({ id: 'sub_' + slugify(c.name) + '_' + slugify(s), name: s, categoryId: catId, custom: false });
     });
@@ -139,9 +139,62 @@ function buildDefaultState() {
     tags,
     activities,
     items: [],         // NEVER pre-populated
+    appearance: {
+      themeId: 'theme_canvas',
+      fontId: 'font_fraunces_plex',
+      customThemes: [],
+      customFonts: [],
+    },
     meta: { createdAt: Date.now(), updatedAt: Date.now() },
   };
 }
+
+/* ---------- appearance: built-in themes & fonts ----------
+   Each theme defines a small core palette; everything else (muted
+   text, hairlines, panel backgrounds, tinted badges) is derived
+   from these via CSS color-mix(), so a theme only needs 8 colors. */
+function defaultThemes() {
+  return [
+    {
+      id: 'theme_canvas', name: "Tailor's Canvas", custom: false,
+      canvas: '#E7E1D3', surfaceRaised: '#FFFFFF', text: '#23201B', ink: '#23201B',
+      accentInk: '#FBF9F4', accent: '#8A6F3B', thread: '#A23B33', good: '#4C6B4F',
+    },
+    {
+      id: 'theme_night', name: 'Night Rack', custom: false,
+      canvas: '#1C1A17', surfaceRaised: '#27231D', text: '#EDE6D8', ink: '#100F0C',
+      accentInk: '#F5F0E4', accent: '#C9A24B', thread: '#D8685C', good: '#7FAE83',
+    },
+    {
+      id: 'theme_denim', name: 'Denim Studio', custom: false,
+      canvas: '#E4E7EC', surfaceRaised: '#FFFFFF', text: '#1E2733', ink: '#1E2733',
+      accentInk: '#F4F6F8', accent: '#3B6EA5', thread: '#B4483D', good: '#3F7A5D',
+    },
+  ];
+}
+
+function defaultFonts() {
+  return [
+    {
+      id: 'font_fraunces_plex', name: 'Fraunces & Plex Sans', custom: false,
+      display: 'Fraunces', body: 'IBM Plex Sans',
+      googleQuery: 'Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600',
+    },
+    {
+      id: 'font_playfair_inter', name: 'Playfair & Inter', custom: false,
+      display: 'Playfair Display', body: 'Inter',
+      googleQuery: 'Playfair+Display:wght@600;700&family=Inter:wght@400;500;600',
+    },
+    {
+      id: 'font_space_grotesk', name: 'Space Grotesk', custom: false,
+      display: 'Space Grotesk', body: 'Space Grotesk',
+      googleQuery: 'Space+Grotesk:wght@500;600;700',
+    },
+  ];
+}
+
+/* icon keys used by categories, rendered from app.js's ICONS registry */
+const DEFAULT_CATEGORY_ICON = 'tag';
 
 /* ---------- persistence ---------- */
 
@@ -170,6 +223,12 @@ const Store = {
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
+    if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', customThemes: [], customFonts: [] };
+    if (!s.appearance.customThemes) s.appearance.customThemes = [];
+    if (!s.appearance.customFonts) s.appearance.customFonts = [];
+    if (!s.appearance.themeId) s.appearance.themeId = 'theme_canvas';
+    if (!s.appearance.fontId) s.appearance.fontId = 'font_fraunces_plex';
+    s.categories.forEach(c => { if (!c.icon) c.icon = DEFAULT_CATEGORY_ICON; });
     s.items.forEach(i => {
       if (!i.status) i.status = 'active';
       if (i.retiredReason === undefined) i.retiredReason = null;

@@ -273,11 +273,37 @@ const TABS = ['dashboard', 'wardrobe', 'masters', 'settings'];
 let activeTab = 'dashboard';
 let activeMasterPanel = 'categories';
 let activeSettingsPanel = 'general';
-let wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent' };
+const WARDROBE_FILTERS_KEY = 'rack.wardrobe.filters';
+const DEFAULT_WARDROBE_FILTERS = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent' };
+function loadWardrobeFilters() {
+  try {
+    const raw = localStorage.getItem(WARDROBE_FILTERS_KEY);
+    if (!raw) return { ...DEFAULT_WARDROBE_FILTERS };
+    return { ...DEFAULT_WARDROBE_FILTERS, ...JSON.parse(raw) };
+  } catch (e) { return { ...DEFAULT_WARDROBE_FILTERS }; }
+}
+function saveWardrobeFilters() {
+  try { localStorage.setItem(WARDROBE_FILTERS_KEY, JSON.stringify(wardrobeFilters)); } catch (e) { /* ignore */ }
+}
+function countActiveWardrobeFilters() {
+  const f = wardrobeFilters;
+  let n = 0;
+  if ((f.status || 'active') !== 'active') n++;
+  if (f.category) n++;
+  if (f.subcategory) n++;
+  if (f.brand) n++;
+  if (f.color) n++;
+  if (f.tag) n++;
+  if (f.activity) n++;
+  return n;
+}
+let wardrobeFilters = loadWardrobeFilters();
+let filtersSheetOpen = false;
 
 function switchTab(name) {
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
+  qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   render();
 }
 
@@ -322,6 +348,7 @@ function renderDashboard() {
     qs('#empty-add', wrap).addEventListener('click', openAddItemModal);
     qs('#empty-retired', wrap).addEventListener('click', () => {
       wardrobeFilters = { ...wardrobeFilters, status: 'retired' };
+      saveWardrobeFilters();
       switchTab('wardrobe');
     });
     appendFab(wrap);
@@ -406,6 +433,7 @@ function renderDashboard() {
       </div>`);
     qs('#view-retired', retiredPanel).addEventListener('click', () => {
       wardrobeFilters = { ...wardrobeFilters, status: 'retired' };
+      saveWardrobeFilters();
       switchTab('wardrobe');
     });
     chartCols.appendChild(retiredPanel);
@@ -447,6 +475,7 @@ function renderDashboard() {
       </div>`);
     qs('#goto-unused', donate).addEventListener('click', () => {
       wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'least' };
+      saveWardrobeFilters();
       switchTab('wardrobe');
     });
     wrap.appendChild(donate);
@@ -491,7 +520,10 @@ function renderWardrobe() {
   const toolbar = el(`
     <div class="wardrobe-block">
       <div class="toolbar">
-        <div class="toolbar__filters">
+        <button type="button" class="btn btn--ghost filters-toggle-btn" id="filters-toggle-btn">
+          Filters<span class="filter-count-badge" id="filter-count-badge" hidden></span>
+        </button>
+        <div class="toolbar__filters" id="toolbar-filters">
           <select id="f-status">
             <option value="active">Active</option>
             <option value="retired">Retired</option>
@@ -510,9 +542,12 @@ function renderWardrobe() {
             <option value="cpw-asc">Best value / wear</option>
             <option value="cpw-desc">Worst value / wear</option>
           </select>
+          <button type="button" class="btn btn--ghost btn--small" id="filters-reset-btn">Reset filters</button>
+          <button type="button" class="btn btn--ghost filters-done-btn" id="filters-done-btn">Done</button>
         </div>
         <button class="btn btn--primary" id="add-item-btn">+ Add item</button>
       </div>
+      <div class="filters-backdrop" id="filters-backdrop"></div>
       <div class="item-grid" id="item-grid"></div>
     </div>
   `);
@@ -552,15 +587,58 @@ function renderWardrobe() {
 
   qs('#f-sort', toolbar).value = wardrobeFilters.sort;
 
-  qs('#f-status', toolbar).addEventListener('change', (e) => { wardrobeFilters.status = e.target.value; renderItemGrid(); });
-  catSel.addEventListener('change', () => { wardrobeFilters.category = catSel.value; wardrobeFilters.subcategory = ''; refreshSubOptions(); renderItemGrid(); });
-  subSel.addEventListener('change', () => { wardrobeFilters.subcategory = subSel.value; renderItemGrid(); });
-  brandSel.addEventListener('change', () => { wardrobeFilters.brand = brandSel.value; renderItemGrid(); });
-  colorSel.addEventListener('change', () => { wardrobeFilters.color = colorSel.value; renderItemGrid(); });
-  tagSel.addEventListener('change', () => { wardrobeFilters.tag = tagSel.value; renderItemGrid(); });
-  actSel.addEventListener('change', () => { wardrobeFilters.activity = actSel.value; renderItemGrid(); });
-  qs('#f-sort', toolbar).addEventListener('change', (e) => { wardrobeFilters.sort = e.target.value; renderItemGrid(); });
+  const badge = qs('#filter-count-badge', toolbar);
+  const resetBtn = qs('#filters-reset-btn', toolbar);
+  function syncFilterIndicators() {
+    const count = countActiveWardrobeFilters();
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+    resetBtn.textContent = count > 0 ? `Reset filters (${count})` : 'Reset filters';
+    resetBtn.disabled = count === 0;
+  }
+  function onFilterChanged() {
+    saveWardrobeFilters();
+    syncFilterIndicators();
+    renderItemGrid();
+  }
+  syncFilterIndicators();
+
+  qs('#f-status', toolbar).addEventListener('change', (e) => { wardrobeFilters.status = e.target.value; onFilterChanged(); });
+  catSel.addEventListener('change', () => { wardrobeFilters.category = catSel.value; wardrobeFilters.subcategory = ''; refreshSubOptions(); onFilterChanged(); });
+  subSel.addEventListener('change', () => { wardrobeFilters.subcategory = subSel.value; onFilterChanged(); });
+  brandSel.addEventListener('change', () => { wardrobeFilters.brand = brandSel.value; onFilterChanged(); });
+  colorSel.addEventListener('change', () => { wardrobeFilters.color = colorSel.value; onFilterChanged(); });
+  tagSel.addEventListener('change', () => { wardrobeFilters.tag = tagSel.value; onFilterChanged(); });
+  actSel.addEventListener('change', () => { wardrobeFilters.activity = actSel.value; onFilterChanged(); });
+  qs('#f-sort', toolbar).addEventListener('change', (e) => { wardrobeFilters.sort = e.target.value; onFilterChanged(); });
   qs('#add-item-btn', toolbar).addEventListener('click', openAddItemModal);
+
+  resetBtn.addEventListener('click', () => {
+    wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS };
+    saveWardrobeFilters();
+    render();
+    toast('Filters reset');
+  });
+
+  /* mobile-only filter sheet: same live selects, just repositioned via CSS */
+  const filtersPanel = qs('#toolbar-filters', toolbar);
+  const backdrop = qs('#filters-backdrop', toolbar);
+  const toggleBtn = qs('#filters-toggle-btn', toolbar);
+  const doneBtn = qs('#filters-done-btn', toolbar);
+  function openFiltersSheet() {
+    filtersSheetOpen = true;
+    filtersPanel.classList.add('is-open');
+    backdrop.classList.add('is-open');
+  }
+  function closeFiltersSheet() {
+    filtersSheetOpen = false;
+    filtersPanel.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+  }
+  toggleBtn.addEventListener('click', () => (filtersSheetOpen ? closeFiltersSheet() : openFiltersSheet()));
+  backdrop.addEventListener('click', closeFiltersSheet);
+  doneBtn.addEventListener('click', closeFiltersSheet);
+  if (filtersSheetOpen) { filtersPanel.classList.add('is-open'); backdrop.classList.add('is-open'); }
 
   return wrap;
 }
@@ -1661,6 +1739,7 @@ function init() {
   if (!Store.state.meta.currency) { Store.state.meta.currency = 'LKR'; Store.save(); }
   applyStoredAppearance();
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   switchTab('dashboard');
 }
 document.addEventListener('DOMContentLoaded', init);

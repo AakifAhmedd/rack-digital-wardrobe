@@ -68,6 +68,86 @@ const RETIRE_REASONS = [
 function activeItems() { return Store.state.items.filter(i => i.status !== 'retired'); }
 function retiredItems() { return Store.state.items.filter(i => i.status === 'retired'); }
 
+/* ---------------- icon registry ----------------
+   Small hand-drawn line icons (24x24, stroke=currentColor) — no
+   external icon font/library. Used for category badges and, in
+   the dashboard charts, in place of text labels to save width. */
+const ICONS = {
+  tag: '<path d="M3 12 12 3h6a2 2 0 0 1 2 2v6l-9 9a2 2 0 0 1-3 0l-5-5a2 2 0 0 1 0-3Z"/><circle cx="15" cy="7" r="1.3"/>',
+  hanger: '<path d="M12 3a2 2 0 1 1 2 2c-.6.5-1 1-1 1.7V8"/><path d="M12 8c-3.2 2-9 4.3-9 8.2A1 1 0 0 0 4 17h16a1 1 0 0 0 1-.8c0-3.9-5.8-6.2-9-8.2Z"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/>',
+  shirt: '<path d="M8 4 4 7l2 3 2-1v10h8V9l2 1 2-3-4-3-2 2-2-2Z"/>',
+  pants: '<path d="M6 3h12l1 6-2 12h-3l-1-9-1 9H8L6 9Z"/>',
+  shorts: '<path d="M5 4h14l1 5-1 3v6h-4l-1-7-1 7H8v-6l-1-3Z"/>',
+  dress: '<path d="M9 3 7 6l2 2-3 12h12L15 8l2-2-2-3-3 2Z"/>',
+  shoe: '<path d="M3 17c0-2 2-3 4-4l6-4 3 2h4a2 2 0 0 1 2 2v1c0 1.6-1.5 3-4 3H5c-1 0-2-.5-2-2Z"/><line x1="9" y1="13" x2="9" y2="9"/>',
+  jacket: '<path d="M9 3 6 5 3 9l2 2 2-1v11h10V10l2 1 2-2-3-4-3-2-2 2-2-2Z"/><line x1="12" y1="7" x2="12" y2="20"/>',
+  watch: '<circle cx="12" cy="12" r="5"/><path d="M12 9v3l2 1"/><path d="M9 3h6l-1 4H10Z"/><path d="M9 21h6l-1-4H10Z"/>',
+  bag: '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/>',
+  hat: '<path d="M4 16c0-4 3.5-7 8-7s8 3 8 7"/><line x1="2" y1="16" x2="22" y2="16"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>',
+  tie: '<path d="M9 3h6l-1 4-2 1-2-1Z"/><path d="M11 8 8 18l4 3 4-3-3-10Z"/>',
+  glasses: '<circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="20" y1="11" x2="22" y2="10"/><line x1="4" y1="11" x2="2" y2="10"/>',
+  socks: '<path d="M9 3h5v9l4 6a2 2 0 0 1-2 3H9a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z"/>',
+  scarf: '<path d="M3 6c3 2 6 2 9 0s6-2 9 0"/><path d="M14 6c1 4 1 8-1 12l-3-2c1-3 1-7 0-10"/>',
+  belt: '<rect x="2" y="10" width="20" height="4" rx="1"/><rect x="9" y="8" width="6" height="8" rx="1"/>',
+  gloves: '<path d="M6 12V5a1.5 1.5 0 0 1 3 0v4M9 9V4a1.5 1.5 0 0 1 3 0v5M12 9V4a1.5 1.5 0 0 1 3 0v6M15 10V6a1.5 1.5 0 0 1 3 0v8a5 5 0 0 1-5 5H9a4 4 0 0 1-4-4v-3l1-2"/>',
+  umbrella: '<path d="M12 3a9 9 0 0 1 9 9H3a9 9 0 0 1 9-9Z"/><line x1="12" y1="12" x2="12" y2="19"/><path d="M12 19a2 2 0 0 0 4 0"/>',
+  ring: '<circle cx="12" cy="15" r="5"/><path d="M9 10 12 3l3 7"/>',
+};
+const ICON_KEYS = Object.keys(ICONS);
+function iconMarkup(key) {
+  return `<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[key] || ICONS.tag}</g>`;
+}
+function iconSvg(key, size = 18, extraAttrs = '') {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" ${extraAttrs}>${iconMarkup(key)}</svg>`;
+}
+
+/* ---------------- appearance: themes & fonts ---------------- */
+function getThemeById(id) {
+  return defaultThemes().find(t => t.id === id) || Store.state.appearance.customThemes.find(t => t.id === id);
+}
+function getFontById(id) {
+  return defaultFonts().find(f => f.id === id) || Store.state.appearance.customFonts.find(f => f.id === id);
+}
+function ensureGoogleFont(query) {
+  if (!query) return;
+  const id = 'gf-' + slugify(query);
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id = id;
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${query}&display=swap`;
+  document.head.appendChild(link);
+}
+function applyTheme(themeId) {
+  const theme = getThemeById(themeId);
+  if (!theme) return;
+  const root = document.documentElement.style;
+  root.setProperty('--canvas', theme.canvas);
+  root.setProperty('--surface-raised', theme.surfaceRaised);
+  root.setProperty('--text', theme.text);
+  root.setProperty('--ink', theme.ink);
+  root.setProperty('--accent-ink', theme.accentInk);
+  root.setProperty('--accent', theme.accent);
+  root.setProperty('--thread', theme.thread);
+  root.setProperty('--good', theme.good);
+  Store.state.appearance.themeId = themeId;
+  Store.save();
+}
+function applyFont(fontId) {
+  const font = getFontById(fontId);
+  if (!font) return;
+  ensureGoogleFont(font.googleQuery);
+  document.documentElement.style.setProperty('--font-display', `'${font.display}', Georgia, 'Times New Roman', serif`);
+  document.documentElement.style.setProperty('--font-body', `'${font.body}', -apple-system, Segoe UI, sans-serif`);
+  Store.state.appearance.fontId = fontId;
+  Store.save();
+}
+function applyStoredAppearance() {
+  const a = Store.state.appearance;
+  applyTheme(a.themeId);
+  applyFont(a.fontId);
+}
+
 /* ---------------- rule engine ---------------- */
 function matchRule(rule, item) {
   if (rule.category && item.categoryId !== rule.category) return false;
@@ -116,11 +196,12 @@ function avgCostPerWear() {
    Hand-rolled, dependency-free, styled with our own tokens
    rather than a generic charting library's default look. */
 function svgHBarChart(rows, opts = {}) {
-  // rows: [{ label, value, color }]  — value assumed >= 0
+  // rows: [{ label, value, color, iconKey }]  — value assumed >= 0
   const width = opts.width || 560;
   const rowH = 30;
   const gap = 10;
-  const labelW = opts.labelW || 132;
+  const useIcons = !!opts.useIcons;
+  const labelW = opts.labelW || (useIcons ? 34 : 132);
   const fmt = opts.format || (v => Math.round(v).toLocaleString());
   const longestValue = Math.max(...rows.map(r => fmt(r.value).length), 3);
   const valueW = Math.max(56, longestValue * 7.2 + 14);
@@ -132,8 +213,11 @@ function svgHBarChart(rows, opts = {}) {
     const y = i * (rowH + gap);
     const w = Math.max(2, (r.value / max) * barAreaW);
     const color = r.color || 'var(--accent)';
+    const labelMarkup = useIcons
+      ? `<svg x="4" y="${y + rowH / 2 - 10}" width="20" height="20" viewBox="0 0 24 24" class="chart-icon"><title>${esc(r.label)}</title>${iconMarkup(r.iconKey)}</svg>`
+      : `<text x="0" y="${y + rowH / 2 + 4}" class="chart-label">${esc(r.label)}</text>`;
     return `
-      <text x="0" y="${y + rowH / 2 + 4}" class="chart-label">${esc(r.label)}</text>
+      ${labelMarkup}
       <rect x="${labelW}" y="${y + 4}" width="${barAreaW}" height="${rowH - 8}" rx="4" class="chart-track"></rect>
       <rect x="${labelW}" y="${y + 4}" width="${w}" height="${rowH - 8}" rx="4" fill="${color}"></rect>
       <text x="${labelW + barAreaW + 8}" y="${y + rowH / 2 + 4}" class="chart-value">${esc(fmt(r.value))}</text>`;
@@ -188,6 +272,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Modal.clos
 const TABS = ['dashboard', 'wardrobe', 'masters', 'settings'];
 let activeTab = 'dashboard';
 let activeMasterPanel = 'categories';
+let activeSettingsPanel = 'general';
 let wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent' };
 
 function switchTab(name) {
@@ -283,30 +368,30 @@ function renderDashboard() {
   const chartCols = el(`<div class="dash-cols"></div>`);
 
   const wearRows = Object.entries(byCategoryWears)
-    .map(([id, wears]) => ({ label: G.category(id).name, value: wears }))
+    .map(([id, wears]) => ({ label: G.category(id).name, iconKey: G.category(id).icon, value: wears }))
     .sort((a, b) => b.value - a.value).slice(0, 8);
   chartCols.appendChild(el(`
     <div class="panel">
       <h3>Wears by category</h3>
-      ${wearRows.some(r => r.value > 0) ? svgHBarChart(wearRows, { color: 'var(--accent)', aria: 'Wears by category' }) : chartEmpty('Log a few wears to see this fill in.')}
+      ${wearRows.some(r => r.value > 0) ? svgHBarChart(wearRows, { color: 'var(--accent)', useIcons: true, aria: 'Wears by category' }) : chartEmpty('Log a few wears to see this fill in.')}
     </div>`));
 
   const cpwRows = Object.entries(byCategoryCPW)
-    .map(([id, vals]) => ({ label: G.category(id).name, value: vals.reduce((a, b) => a + b, 0) / vals.length }))
+    .map(([id, vals]) => ({ label: G.category(id).name, iconKey: G.category(id).icon, value: vals.reduce((a, b) => a + b, 0) / vals.length }))
     .sort((a, b) => b.value - a.value).slice(0, 8);
   chartCols.appendChild(el(`
     <div class="panel">
       <h3>Avg. cost per wear by category</h3>
-      ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', format: v => fmtMoney(v), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
+      ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', useIcons: true, format: v => fmtMoney(v), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
     </div>`));
 
   const countRows = Object.entries(byCategoryCount)
-    .map(([id, n]) => ({ label: G.category(id).name, value: n }))
+    .map(([id, n]) => ({ label: G.category(id).name, iconKey: G.category(id).icon, value: n }))
     .sort((a, b) => b.value - a.value).slice(0, 8);
   chartCols.appendChild(el(`
     <div class="panel">
       <h3>Wardrobe composition</h3>
-      ${svgHBarChart(countRows, { color: 'var(--good)', aria: 'Item count by category' })}
+      ${svgHBarChart(countRows, { color: 'var(--good)', useIcons: true, aria: 'Item count by category' })}
     </div>`));
 
   if (retired.length) {
@@ -540,7 +625,7 @@ function itemCard(item) {
         <span class="swatch" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
         <div class="item-card__titles">
           <h4>${esc(itemTitle(item))}</h4>
-          <p class="item-card__breadcrumb">${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
+          <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
         </div>
       </div>
       ${item.subtext ? `<p class="item-card__subtext">${esc(item.subtext)}</p>` : ''}
@@ -819,7 +904,7 @@ function renderCategoriesPanel() {
       <p class="muted">Categories organize your rack. Add subcategories under each — they carry the same weight as the built-in ones.</p>
       <button class="btn btn--primary btn--small" id="add-cat">+ Add category</button>
     </div>`));
-  qs('#add-cat', box).addEventListener('click', () => promptCategory());
+  qs('#add-cat', box).addEventListener('click', () => openCategoryModal());
 
   s.categories.forEach(cat => {
     const subs = G.subsFor(cat.id);
@@ -827,10 +912,11 @@ function renderCategoriesPanel() {
     const catBox = el(`
       <div class="master-card">
         <div class="master-card__row">
+          <span class="cat-icon-badge">${iconSvg(cat.icon, 18)}</span>
           <strong>${esc(cat.name)}</strong>
           <span class="muted">${itemCount} item${itemCount === 1 ? '' : 's'}</span>
           <div class="master-card__actions">
-            <button class="btn btn--tiny btn--ghost" data-act="rename">Rename</button>
+            <button class="btn btn--tiny btn--ghost" data-act="edit">Edit</button>
             <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
           </div>
         </div>
@@ -845,7 +931,7 @@ function renderCategoriesPanel() {
         </div>
       </div>`);
 
-    qs('[data-act="rename"]', catBox).addEventListener('click', () => promptCategory(cat));
+    qs('[data-act="edit"]', catBox).addEventListener('click', () => openCategoryModal(cat));
     qs('[data-act="delete"]', catBox).addEventListener('click', () => {
       Modal.confirm(`Delete category "${cat.name}" and its subcategories? Items already using it will keep a dangling reference.`, () => {
         s.categories = s.categories.filter(c => c.id !== cat.id);
@@ -870,12 +956,45 @@ function renderCategoriesPanel() {
   });
   return box;
 }
-function promptCategory(existing) {
-  const name = prompt(existing ? 'Rename category:' : 'New category name:', existing?.name || '');
-  if (!name || !name.trim()) return;
-  if (existing) { existing.name = name.trim(); }
-  else { Store.state.categories.push({ id: uid('cat'), name: name.trim(), custom: true }); }
-  Store.save(); render();
+function openCategoryModal(existing) {
+  const isEdit = !!existing;
+  let selectedIcon = existing?.icon || 'tag';
+  const body = el(`
+    <form class="form" id="cat-form">
+      <label>Category name
+        <input type="text" name="name" value="${esc(existing?.name || '')}" required autofocus>
+      </label>
+      <fieldset>
+        <legend>Icon</legend>
+        <div class="icon-picker" id="icon-picker">
+          ${ICON_KEYS.map(k => `<button type="button" class="icon-picker__btn ${k === selectedIcon ? 'is-selected' : ''}" data-icon="${k}" title="${k}">${iconSvg(k, 20)}</button>`).join('')}
+        </div>
+      </fieldset>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="cat-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">${isEdit ? 'Save' : 'Add category'}</button>
+      </div>
+    </form>`);
+  Modal.open(isEdit ? 'Edit category' : 'New category', body, {
+    onMount: (root) => {
+      qsa('.icon-picker__btn', root).forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedIcon = btn.dataset.icon;
+          qsa('.icon-picker__btn', root).forEach(b => b.classList.toggle('is-selected', b === btn));
+        });
+      });
+      qs('#cat-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#cat-form', root).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = qs('[name="name"]', root).value.trim();
+        if (!name) return;
+        if (isEdit) { existing.name = name; existing.icon = selectedIcon; }
+        else { Store.state.categories.push({ id: uid('cat'), name, icon: selectedIcon, custom: true }); }
+        Store.save(); Modal.close(); render();
+        toast(isEdit ? 'Category updated' : 'Category added');
+      });
+    },
+  });
 }
 function promptSubcategory(cat, existing) {
   const name = prompt(existing ? 'Rename subcategory:' : `New subcategory under ${cat.name}:`, existing?.name || '');
@@ -1216,8 +1335,31 @@ function openActivityModal(existing) {
    SETTINGS
    ================================================================ */
 function renderSettings() {
+  const wrap = el(`
+    <section class="view-section">
+      <div class="subnav" id="settings-subnav">
+        ${['general', 'appearance'].map(p =>
+          `<button class="subnav__link ${p === activeSettingsPanel ? 'is-active' : ''}" data-panel="${p}">${p[0].toUpperCase() + p.slice(1)}</button>`
+        ).join('')}
+      </div>
+      <div id="settings-panel"></div>
+    </section>`);
+
+  qsa('.subnav__link', wrap).forEach(btn => btn.addEventListener('click', () => {
+    activeSettingsPanel = btn.dataset.panel;
+    render();
+  }));
+
+  const panel = qs('#settings-panel', wrap);
+  if (activeSettingsPanel === 'appearance') panel.appendChild(renderAppearanceSettings());
+  else panel.appendChild(renderGeneralSettings());
+
+  return wrap;
+}
+
+function renderGeneralSettings() {
   const s = Store.state;
-  const wrap = el(`<section class="view-section settings-grid"></section>`);
+  const wrap = el(`<div class="settings-grid"></div>`);
 
   const dataPanel = el(`
     <div class="panel">
@@ -1255,6 +1397,7 @@ function renderSettings() {
         const data = JSON.parse(reader.result);
         Modal.confirm('Replace all current data with this backup?', () => {
           Store.replaceAll(data);
+          applyStoredAppearance();
           render();
           toast('Backup restored');
         }, { danger: true, yesLabel: 'Restore' });
@@ -1303,6 +1446,7 @@ function renderSettings() {
       const data = await Sync.pullFromCloud();
       Modal.confirm('Replace local data with the version from the cloud?', () => {
         Store.replaceAll(data);
+        applyStoredAppearance();
         render();
         toast('Pulled from cloud');
       }, { danger: true, yesLabel: 'Replace' });
@@ -1325,6 +1469,7 @@ function renderSettings() {
       localStorage.removeItem(STORAGE_KEY);
       Store._state = null;
       Store.load();
+      applyStoredAppearance();
       render();
       toast('App reset');
     }, { danger: true, yesLabel: 'Erase everything' });
@@ -1334,11 +1479,187 @@ function renderSettings() {
   return wrap;
 }
 
+/* ---- Appearance: themes & fonts ---- */
+function renderAppearanceSettings() {
+  const s = Store.state;
+  const wrap = el(`<div class="settings-grid settings-grid--appearance"></div>`);
+
+  /* -- themes -- */
+  const themePanel = el(`
+    <div class="panel panel--wide">
+      <h3>Theme</h3>
+      <p class="muted">Pick a palette, or build your own.</p>
+      <div class="theme-grid" id="theme-grid"></div>
+      <button class="btn btn--ghost btn--small" id="add-theme" style="margin-top:.8rem;">+ New theme</button>
+    </div>`);
+  const themeGrid = qs('#theme-grid', themePanel);
+  const allThemes = [...defaultThemes(), ...s.appearance.customThemes];
+  allThemes.forEach(theme => {
+    const isActive = s.appearance.themeId === theme.id;
+    const card = el(`
+      <div class="theme-card ${isActive ? 'is-active' : ''}" style="background:${theme.canvas}; border-color:${isActive ? theme.accent : theme.canvas};">
+        <div class="theme-card__dots">
+          <span style="background:${theme.ink}"></span>
+          <span style="background:${theme.accent}"></span>
+          <span style="background:${theme.thread}"></span>
+          <span style="background:${theme.good}"></span>
+        </div>
+        <p style="color:${theme.text};">${esc(theme.name)}</p>
+        <div class="theme-card__actions">
+          <button class="btn btn--tiny" data-act="apply" style="${isActive ? `background:${theme.ink};color:${theme.accentInk};border-color:${theme.ink};` : `background:transparent;color:${theme.text};border:1px solid ${theme.accent};`}">${isActive ? 'Active' : 'Apply'}</button>
+          ${theme.custom ? `<button class="btn btn--tiny" data-act="delete" style="background:transparent;color:${theme.thread};border:1px solid ${theme.thread};">Delete</button>` : ''}
+        </div>
+      </div>`);
+    qs('[data-act="apply"]', card).addEventListener('click', () => {
+      applyTheme(theme.id);
+      render();
+      toast(`Theme set to ${theme.name}`);
+    });
+    if (theme.custom) {
+      qs('[data-act="delete"]', card).addEventListener('click', () => {
+        Modal.confirm(`Delete theme "${theme.name}"?`, () => {
+          s.appearance.customThemes = s.appearance.customThemes.filter(t => t.id !== theme.id);
+          if (s.appearance.themeId === theme.id) applyTheme('theme_canvas');
+          Store.save(); render();
+        }, { danger: true, yesLabel: 'Delete' });
+      });
+    }
+    themeGrid.appendChild(card);
+  });
+  qs('#add-theme', themePanel).addEventListener('click', () => openThemeModal());
+
+  /* -- fonts -- */
+  const fontPanel = el(`
+    <div class="panel panel--wide">
+      <h3>Font</h3>
+      <p class="muted">Applies to headings and body text throughout the app.</p>
+      <div class="font-grid" id="font-grid"></div>
+      <button class="btn btn--ghost btn--small" id="add-font" style="margin-top:.8rem;">+ New font</button>
+    </div>`);
+  const fontGrid = qs('#font-grid', fontPanel);
+  const allFonts = [...defaultFonts(), ...s.appearance.customFonts];
+  allFonts.forEach(font => {
+    ensureGoogleFont(font.googleQuery);
+    const isActive = s.appearance.fontId === font.id;
+    const card = el(`
+      <div class="font-card ${isActive ? 'is-active' : ''}">
+        <p class="font-card__sample" style="font-family:'${esc(font.display)}', serif;">Aa</p>
+        <p class="font-card__name">${esc(font.name)}</p>
+        <div class="theme-card__actions">
+          <button class="btn btn--tiny ${isActive ? 'btn--primary' : 'btn--ghost'}" data-act="apply">${isActive ? 'Active' : 'Apply'}</button>
+          ${font.custom ? '<button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>' : ''}
+        </div>
+      </div>`);
+    qs('[data-act="apply"]', card).addEventListener('click', () => {
+      applyFont(font.id);
+      render();
+      toast(`Font set to ${font.name}`);
+    });
+    if (font.custom) {
+      qs('[data-act="delete"]', card).addEventListener('click', () => {
+        Modal.confirm(`Delete font "${font.name}"?`, () => {
+          s.appearance.customFonts = s.appearance.customFonts.filter(f => f.id !== font.id);
+          if (s.appearance.fontId === font.id) applyFont('font_fraunces_plex');
+          Store.save(); render();
+        }, { danger: true, yesLabel: 'Delete' });
+      });
+    }
+    fontGrid.appendChild(card);
+  });
+  qs('#add-font', fontPanel).addEventListener('click', () => openFontModal());
+
+  wrap.appendChild(themePanel);
+  wrap.appendChild(fontPanel);
+  return wrap;
+}
+
+function openThemeModal() {
+  const fields = [
+    ['name', 'Theme name', 'text', 'My theme'],
+    ['canvas', 'Background', 'color', '#E7E1D3'],
+    ['surfaceRaised', 'Card surface', 'color', '#FFFFFF'],
+    ['text', 'Body text', 'color', '#23201B'],
+    ['ink', 'Header / buttons', 'color', '#23201B'],
+    ['accentInk', 'Text on header/buttons', 'color', '#FBF9F4'],
+    ['accent', 'Accent', 'color', '#8A6F3B'],
+    ['thread', 'Secondary accent', 'color', '#A23B33'],
+    ['good', 'Success color', 'color', '#4C6B4F'],
+  ];
+  const body = el(`
+    <form class="form" id="theme-form">
+      ${fields.map(([key, label, type, def]) => `
+        <label${type === 'color' ? ' class="color-field"' : ''}>${label}
+          <input type="${type}" name="${key}" value="${def}" ${type === 'text' ? 'required' : ''}>
+        </label>`).join('')}
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="theme-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">Create theme</button>
+      </div>
+    </form>`);
+  Modal.open('New theme', body, {
+    onMount: (root) => {
+      qs('#theme-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#theme-form', root).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const name = fd.get('name').trim();
+        if (!name) return;
+        const theme = { id: uid('theme'), name, custom: true };
+        fields.forEach(([key]) => { if (key !== 'name') theme[key] = fd.get(key); });
+        Store.state.appearance.customThemes.push(theme);
+        applyTheme(theme.id);
+        Modal.close(); render();
+        toast('Theme created');
+      });
+    },
+  });
+}
+
+function openFontModal() {
+  const body = el(`
+    <form class="form" id="font-form">
+      <label>Font name
+        <input type="text" name="name" required placeholder="e.g. My Font Pairing">
+      </label>
+      <label>Display font (headings) <span class="muted">— exact Google Fonts name</span>
+        <input type="text" name="display" required placeholder="e.g. Lora">
+      </label>
+      <label>Body font (everything else) <span class="muted">— exact Google Fonts name</span>
+        <input type="text" name="body" required placeholder="e.g. Source Sans 3">
+      </label>
+      <p class="muted">RACK loads these from Google Fonts, so use the family name exactly as it appears there.</p>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="font-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">Create font</button>
+      </div>
+    </form>`);
+  Modal.open('New font', body, {
+    onMount: (root) => {
+      qs('#font-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#font-form', root).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const name = fd.get('name').trim();
+        const display = fd.get('display').trim();
+        const bodyFont = fd.get('body').trim();
+        if (!name || !display || !bodyFont) return;
+        const families = [...new Set([display, bodyFont])].map(f => f.replace(/\s+/g, '+') + ':wght@400;500;600;700');
+        const font = { id: uid('font'), name, display, body: bodyFont, googleQuery: families.join('&family='), custom: true };
+        Store.state.appearance.customFonts.push(font);
+        applyFont(font.id);
+        Modal.close(); render();
+        toast('Font created');
+      });
+    },
+  });
+}
+
 /* ================================================================
    INIT
    ================================================================ */
 function init() {
   if (!Store.state.meta.currency) { Store.state.meta.currency = 'LKR'; Store.save(); }
+  applyStoredAppearance();
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   switchTab('dashboard');
 }

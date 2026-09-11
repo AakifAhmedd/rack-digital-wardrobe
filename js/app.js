@@ -130,8 +130,13 @@ function applyTheme(themeId) {
   root.setProperty('--accent', theme.accent);
   root.setProperty('--thread', theme.thread);
   root.setProperty('--good', theme.good);
-  Store.state.appearance.themeId = themeId;
-  Store.save();
+  // Only persist (and bump meta.updatedAt) when the choice actually changed —
+  // re-applying the already-saved theme on every app load shouldn't count
+  // as a local edit for sync purposes.
+  if (Store.state.appearance.themeId !== themeId) {
+    Store.state.appearance.themeId = themeId;
+    Store.save();
+  }
 }
 function applyFont(fontId) {
   const font = getFontById(fontId);
@@ -139,8 +144,10 @@ function applyFont(fontId) {
   ensureGoogleFont(font.googleQuery);
   document.documentElement.style.setProperty('--font-display', `'${font.display}', Georgia, 'Times New Roman', serif`);
   document.documentElement.style.setProperty('--font-body', `'${font.body}', -apple-system, Segoe UI, sans-serif`);
-  Store.state.appearance.fontId = fontId;
-  Store.save();
+  if (Store.state.appearance.fontId !== fontId) {
+    Store.state.appearance.fontId = fontId;
+    Store.save();
+  }
 }
 function applyStoredAppearance() {
   const a = Store.state.appearance;
@@ -331,6 +338,118 @@ function render() {
 }
 
 /* ================================================================
+   SYNC INDICATOR (header) — status dot + popover with Push/Pull,
+   plus the conflict modal shown when SyncEngine flags a genuine
+   conflict (local unsynced changes + remote also moved).
+   ================================================================ */
+function syncStatusLabel(status) {
+  switch (status) {
+    case 'synced': return 'Synced';
+    case 'pending': return 'Unsynced';
+    case 'syncing': return 'Syncing…';
+    case 'failed': return 'Sync failed';
+    case 'conflict': return 'Conflict';
+    case 'not-connected': return 'Not synced';
+    default: return '—';
+  }
+}
+function fmtDateTime(ts) {
+  if (!ts) return null;
+  return new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function syncStatusDetail(status) {
+  const meta = loadSyncMeta();
+  switch (status) {
+    case 'synced': {
+      const when = fmtDateTime(meta.lastSyncedLocalUpdatedAt);
+      return when ? `Last synced ${when}` : 'Up to date.';
+    }
+    case 'pending': return "You have changes on this device that haven't been pushed yet.";
+    case 'syncing': return 'Talking to the cloud…';
+    case 'failed': return (SyncEngine.lastError && SyncEngine.lastError.message) || 'Something went wrong. Retrying automatically.';
+    case 'conflict': return 'This device and the cloud both have changes. Choose which one wins.';
+    case 'not-connected': return "Cloud sync isn't set up yet.";
+    default: return '';
+  }
+}
+
+let conflictModalShown = false;
+function openConflictModal() {
+  const body = el(`
+    <div>
+      <p>This device has changes that haven't been pushed, and the cloud copy has changed too — probably from another device. Pick one:</p>
+      <div class="form-actions" style="flex-direction:column; align-items:stretch; gap:.6rem;">
+        <button class="btn btn--primary" id="conflict-pull">Pull remote — discard my local changes</button>
+        <button class="btn btn--danger" id="conflict-push">Push mine — overwrite remote</button>
+        <button class="btn btn--ghost" id="conflict-cancel">Decide later</button>
+      </div>
+    </div>`);
+  Modal.open('Sync conflict', body, {
+    onMount: (root) => {
+      qs('#conflict-pull', root).addEventListener('click', async () => {
+        Modal.close();
+        try { await SyncEngine.pull(); toast('Pulled remote — local changes replaced'); }
+        catch (err) { toast(err.message, 'warn'); }
+      });
+      qs('#conflict-push', root).addEventListener('click', async () => {
+        Modal.close();
+        try { await SyncEngine.push(); toast('Pushed — remote overwritten'); }
+        catch (err) { toast(err.message, 'warn'); }
+      });
+      qs('#conflict-cancel', root).addEventListener('click', () => Modal.close());
+    },
+  });
+}
+
+function initSyncIndicator() {
+  const wrap = qs('#sync-indicator');
+  const btn = qs('#sync-indicator-btn');
+  const dot = qs('#sync-dot');
+  const label = qs('#sync-indicator-label');
+  const popover = qs('#sync-popover');
+  const statusEl = qs('#sync-popover-status');
+  const pushBtn = qs('#sync-push-btn');
+  const pullBtn = qs('#sync-pull-btn');
+  const settingsBtn = qs('#sync-popover-settings');
+
+  const closePopover = () => popover.classList.remove('is-open');
+  btn.addEventListener('click', (e) => { e.stopPropagation(); popover.classList.toggle('is-open'); });
+  document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) closePopover(); });
+
+  settingsBtn.addEventListener('click', () => {
+    closePopover();
+    activeSettingsPanel = 'general';
+    switchTab('settings');
+  });
+  pushBtn.addEventListener('click', async () => {
+    try { await SyncEngine.push(); toast('Pushed to cloud'); }
+    catch (err) { toast(err.message, 'warn'); }
+  });
+  pullBtn.addEventListener('click', async () => {
+    try { await SyncEngine.pull(); toast('Pulled from cloud'); }
+    catch (err) { toast(err.message, 'warn'); }
+  });
+
+  function updateUI(status) {
+    dot.className = 'sync-dot sync-dot--' + status;
+    label.textContent = syncStatusLabel(status);
+    statusEl.textContent = syncStatusDetail(status);
+    const busy = status === 'syncing' || status === 'not-connected';
+    pushBtn.disabled = busy;
+    pullBtn.disabled = busy;
+
+    if (status === 'conflict' && !conflictModalShown) {
+      conflictModalShown = true;
+      openConflictModal();
+    } else if (status !== 'conflict') {
+      conflictModalShown = false;
+    }
+  }
+  SyncEngine.onChange(updateUI);
+  updateUI(SyncEngine.status);
+}
+
+/* ================================================================
    DASHBOARD
    ================================================================ */
 function renderDashboard() {
@@ -347,7 +466,6 @@ function renderDashboard() {
         <button class="btn btn--primary" id="empty-add">Add an item</button>
       </div>`));
     qs('#empty-add', wrap).addEventListener('click', openAddItemModal);
-    appendFab(wrap);
     return wrap;
   }
 
@@ -365,7 +483,6 @@ function renderDashboard() {
       saveWardrobeFilters();
       switchTab('wardrobe');
     });
-    appendFab(wrap);
     return wrap;
   }
 
@@ -495,34 +612,7 @@ function renderDashboard() {
     wrap.appendChild(donate);
   }
 
-  appendFab(wrap);
   return wrap;
-}
-
-/* floating "push to cloud" button — dashboard only, push-only by design */
-function appendFab(wrap) {
-  const fab = el(`
-    <button class="fab" id="dash-fab" title="Push wardrobe to cloud">
-      <span class="fab__icon">&#8593;</span><span class="fab__label">Push to cloud</span>
-    </button>`);
-  fab.addEventListener('click', async () => {
-    if (!Sync.getToken()) {
-      toast('Add a GitHub token in Settings first', 'warn');
-      return;
-    }
-    fab.classList.add('is-busy');
-    fab.querySelector('.fab__label').textContent = 'Pushing…';
-    try {
-      await Sync.pushToCloud(Store.state);
-      toast('Pushed to cloud');
-    } catch (err) {
-      toast(err.message, 'warn');
-    } finally {
-      fab.classList.remove('is-busy');
-      fab.querySelector('.fab__label').textContent = 'Push to cloud';
-    }
-  });
-  wrap.appendChild(fab);
 }
 
 /* ================================================================
@@ -1544,7 +1634,7 @@ function renderGeneralSettings() {
   const syncPanel = el(`
     <div class="panel">
       <h3>Cloud sync (optional)</h3>
-      <p class="muted">Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository.</p>
+      <p class="muted">Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
       <label>GitHub personal access token (needs "gist" scope)
         <input type="password" id="sync-token" value="${esc(Sync.getToken())}" placeholder="ghp_…">
       </label>
@@ -1556,39 +1646,37 @@ function renderGeneralSettings() {
         <button class="btn btn--ghost btn--small" id="pull-btn">Pull from cloud</button>
         <button class="btn btn--danger-ghost btn--small" id="disconnect-btn">Disconnect</button>
       </div>
-      <p class="muted" id="sync-status"></p>
+      <p class="muted" id="sync-status">${esc(syncStatusLabel(SyncEngine.status))} — ${esc(syncStatusDetail(SyncEngine.status))}</p>
     </div>`);
+  const statusLine = qs('#sync-status', syncPanel);
+  const refreshStatusLine = () => { statusLine.textContent = `${syncStatusLabel(SyncEngine.status)} — ${syncStatusDetail(SyncEngine.status)}`; };
   qs('#sync-token', syncPanel).addEventListener('change', (e) => Sync.setToken(e.target.value.trim()));
   qs('#sync-gist', syncPanel).addEventListener('change', (e) => Sync.setGistId(e.target.value.trim()));
   qs('#push-btn', syncPanel).addEventListener('click', async () => {
-    const status = qs('#sync-status', syncPanel);
-    status.textContent = 'Pushing…';
+    Sync.setToken(qs('#sync-token', syncPanel).value.trim());
+    Sync.setGistId(qs('#sync-gist', syncPanel).value.trim());
     try {
-      Sync.setToken(qs('#sync-token', syncPanel).value.trim());
-      await Sync.pushToCloud(Store.state);
+      await SyncEngine.push();
       qs('#sync-gist', syncPanel).value = Sync.getGistId();
-      status.textContent = `Synced to cloud just now. Gist ID: ${Sync.getGistId()}`;
       toast('Pushed to cloud');
-    } catch (err) { status.textContent = err.message; toast(err.message, 'warn'); }
+    } catch (err) { toast(err.message, 'warn'); }
+    refreshStatusLine();
   });
   qs('#pull-btn', syncPanel).addEventListener('click', async () => {
-    const status = qs('#sync-status', syncPanel);
+    Sync.setToken(qs('#sync-token', syncPanel).value.trim());
+    Sync.setGistId(qs('#sync-gist', syncPanel).value.trim());
     try {
-      Sync.setToken(qs('#sync-token', syncPanel).value.trim());
-      Sync.setGistId(qs('#sync-gist', syncPanel).value.trim());
-      const data = await Sync.pullFromCloud();
-      Modal.confirm('Replace local data with the version from the cloud?', () => {
-        Store.replaceAll(data);
-        applyStoredAppearance();
-        render();
-        toast('Pulled from cloud');
-      }, { danger: true, yesLabel: 'Replace' });
-    } catch (err) { status.textContent = err.message; toast(err.message, 'warn'); }
+      await SyncEngine.pull();
+      toast('Pulled from cloud');
+    } catch (err) { toast(err.message, 'warn'); }
+    refreshStatusLine();
   });
   qs('#disconnect-btn', syncPanel).addEventListener('click', () => {
     Sync.setToken(''); Sync.setGistId('');
+    SyncEngine.disconnect();
     qs('#sync-token', syncPanel).value = ''; qs('#sync-gist', syncPanel).value = '';
     toast('Disconnected');
+    refreshStatusLine();
   });
 
   const dangerPanel = el(`
@@ -1795,6 +1883,14 @@ function init() {
   applyStoredAppearance();
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  initSyncIndicator();
   switchTab('dashboard');
+
+  SyncEngine.checkAndAutoSync().catch(() => { /* status already reflects the failure */ });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      SyncEngine.checkAndAutoSync().catch(() => {});
+    }
+  });
 }
 document.addEventListener('DOMContentLoaded', init);

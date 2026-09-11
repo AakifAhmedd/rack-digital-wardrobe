@@ -200,17 +200,32 @@ function svgHBarChart(rows, opts = {}) {
   const width = opts.width || 560;
   const rowH = 30;
   const gap = 10;
+  const tickH = 20; // reserved space at top for gridline tick labels
   const useIcons = !!opts.useIcons;
   const labelW = opts.labelW || (useIcons ? 34 : 132);
   const fmt = opts.format || (v => Math.round(v).toLocaleString());
   const longestValue = Math.max(...rows.map(r => fmt(r.value).length), 3);
   const valueW = Math.max(56, longestValue * 7.2 + 14);
   const barAreaW = width - labelW - valueW;
-  const height = rows.length * (rowH + gap) - gap + 8;
+  const bodyH = rows.length * (rowH + gap) - gap;
+  const height = tickH + bodyH + 8;
   const max = Math.max(1, ...rows.map(r => r.value));
 
+  // gridlines + tick labels at 25/50/75/100% of the shared scale
+  const gridlines = [0.25, 0.5, 0.75, 1].map(frac => {
+    const x = labelW + frac * barAreaW;
+    return `
+      <line x1="${x}" y1="${tickH}" x2="${x}" y2="${tickH + bodyH}" class="chart-grid"></line>
+      <text x="${x}" y="${tickH - 6}" class="chart-tick" text-anchor="middle">${esc(fmt(max * frac))}</text>`;
+  }).join('');
+
+  const tracks = rows.map((r, i) => {
+    const y = tickH + i * (rowH + gap);
+    return `<rect x="${labelW}" y="${y + 4}" width="${barAreaW}" height="${rowH - 8}" rx="4" class="chart-track"></rect>`;
+  }).join('');
+
   const bars = rows.map((r, i) => {
-    const y = i * (rowH + gap);
+    const y = tickH + i * (rowH + gap);
     const w = Math.max(2, (r.value / max) * barAreaW);
     const color = r.color || 'var(--accent)';
     const labelMarkup = useIcons
@@ -218,12 +233,11 @@ function svgHBarChart(rows, opts = {}) {
       : `<text x="0" y="${y + rowH / 2 + 4}" class="chart-label">${esc(r.label)}</text>`;
     return `
       ${labelMarkup}
-      <rect x="${labelW}" y="${y + 4}" width="${barAreaW}" height="${rowH - 8}" rx="4" class="chart-track"></rect>
       <rect x="${labelW}" y="${y + 4}" width="${w}" height="${rowH - 8}" rx="4" fill="${color}"></rect>
       <text x="${labelW + barAreaW + 8}" y="${y + rowH / 2 + 4}" class="chart-value">${esc(fmt(r.value))}</text>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${width} ${Math.max(height, rowH)}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'chart')}">${bars}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${Math.max(height, rowH)}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'chart')}">${tracks}${gridlines}${bars}</svg>`;
 }
 function chartEmpty(msg) {
   return `<p class="muted" style="padding:.5rem 0;">${esc(msg)}</p>`;

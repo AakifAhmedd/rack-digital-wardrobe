@@ -737,6 +737,7 @@ function itemCard(item) {
           ${isRetired
             ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
             : `<button class="btn btn--small btn--ghost" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
+               <button class="btn btn--small btn--ghost" data-act="backfill">Log past wear</button>
                <button class="btn btn--small btn--ghost" data-act="retire">Retire</button>`}
           <button class="btn btn--small btn--ghost" data-act="edit">Edit</button>
           <button class="btn btn--small btn--danger-ghost" data-act="delete">Delete</button>
@@ -757,6 +758,7 @@ function itemCard(item) {
       Store.save();
       renderItemGrid();
     });
+    qs('[data-act="backfill"]', card).addEventListener('click', () => openBackfillModal(item));
     qs('[data-act="retire"]', card).addEventListener('click', () => openRetireModal(item));
   } else {
     qs('[data-act="reactivate"]', card).addEventListener('click', () => {
@@ -779,6 +781,45 @@ function itemCard(item) {
   });
 
   return card;
+}
+
+function todayDateStr() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function openBackfillModal(item) {
+  const maxDate = todayDateStr();
+  const body = el(`
+    <form class="form" id="backfill-form">
+      <p class="muted">Log a wear for "${esc(itemTitle(item))}" on a past date. This adds to the wear count; "Last worn" only moves forward if this date is more recent than what's already stored.</p>
+      <label>Date worn
+        <input type="date" name="date" max="${maxDate}" value="${maxDate}" required>
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="backfill-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">Log wear</button>
+      </div>
+    </form>`);
+  Modal.open('Log a past wear', body, {
+    onMount: (root) => {
+      qs('#backfill-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#backfill-form', root).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const dateStr = new FormData(e.target).get('date');
+        if (!dateStr) return;
+        if (dateStr > maxDate) { toast('Pick a date up to today', 'warn'); return; }
+        const ts = new Date(dateStr + 'T12:00:00').getTime();
+        item.wearCount = (item.wearCount || 0) + 1;
+        if (ts > (item.lastWornAt || 0)) item.lastWornAt = ts;
+        Store.save();
+        Modal.close();
+        renderItemGrid();
+        toast(`Logged a wear for ${fmtDate(ts)}`);
+      });
+    },
+  });
 }
 
 function openRetireModal(item) {

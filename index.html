@@ -22,6 +22,20 @@
       <button class="nav__link" data-tab="masters">Masters</button>
       <button class="nav__link" data-tab="settings">Settings</button>
     </nav>
+    <div class="sync-indicator" id="sync-indicator">
+      <button class="sync-indicator__btn" id="sync-indicator-btn" type="button">
+        <span class="sync-dot" id="sync-dot"></span>
+        <span class="sync-indicator__label" id="sync-indicator-label">—</span>
+      </button>
+      <div class="sync-popover" id="sync-popover">
+        <p class="sync-popover__status" id="sync-popover-status">—</p>
+        <div class="sync-popover__actions">
+          <button class="btn btn--small btn--primary" id="sync-push-btn">Push</button>
+          <button class="btn btn--small btn--ghost" id="sync-pull-btn">Pull</button>
+        </div>
+        <button class="btn btn--tiny btn--ghost sync-popover__settings" id="sync-popover-settings">Sync settings</button>
+      </div>
+    </div>
   </div>
 </header>
 

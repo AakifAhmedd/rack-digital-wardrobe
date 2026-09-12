@@ -27,6 +27,18 @@ function fmtDate(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+/* Compact relative date for tight spaces (e.g. the item card stat grid). */
+function fmtDateShort(ts) {
+  if (!ts) return 'Never';
+  const d = new Date(ts);
+  const startOf = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const days = Math.round((startOf(Date.now()) - startOf(ts)) / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days > 1 && days < 7) return `${days}d ago`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: '2-digit' });
+}
 function toast(msg, kind = 'ok') {
   const host = qs('#toast-host');
   const t = el(`<div class="toast toast--${kind}">${esc(msg)}</div>`);
@@ -99,6 +111,17 @@ function iconMarkup(key) {
 }
 function iconSvg(key, size = 18, extraAttrs = '') {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" ${extraAttrs}>${iconMarkup(key)}</svg>`;
+}
+
+/* Stat-card icons (Lucide, MIT) — kept separate from ICONS/ICON_KEYS so they never show up in the category icon picker. */
+const STAT_ICONS = {
+  wears: '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>',
+  calendar: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
+  wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  'trending-down': '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+};
+function statIconSvg(key, size = 16) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
 }
 
 /* ---------------- appearance: themes & fonts ---------------- */
@@ -869,14 +892,26 @@ function itemCard(item) {
 
   const reasonLabel = RETIRE_REASONS.find(r => r.id === item.retiredReason)?.label || 'Retired';
 
+  const cpwCellClass = cpwClass === 'tag-chip--good' ? 'stat-cell--good' : (cpwClass === 'tag-chip--warn' ? 'stat-cell--warn' : '');
+
+  ensureOverflowOutsideClickHandler();
   const card = el(`
     <article class="item-card ${isRetired ? 'item-card--retired' : ''}">
-      <div class="item-card__hole"></div>
       <div class="item-card__top">
         <span class="swatch" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
         <div class="item-card__titles">
           <h4>${esc(itemTitle(item))}</h4>
           <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
+        </div>
+        <div class="item-card__overflow item-row__overflow">
+          <button type="button" class="item-card__hole-btn" data-act="overflow-toggle" aria-label="More actions">&#8942;</button>
+          <div class="item-row__menu">
+            ${isRetired ? '' : `
+              <button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
+              <button type="button" data-act="retire">Retire</button>`}
+            <button type="button" data-act="edit">Edit</button>
+            <button type="button" data-act="delete" class="danger">Delete</button>
+          </div>
         </div>
       </div>
       ${item.subtext ? `<p class="item-card__subtext">${esc(item.subtext)}</p>` : ''}
@@ -885,24 +920,40 @@ function itemCard(item) {
         ${(item.tags || []).map(tid => `<span class="tag-chip">${esc(G.tag(tid).name)}</span>`).join('')}
       </div>
       <div class="item-card__stats">
-        <div><span class="mono">${item.wearCount || 0}</span><small>wears</small></div>
-        <div><span class="mono">${item.cost ? fmtMoney(item.cost) : '—'}</span><small>cost</small></div>
-        <div><span class="mono ${cpwClass}">${cpw !== null ? fmtMoney(cpw) : '—'}</span><small>per wear</small></div>
-      </div>
-      <p class="item-card__last muted">Last worn: ${fmtDate(item.lastWornAt)}</p>
-      <div class="item-card__actions">
-        ${isRetired ? '' : `<button class="btn btn--primary btn--wear" data-act="wear">+1 Worn</button>`}
-        <div class="item-card__actions-row">
-          ${isRetired
-            ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
-            : `<button class="btn btn--small btn--ghost" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
-               <button class="btn btn--small btn--ghost" data-act="backfill">Log past wear</button>
-               <button class="btn btn--small btn--ghost" data-act="retire">Retire</button>`}
-          <button class="btn btn--small btn--ghost" data-act="edit">Edit</button>
-          <button class="btn btn--small btn--danger-ghost" data-act="delete">Delete</button>
+        <div class="stat-cell">
+          <span class="stat-cell__icon">${statIconSvg('wears')}</span>
+          <span class="stat-cell__text"><span class="mono">${item.wearCount || 0}</span><small>wears</small></span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-cell__icon">${statIconSvg('calendar')}</span>
+          <span class="stat-cell__text"><span class="mono" title="${item.lastWornAt ? esc(fmtDate(item.lastWornAt)) : ''}">${fmtDateShort(item.lastWornAt)}</span><small>last worn</small></span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-cell__icon">${statIconSvg('wallet')}</span>
+          <span class="stat-cell__text"><span class="mono">${item.cost ? fmtMoney(item.cost) : '—'}</span><small>cost</small></span>
+        </div>
+        <div class="stat-cell ${cpwCellClass}">
+          <span class="stat-cell__icon">${statIconSvg('trending-down')}</span>
+          <span class="stat-cell__text"><span class="mono">${cpw !== null ? fmtMoney(cpw) : '—'}</span><small>per wear</small></span>
         </div>
       </div>
+      <div class="item-card__actions">
+        ${isRetired
+          ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
+          : `<div class="item-card__actions-row item-card__actions-row--primary">
+               <button class="btn btn--primary btn--wear" data-act="wear">+1 Worn</button>
+               <button class="btn btn--ghost btn--wear" data-act="backfill">Log past</button>
+             </div>`}
+      </div>
     </article>`);
+
+  const overflowWrap = qs('.item-card__overflow', card);
+  qs('[data-act="overflow-toggle"]', card).addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = overflowWrap.classList.contains('is-open');
+    qsa('.item-row__overflow.is-open').forEach(w => w.classList.remove('is-open'));
+    if (!wasOpen) overflowWrap.classList.add('is-open');
+  });
 
   wireItemActions(card, item, isRetired);
   return card;

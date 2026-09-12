@@ -321,6 +321,16 @@ function countActiveWardrobeFilters() {
 let wardrobeFilters = loadWardrobeFilters();
 let filtersSheetOpen = false;
 
+const WARDROBE_VIEW_MODE_KEY = 'rack.wardrobe.viewMode';
+function loadViewMode() {
+  try { return localStorage.getItem(WARDROBE_VIEW_MODE_KEY) === 'list' ? 'list' : 'card'; }
+  catch (e) { return 'card'; }
+}
+function saveViewMode(mode) {
+  try { localStorage.setItem(WARDROBE_VIEW_MODE_KEY, mode); } catch (e) { /* ignore */ }
+}
+let wardrobeViewMode = loadViewMode();
+
 function switchTab(name) {
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
@@ -649,6 +659,10 @@ function renderWardrobe() {
           <button type="button" class="btn btn--ghost btn--small" id="filters-reset-btn">Reset filters</button>
           <button type="button" class="btn btn--ghost filters-done-btn" id="filters-done-btn">Done</button>
         </div>
+        <div class="view-toggle" id="view-toggle">
+          <button type="button" class="view-toggle__btn ${wardrobeViewMode === 'card' ? 'is-active' : ''}" data-mode="card">Cards</button>
+          <button type="button" class="view-toggle__btn ${wardrobeViewMode === 'list' ? 'is-active' : ''}" data-mode="list">List</button>
+        </div>
         <button class="btn btn--primary" id="add-item-btn">+ Add item</button>
       </div>
       <div class="filters-backdrop" id="filters-backdrop"></div>
@@ -656,6 +670,16 @@ function renderWardrobe() {
     </div>
   `);
   wrap.appendChild(toolbar);
+
+  qsa('.view-toggle__btn', toolbar).forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.mode === wardrobeViewMode) return;
+      wardrobeViewMode = btn.dataset.mode;
+      saveViewMode(wardrobeViewMode);
+      qsa('.view-toggle__btn', toolbar).forEach(b => b.classList.toggle('is-active', b === btn));
+      renderItemGrid();
+    });
+  });
 
   const s = Store.state;
   qs('#f-status', toolbar).value = wardrobeFilters.status || 'active';
@@ -751,6 +775,7 @@ function renderItemGrid() {
   const grid = qs('#item-grid');
   if (!grid) return;
   grid.innerHTML = '';
+  grid.classList.toggle('item-grid--list', wardrobeViewMode === 'list');
   const f = wardrobeFilters;
   let items = Store.state.items.filter(i => {
     const status = f.status || 'active';
@@ -781,7 +806,51 @@ function renderItemGrid() {
     grid.appendChild(el(`<p class="muted" style="padding: 2rem 0;">${esc(msg)}</p>`));
     return;
   }
-  items.forEach(item => grid.appendChild(itemCard(item)));
+  items.forEach(item => grid.appendChild(wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item)));
+}
+
+/* Shared action wiring — both the card and the compact list row use the
+   exact same data-act handlers, just attached to different markup. */
+function wireItemActions(root, item, isRetired) {
+  if (!isRetired) {
+    const wearBtn = qs('[data-act="wear"]', root);
+    if (wearBtn) wearBtn.addEventListener('click', () => {
+      item.wearCount = (item.wearCount || 0) + 1;
+      item.lastWornAt = Date.now();
+      Store.save();
+      renderItemGrid();
+    });
+    const undoBtn = qs('[data-act="undo"]', root);
+    if (undoBtn) undoBtn.addEventListener('click', () => {
+      if (!item.wearCount) return;
+      item.wearCount -= 1;
+      Store.save();
+      renderItemGrid();
+    });
+    const backfillBtn = qs('[data-act="backfill"]', root);
+    if (backfillBtn) backfillBtn.addEventListener('click', () => openBackfillModal(item));
+    const retireBtn = qs('[data-act="retire"]', root);
+    if (retireBtn) retireBtn.addEventListener('click', () => openRetireModal(item));
+  } else {
+    const reactivateBtn = qs('[data-act="reactivate"]', root);
+    if (reactivateBtn) reactivateBtn.addEventListener('click', () => {
+      item.status = 'active';
+      item.retiredReason = null;
+      item.retiredAt = null;
+      Store.save();
+      render();
+      toast('Item reactivated');
+    });
+  }
+  qs('[data-act="edit"]', root).addEventListener('click', () => openItemModal(item));
+  qs('[data-act="delete"]', root).addEventListener('click', () => {
+    Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear history. This can't be undone.`, () => {
+      Store.state.items = Store.state.items.filter(i => i.id !== item.id);
+      Store.save();
+      render();
+      toast('Item deleted');
+    }, { danger: true, yesLabel: 'Delete permanently' });
+  });
 }
 
 function itemCard(item) {
@@ -835,43 +904,77 @@ function itemCard(item) {
       </div>
     </article>`);
 
-  if (!isRetired) {
-    qs('[data-act="wear"]', card).addEventListener('click', () => {
-      item.wearCount = (item.wearCount || 0) + 1;
-      item.lastWornAt = Date.now();
-      Store.save();
-      renderItemGrid();
-    });
-    qs('[data-act="undo"]', card).addEventListener('click', () => {
-      if (!item.wearCount) return;
-      item.wearCount -= 1;
-      Store.save();
-      renderItemGrid();
-    });
-    qs('[data-act="backfill"]', card).addEventListener('click', () => openBackfillModal(item));
-    qs('[data-act="retire"]', card).addEventListener('click', () => openRetireModal(item));
-  } else {
-    qs('[data-act="reactivate"]', card).addEventListener('click', () => {
-      item.status = 'active';
-      item.retiredReason = null;
-      item.retiredAt = null;
-      Store.save();
-      render();
-      toast('Item reactivated');
-    });
-  }
-  qs('[data-act="edit"]', card).addEventListener('click', () => openItemModal(item));
-  qs('[data-act="delete"]', card).addEventListener('click', () => {
-    Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear history. This can't be undone.`, () => {
-      Store.state.items = Store.state.items.filter(i => i.id !== item.id);
-      Store.save();
-      render();
-      toast('Item deleted');
-    }, { danger: true, yesLabel: 'Delete permanently' });
-  });
-
+  wireItemActions(card, item, isRetired);
   return card;
 }
+
+/* ---- compact list row: name + primary action visible, rest behind an overflow menu ---- */
+let __overflowOutsideClickBound = false;
+function ensureOverflowOutsideClickHandler() {
+  if (__overflowOutsideClickBound) return;
+  __overflowOutsideClickBound = true;
+  document.addEventListener('click', (e) => {
+    qsa('.item-row__overflow.is-open').forEach(wrap => {
+      if (!wrap.contains(e.target)) wrap.classList.remove('is-open');
+    });
+  });
+}
+
+function itemListRow(item) {
+  ensureOverflowOutsideClickHandler();
+  const color = G.color(item.colorId);
+  const cat = G.category(item.categoryId);
+  const sub = G.subcategory(item.subcategoryId);
+  const cpw = costPerWear(item);
+  const isRetired = item.status === 'retired';
+  const reasonLabel = RETIRE_REASONS.find(r => r.id === item.retiredReason)?.label || 'Retired';
+
+  const swatchStyle = color?.hex && color.hex !== 'multi'
+    ? `background:${color.hex}`
+    : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
+
+  const metaBits = [
+    `${esc(cat.name)} \u203a ${esc(sub?.name || '—')}`,
+    `${item.wearCount || 0}\u00d7`,
+  ];
+  if (cpw !== null) metaBits.push(`${fmtMoney(cpw)}/wear`);
+  if (isRetired) metaBits.push(`${esc(reasonLabel)}`);
+
+  const row = el(`
+    <div class="item-row ${isRetired ? 'item-row--retired' : ''}">
+      <span class="swatch swatch--sm" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
+      <div class="item-row__main">
+        <span class="item-row__title">${esc(itemTitle(item))}</span>
+        <span class="item-row__meta">${metaBits.join(' &middot; ')}</span>
+      </div>
+      ${isRetired
+        ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
+        : `<button class="btn btn--small btn--primary" data-act="wear">+1 Worn</button>`}
+      <div class="item-row__overflow">
+        <button type="button" class="btn btn--tiny btn--ghost item-row__overflow-btn" data-act="overflow-toggle" aria-label="More actions">&#8942;</button>
+        <div class="item-row__menu">
+          ${isRetired ? '' : `
+            <button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
+            <button type="button" data-act="backfill">Log past wear</button>
+            <button type="button" data-act="retire">Retire</button>`}
+          <button type="button" data-act="edit">Edit</button>
+          <button type="button" data-act="delete" class="danger">Delete</button>
+        </div>
+      </div>
+    </div>`);
+
+  const overflowWrap = qs('.item-row__overflow', row);
+  qs('[data-act="overflow-toggle"]', row).addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = overflowWrap.classList.contains('is-open');
+    qsa('.item-row__overflow.is-open').forEach(w => w.classList.remove('is-open'));
+    if (!wasOpen) overflowWrap.classList.add('is-open');
+  });
+
+  wireItemActions(row, item, isRetired);
+  return row;
+}
+
 
 function todayDateStr() {
   const d = new Date();

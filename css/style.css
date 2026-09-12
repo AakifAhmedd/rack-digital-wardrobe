@@ -462,6 +462,7 @@ select, input[type="text"], input[type="number"], input[type="password"] {
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 640px) {
+  .app-header { position: static; }
   .app-header__inner { gap: 1rem; }
   .brand small { display: none; }
   .nav { display: none; }

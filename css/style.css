@@ -237,29 +237,49 @@ select, input[type="text"], input[type="number"], input[type="password"] {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
   padding: 1.1rem 1.1rem 1rem; box-shadow: var(--shadow-card);
 }
-.item-card__hole {
-  position: absolute; top: .75rem; right: .9rem; width: 14px; height: 14px;
-  border-radius: 50%; border: 2px solid var(--line); background: var(--canvas);
-}
-.item-card__top { display: flex; gap: .65rem; align-items: flex-start; padding-right: 1.5rem; }
+.item-card__top { display: flex; gap: .65rem; align-items: flex-start; }
 .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface-raised); box-shadow: 0 0 0 1px var(--line); flex-shrink: 0; margin-top: .15rem; }
 .swatch--sm { width: 18px; height: 18px; }
-.item-card__titles h4 { font-size: 1rem; margin-bottom: .1rem; }
-.item-card__breadcrumb { font-size: .76rem; color: var(--ink-soft); margin: 0; }
+.item-card__titles { flex: 1; min-width: 0; }
+.item-card__titles h4 { font-size: 1rem; margin-bottom: .1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-card__breadcrumb { font-size: .76rem; color: var(--ink-soft); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-card__subtext { font-size: .82rem; color: var(--ink-soft); margin: .5rem 0 0; font-style: italic; }
 .item-card__tags { display: flex; flex-wrap: wrap; gap: .3rem; margin: .7rem 0; }
-.item-card__stats {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem;
-  border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
-  padding: .6rem 0; margin: .5rem 0;
+
+/* overflow menu trigger: doubles as the card's decorative "hole" */
+.item-card__overflow { flex-shrink: 0; margin-top: .15rem; }
+.item-card__hole-btn {
+  position: relative; width: 16px; height: 16px; padding: 0; border-radius: 50%;
+  border: 2px solid var(--line); background: var(--canvas); color: var(--ink-soft);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .6rem; line-height: 1; cursor: pointer;
 }
-.item-card__stats > div { display: flex; flex-direction: column; align-items: center; }
-.item-card__stats .mono { font-size: .95rem; font-weight: 600; }
-.item-card__stats small { font-size: .68rem; color: var(--ink-soft); text-transform: lowercase; }
-.item-card__last { font-size: .75rem; margin: 0 0 .7rem; }
+.item-card__hole-btn::before { content: ''; position: absolute; inset: -9px; } /* larger tap target */
+.item-card__hole-btn:hover { background: var(--surface-raised); border-color: var(--ink-soft); }
+
+.item-card__stats {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: .55rem .8rem;
+  border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
+  padding: .65rem 0; margin: .5rem 0;
+}
+.stat-cell { display: flex; align-items: center; gap: .45rem; min-width: 0; }
+.stat-cell__icon { flex-shrink: 0; color: var(--ink-soft); display: flex; }
+.stat-cell__text { display: flex; flex-direction: column; min-width: 0; }
+.stat-cell__text .mono { font-size: .9rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-cell__text small { font-size: .66rem; color: var(--ink-soft); text-transform: lowercase; }
+.stat-cell--good,
+.stat-cell--warn { padding: .2rem .4rem; margin: -.2rem -.4rem; border-radius: var(--radius-s); }
+.stat-cell--good { background: var(--good-bg); }
+.stat-cell--warn { background: var(--warn-bg); }
+.stat-cell--good .stat-cell__icon,
+.stat-cell--good .mono { color: var(--good); }
+.stat-cell--warn .stat-cell__icon,
+.stat-cell--warn .mono { color: var(--warn); }
+
 .item-card__actions { display: flex; flex-direction: column; gap: .5rem; }
 .item-card__actions-row { display: flex; flex-wrap: wrap; gap: .4rem; }
-.btn--wear { width: 100%; padding: .65rem 1rem; font-size: .92rem; }
+.item-card__actions-row--primary .btn--wear { flex: 1; }
+.btn--wear { padding: .65rem 1rem; font-size: .92rem; }
 .item-card--retired { opacity: .82; background: var(--canvas); }
 .retired-badge {
   display: inline-block; font-size: .72rem; font-family: var(--font-mono);

@@ -267,6 +267,46 @@ select, input[type="text"], input[type="number"], input[type="password"] {
   border-radius: 20px; padding: .15rem .6rem; margin: .3rem 0 0;
 }
 
+/* ---------------- view toggle (cards / list) ---------------- */
+.view-toggle { display: flex; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; flex-shrink: 0; }
+.view-toggle__btn {
+  background: var(--surface-raised); border: none; padding: .5rem .9rem;
+  font-family: var(--font-body); font-size: .82rem; color: var(--ink-soft); cursor: pointer;
+}
+.view-toggle__btn.is-active { background: var(--ink); color: var(--accent-ink); }
+
+/* ---------------- compact list view ---------------- */
+.item-grid--list { display: flex; flex-direction: column; gap: .4rem; }
+.item-row {
+  display: flex; align-items: center; gap: .7rem;
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
+  padding: .55rem .7rem;
+}
+.item-row--retired { opacity: .8; background: var(--canvas); }
+.item-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .05rem; }
+.item-row__title { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-row__meta { font-size: .74rem; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-row__overflow { position: relative; flex-shrink: 0; }
+.item-row__overflow-btn { font-size: 1.05rem; line-height: 1; padding: .35rem .55rem; }
+.item-row__menu {
+  display: none; position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
+  box-shadow: 0 10px 26px rgba(0,0,0,.18); min-width: 168px; overflow: hidden;
+}
+.item-row__overflow.is-open .item-row__menu { display: block; }
+.item-row__menu button {
+  display: block; width: 100%; text-align: left; padding: .55rem .8rem;
+  background: none; border: none; border-bottom: 1px solid var(--line);
+  cursor: pointer; font-family: var(--font-body); font-size: .84rem; color: var(--text);
+}
+.item-row__menu button:last-child { border-bottom: none; }
+.item-row__menu button:hover { background: var(--canvas); }
+.item-row__menu button.danger { color: var(--thread); }
+.item-row__menu button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 640px) {
+  .item-row__title { max-width: 46vw; }
+}
+
 /* ---------------- masters ---------------- */
 .subnav { display: flex; gap: .4rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .75rem; }
 .subnav__link {

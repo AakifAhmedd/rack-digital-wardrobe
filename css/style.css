@@ -235,6 +235,7 @@ select, input[type="text"], input[type="number"], input[type="password"] {
 .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 1rem; }
 .item-card {
   position: relative;
+  min-width: 0;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
   padding: 1.1rem 1.1rem 1rem; box-shadow: var(--shadow-card);
 }

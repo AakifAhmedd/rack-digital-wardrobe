@@ -184,11 +184,12 @@ a { color: var(--accent); }
 .filter-count-badge[hidden] { display: none; }
 .filters-backdrop { display: none; }
 .filters-done-btn { display: none; }
-select, input[type="text"], input[type="number"], input[type="password"] {
+select, input[type="text"], input[type="number"], input[type="password"], input[type="search"] {
   font-family: var(--font-body); font-size: .87rem;
   padding: .5rem .6rem; border-radius: var(--radius-s); border: 1px solid var(--line);
   background: var(--surface-raised); color: var(--text);
 }
+.search-input { flex: 1 1 180px; min-width: 0; max-width: 260px; }
 
 /* ---------------- stat grid (dashboard) ---------------- */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; }
@@ -479,6 +480,7 @@ select, input[type="text"], input[type="number"], input[type="password"] {
   .item-grid { grid-template-columns: 1fr; }
 
   /* filters: collapse behind a toggle + bottom sheet */
+  .search-input { max-width: none; flex-basis: 100%; order: -1; }
   .filters-toggle-btn { display: inline-flex; align-items: center; }
   .toolbar__filters { display: none; }
   .toolbar__filters.is-open {

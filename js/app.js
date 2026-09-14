@@ -318,7 +318,7 @@ let activeTab = 'dashboard';
 let activeMasterPanel = 'categories';
 let activeSettingsPanel = 'general';
 const WARDROBE_FILTERS_KEY = 'rack.wardrobe.filters';
-const DEFAULT_WARDROBE_FILTERS = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent' };
+const DEFAULT_WARDROBE_FILTERS = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent', search: '' };
 function loadWardrobeFilters() {
   try {
     const raw = localStorage.getItem(WARDROBE_FILTERS_KEY);
@@ -339,6 +339,7 @@ function countActiveWardrobeFilters() {
   if (f.color) n++;
   if (f.tag) n++;
   if (f.activity) n++;
+  if (f.search) n++;
   return n;
 }
 let wardrobeFilters = loadWardrobeFilters();
@@ -638,7 +639,7 @@ function renderDashboard() {
         <button class="btn btn--ghost" id="goto-unused">Review unused items</button>
       </div>`);
     qs('#goto-unused', donate).addEventListener('click', () => {
-      wardrobeFilters = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'least' };
+      wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS, sort: 'least' };
       saveWardrobeFilters();
       switchTab('wardrobe');
     });
@@ -657,6 +658,7 @@ function renderWardrobe() {
   const toolbar = el(`
     <div class="wardrobe-block">
       <div class="toolbar">
+        <input type="search" class="search-input" id="wardrobe-search" placeholder="Search wardrobe…" autocomplete="off" value="${esc(wardrobeFilters.search || '')}">
         <button type="button" class="btn btn--ghost filters-toggle-btn" id="filters-toggle-btn">
           Filters<span class="filter-count-badge" id="filter-count-badge" hidden></span>
         </button>
@@ -764,6 +766,17 @@ function renderWardrobe() {
   qs('#f-sort', toolbar).addEventListener('change', (e) => { wardrobeFilters.sort = e.target.value; onFilterChanged(); });
   qs('#add-item-btn', toolbar).addEventListener('click', openAddItemModal);
 
+  const searchInput = qs('#wardrobe-search', toolbar);
+  let searchDebounce = null;
+  searchInput.addEventListener('input', (e) => {
+    const val = e.target.value;
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      wardrobeFilters.search = val;
+      onFilterChanged();
+    }, 150);
+  });
+
   resetBtn.addEventListener('click', () => {
     wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS };
     saveWardrobeFilters();
@@ -810,6 +823,11 @@ function renderItemGrid() {
     if (f.color && i.colorId !== f.color) return false;
     if (f.tag && !i.tags.includes(f.tag)) return false;
     if (f.activity && !matchActivity(G.activity(f.activity), i)) return false;
+    if (f.search) {
+      const tagNames = (i.tags || []).map(tid => G.tag(tid)?.name || '').join(' ');
+      const haystack = `${itemTitle(i)} ${tagNames}`.toLowerCase();
+      if (!haystack.includes(f.search.trim().toLowerCase())) return false;
+    }
     return true;
   });
 

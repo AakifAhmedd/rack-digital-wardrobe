@@ -313,7 +313,7 @@ qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'mod
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Modal.close(); });
 
 /* ---------------- tab navigation ---------------- */
-const TABS = ['dashboard', 'wardrobe', 'masters', 'settings'];
+const TABS = ['dashboard', 'wardrobe', 'outfit', 'masters', 'settings'];
 let activeTab = 'dashboard';
 let activeMasterPanel = 'categories';
 let activeSettingsPanel = 'general';
@@ -367,6 +367,7 @@ function render() {
   main.innerHTML = '';
   if (activeTab === 'dashboard') main.appendChild(renderDashboard());
   else if (activeTab === 'wardrobe') { main.appendChild(renderWardrobe()); renderItemGrid(); }
+  else if (activeTab === 'outfit') main.appendChild(renderOutfitBuilder());
   else if (activeTab === 'masters') main.appendChild(renderMasters());
   else if (activeTab === 'settings') main.appendChild(renderSettings());
 }
@@ -1262,6 +1263,192 @@ function openItemModal(existing) {
 }
 
 /* ================================================================
+   OUTFIT BUILDER — "What are you doing?" -> suggested items per
+   category (via the existing activity rule engine) -> pick & wear.
+   ================================================================ */
+const OUTFIT_ACTIVITY_KEY = 'rack.outfit.activityId';
+function loadOutfitActivityId() {
+  try { return localStorage.getItem(OUTFIT_ACTIVITY_KEY) || ''; } catch (e) { return ''; }
+}
+function saveOutfitActivityId(id) {
+  try { localStorage.setItem(OUTFIT_ACTIVITY_KEY, id || ''); } catch (e) { /* ignore */ }
+}
+let outfitActivityId = loadOutfitActivityId();
+let outfitSelectedIds = new Set();
+/* Accessories are typically layered (watch + belt + sunglasses...), so that
+   category allows multiple picks; every other category is one-at-a-time. */
+function outfitCategoryIsMulti(catId) { return catId === 'cat_accessories'; }
+
+function openOutfitBuilderFor(activityId) {
+  outfitActivityId = activityId;
+  outfitSelectedIds = new Set();
+  saveOutfitActivityId(activityId);
+  switchTab('outfit');
+}
+
+function renderOutfitBuilder() {
+  const wrap = el(`<section class="view-section outfit-view"></section>`);
+  const activities = Store.state.activities;
+
+  if (!activities.length) {
+    wrap.appendChild(el(`
+      <div class="empty-state">
+        <h2>No activities yet</h2>
+        <p>Set up an activity with rules in Masters, then come back here to build an outfit for it.</p>
+        <button class="btn btn--primary" id="outfit-goto-masters">Go to Masters</button>
+      </div>`));
+    qs('#outfit-goto-masters', wrap).addEventListener('click', () => {
+      activeMasterPanel = 'activities';
+      switchTab('masters');
+    });
+    return wrap;
+  }
+
+  if (!activities.find(a => a.id === outfitActivityId)) outfitActivityId = '';
+
+  wrap.appendChild(el(`<h2 class="outfit-question">What are you doing?</h2>`));
+
+  const chipRow = el(`<div class="subnav outfit-activity-chips"></div>`);
+  activities.forEach(act => {
+    const chip = el(`<button type="button" class="subnav__link ${act.id === outfitActivityId ? 'is-active' : ''}">${esc(act.name)}</button>`);
+    chip.addEventListener('click', () => {
+      if (outfitActivityId === act.id) return;
+      outfitActivityId = act.id;
+      outfitSelectedIds = new Set();
+      saveOutfitActivityId(outfitActivityId);
+      qsa('.subnav__link', chipRow).forEach(c => c.classList.remove('is-active'));
+      chip.classList.add('is-active');
+      renderOutfitBody();
+    });
+    chipRow.appendChild(chip);
+  });
+  wrap.appendChild(chipRow);
+
+  const body = el(`<div id="outfit-body"></div>`);
+  wrap.appendChild(body);
+
+  function renderOutfitBody() {
+    body.innerHTML = '';
+    if (!outfitActivityId) {
+      body.appendChild(el(`<p class="muted outfit-hint">Pick an activity above to see suggested items.</p>`));
+      return;
+    }
+    const act = G.activity(outfitActivityId);
+    const matches = itemsForActivity(outfitActivityId);
+
+    if (!matches.length) {
+      body.appendChild(el(`
+        <div class="empty-state">
+          <h2>Nothing matches yet</h2>
+          <p>No active items match "${esc(act.name)}"'s rules. Add items to your rack or adjust the activity's rules in Masters.</p>
+        </div>`));
+      return;
+    }
+
+    // Drop stale selections (item retired/edited/deleted since last pick).
+    const matchIds = new Set(matches.map(i => i.id));
+    outfitSelectedIds.forEach(id => { if (!matchIds.has(id)) outfitSelectedIds.delete(id); });
+
+    const byCategory = {};
+    matches.forEach(it => { (byCategory[it.categoryId] ||= []).push(it); });
+    const catIds = Store.state.categories.map(c => c.id).filter(id => byCategory[id]);
+
+    catIds.forEach(catId => {
+      const cat = G.category(catId);
+      const multi = outfitCategoryIsMulti(catId);
+      // Recommend items that haven't been worn in a while first.
+      const items = byCategory[catId].slice().sort((a, b) => (a.lastWornAt || 0) - (b.lastWornAt || 0));
+      const section = el(`
+        <div class="outfit-category">
+          <h3>${iconSvg(cat.icon, 15, 'style="vertical-align:-2px;margin-right:5px;"')}${esc(cat.name)}</h3>
+          <div class="outfit-item-row"></div>
+        </div>`);
+      const row = qs('.outfit-item-row', section);
+      items.forEach(item => {
+        const tile = outfitItemTile(item, outfitSelectedIds.has(item.id));
+        tile.addEventListener('click', () => {
+          if (!multi) {
+            byCategory[catId].forEach(other => { if (other.id !== item.id) outfitSelectedIds.delete(other.id); });
+          }
+          if (outfitSelectedIds.has(item.id)) outfitSelectedIds.delete(item.id);
+          else outfitSelectedIds.add(item.id);
+          renderOutfitBody();
+        });
+        row.appendChild(tile);
+      });
+      body.appendChild(section);
+    });
+
+    body.appendChild(renderOutfitSummary(matches, renderOutfitBody));
+  }
+
+  renderOutfitBody();
+  return wrap;
+}
+
+function outfitItemTile(item, selected) {
+  const color = G.color(item.colorId);
+  const swatchStyle = color?.hex && color.hex !== 'multi'
+    ? `background:${color.hex}`
+    : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
+  return el(`
+    <button type="button" class="outfit-item-tile ${selected ? 'is-selected' : ''}">
+      <span class="swatch swatch--sm" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
+      <span class="outfit-item-tile__title">${esc(itemTitle(item))}</span>
+      <span class="outfit-item-tile__meta muted">${item.wearCount || 0}&times; &middot; ${esc(fmtDateShort(item.lastWornAt))}</span>
+    </button>`);
+}
+
+function renderOutfitSummary(matches, refresh) {
+  const selected = matches.filter(i => outfitSelectedIds.has(i.id));
+  const box = el(`<div class="outfit-summary"></div>`);
+
+  if (!selected.length) {
+    box.appendChild(el(`<p class="muted outfit-summary__empty">Select items above to build today's outfit.</p>`));
+    return box;
+  }
+
+  const totalCost = selected.reduce((s, i) => s + (Number(i.cost) || 0), 0);
+  box.appendChild(el(`
+    <div class="outfit-summary__header">
+      <strong>${selected.length} item${selected.length === 1 ? '' : 's'} selected</strong>
+      <span class="muted">${totalCost ? fmtMoney(totalCost) + ' total' : ''}</span>
+    </div>`));
+
+  const list = el(`<div class="outfit-summary__list"></div>`);
+  selected.forEach(item => {
+    const chip = el(`
+      <span class="tag-chip outfit-summary__chip">${esc(itemTitle(item))}
+        <button type="button" aria-label="Remove from outfit">&times;</button>
+      </span>`);
+    qs('button', chip).addEventListener('click', () => { outfitSelectedIds.delete(item.id); refresh(); });
+    list.appendChild(chip);
+  });
+  box.appendChild(list);
+
+  const actions = el(`
+    <div class="outfit-summary__actions">
+      <button type="button" class="btn btn--ghost btn--small" id="outfit-clear">Clear</button>
+      <button type="button" class="btn btn--primary" id="outfit-wear">Wear this outfit</button>
+    </div>`);
+  qs('#outfit-clear', actions).addEventListener('click', () => { outfitSelectedIds.clear(); refresh(); });
+  qs('#outfit-wear', actions).addEventListener('click', () => {
+    const now = Date.now();
+    selected.forEach(item => {
+      item.wearCount = (item.wearCount || 0) + 1;
+      item.lastWornAt = now;
+    });
+    Store.save();
+    outfitSelectedIds.clear();
+    toast(`Outfit logged — ${selected.length} item${selected.length === 1 ? '' : 's'} marked worn`);
+    refresh();
+  });
+  box.appendChild(actions);
+
+  return box;
+}
+
+/* ================================================================
    MASTERS
    ================================================================ */
 function renderMasters() {
@@ -1572,12 +1759,14 @@ function renderActivitiesPanel() {
           <strong>${esc(act.name)}</strong>
           <span class="muted">${count} matching item${count === 1 ? '' : 's'}</span>
           <div class="master-card__actions">
+            <button class="btn btn--tiny btn--ghost" data-act="build">Build outfit</button>
             <button class="btn btn--tiny btn--ghost" data-act="edit">Edit rules</button>
             <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
           </div>
         </div>
         <p class="muted rule-summary">${describeActivityRules(act)}</p>
       </div>`);
+    qs('[data-act="build"]', card).addEventListener('click', () => openOutfitBuilderFor(act.id));
     qs('[data-act="edit"]', card).addEventListener('click', () => openActivityModal(act));
     qs('[data-act="delete"]', card).addEventListener('click', () => {
       Modal.confirm(`Delete activity "${act.name}"?`, () => {

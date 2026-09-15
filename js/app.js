@@ -124,6 +124,18 @@ function statIconSvg(key, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
 }
 
+/* Bottom-nav icons (mobile). 'hanger' is reused from ICONS itself. */
+const NAV_ICONS = {
+  home: '<path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/>',
+  sparkles: '<path d="M12 3L14 10L21 12L14 14L12 21L10 14L3 12L10 10Z"/><path d="M19 2L19.5 3.5L21 4L19.5 4.5L19 6L18.5 4.5L17 4L18.5 3.5Z"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+  sliders: '<line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/>',
+};
+function navIconSvg(key, size = 20) {
+  if (key === 'hanger') return iconSvg('hanger', size);
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${NAV_ICONS[key] || ''}</g></svg>`;
+}
+
 /* ---------------- appearance: themes & fonts ---------------- */
 function getThemeById(id) {
   return defaultThemes().find(t => t.id === id) || Store.state.appearance.customThemes.find(t => t.id === id);
@@ -2254,6 +2266,7 @@ function init() {
   applyStoredAppearance();
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  qsa('.bottom-nav__icon[data-icon]').forEach(span => { span.innerHTML = navIconSvg(span.dataset.icon); });
   initSyncIndicator();
   switchTab('dashboard');
 

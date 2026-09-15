@@ -330,6 +330,42 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
   .item-row__title { max-width: 46vw; }
 }
 
+/* ---------------- outfit builder ---------------- */
+.outfit-question { font-family: var(--font-display); font-size: 1.3rem; margin: 0; }
+.outfit-activity-chips { border-bottom: none; padding-bottom: 0; }
+.outfit-hint { padding: .5rem 0; }
+.outfit-category h3 {
+  display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;
+}
+.outfit-item-row { display: flex; flex-wrap: wrap; gap: .6rem; }
+.outfit-item-tile {
+  display: flex; align-items: center; gap: .5rem; text-align: left;
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
+  padding: .55rem .8rem; cursor: pointer; font-family: var(--font-body); color: var(--text);
+  max-width: 220px;
+}
+.outfit-item-tile:hover { border-color: var(--accent); }
+.outfit-item-tile.is-selected { border-color: var(--ink); background: var(--canvas); box-shadow: 0 0 0 1px var(--ink); }
+.outfit-item-tile__title {
+  font-size: .87rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.outfit-item-tile__meta { display: block; font-size: .72rem; }
+
+.outfit-summary {
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
+  padding: 1rem 1.1rem; position: sticky; bottom: 1rem; box-shadow: var(--shadow-card);
+}
+.outfit-summary__empty { margin: 0; }
+.outfit-summary__header { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin-bottom: .6rem; }
+.outfit-summary__list { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
+.outfit-summary__chip { display: inline-flex; align-items: center; gap: .35rem; padding-right: .35rem; }
+.outfit-summary__chip button { background: none; border: none; cursor: pointer; color: var(--ink-soft); font-size: .85rem; line-height: 1; }
+.outfit-summary__chip button:hover { color: var(--thread); }
+.outfit-summary__actions { display: flex; justify-content: flex-end; gap: .5rem; }
+@media (max-width: 640px) {
+  .outfit-summary { position: static; }
+}
+
 /* ---------------- masters ---------------- */
 .subnav { display: flex; gap: .4rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .75rem; }
 .subnav__link {

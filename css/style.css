@@ -431,10 +431,10 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 .inline-add select { flex: 1; }
 .form-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
 
-.rule-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1.3fr auto; gap: .5rem; align-items: start; }
+.rule-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1.3fr auto; gap: .5rem; align-items: end; margin-bottom: .8rem; }
+.rule-field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.rule-field small { color: var(--ink-soft); font-size: .68rem; }
 .rule-row select[multiple] { min-height: 66px; font-size: .78rem; }
-.rule-row__labels { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1.3fr auto; gap: .5rem; margin: .15rem 0 .8rem; }
-.rule-row__labels small { color: var(--ink-soft); font-size: .68rem; }
 
 /* ---------------- empty state ---------------- */
 .empty-state {
@@ -510,8 +510,8 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
   .sync-indicator__btn { padding: .4rem; }
   .sync-popover { right: -.5rem; }
   .form--wide { min-width: 0; }
-  .rule-row, .rule-row__labels { grid-template-columns: 1fr 1fr; }
-  .rule-row select[multiple] { grid-column: span 2; }
+  .rule-row { grid-template-columns: 1fr 1fr; }
+  .rule-field--wide { grid-column: span 2; }
   .form-row { grid-template-columns: 1fr; }
   .item-grid { grid-template-columns: 1fr; }
 

@@ -1832,26 +1832,36 @@ function openActivityModal(existing) {
       function ruleRowEl(rule, idx) {
         const subs = rule.category ? G.subsFor(rule.category) : [];
         const row = el(`
-          <div class="rule-row-block">
-            <div class="rule-row" data-idx="${idx}">
+          <div class="rule-row" data-idx="${idx}">
+            <div class="rule-field">
+              <small>Category</small>
               <select data-f="category">
                 <option value="">Any category</option>
                 ${s.categories.map(c => `<option value="${c.id}" ${rule.category === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
               </select>
+            </div>
+            <div class="rule-field">
+              <small>Subcategory</small>
               <select data-f="subcategory">
                 <option value="">Any subcategory</option>
                 ${subs.map(sc => `<option value="${sc.id}" ${rule.subcategory === sc.id ? 'selected' : ''}>${esc(sc.name)}</option>`).join('')}
               </select>
+            </div>
+            <div class="rule-field rule-field--wide">
+              <small>Requires tags</small>
               <select data-f="requiredTags" multiple size="3" title="Must have ALL of these tags">
                 ${s.tags.map(t => `<option value="${t.id}" ${rule.requiredTags?.includes(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
               </select>
+            </div>
+            <div class="rule-field rule-field--wide">
+              <small>Excludes tags</small>
               <select data-f="excludeTags" multiple size="3" title="Must have NONE of these tags">
                 ${s.tags.map(t => `<option value="${t.id}" ${rule.excludeTags?.includes(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
               </select>
-              <button type="button" class="btn btn--tiny btn--danger-ghost" data-act="remove-rule">&times;</button>
             </div>
-            <div class="rule-row__labels">
-              <small>Category</small><small>Subcategory</small><small>Requires tags</small><small>Excludes tags</small><small></small>
+            <div class="rule-field">
+              <small>&nbsp;</small>
+              <button type="button" class="btn btn--tiny btn--danger-ghost" data-act="remove-rule">&times;</button>
             </div>
           </div>`);
         const catSel = qs('[data-f="category"]', row);

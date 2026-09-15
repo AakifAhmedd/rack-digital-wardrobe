@@ -133,11 +133,15 @@ a { color: var(--accent); }
 .bottom-nav__link {
   position: relative;
   flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem;
   background: none; border: none; color: #D8D0BC;
-  font-family: var(--font-body); font-size: .78rem;
-  padding: .65rem .25rem;
+  font-family: var(--font-body); font-size: .68rem;
+  padding: .55rem .25rem .5rem;
   cursor: pointer;
 }
+.bottom-nav__icon { display: flex; line-height: 0; }
+.bottom-nav__icon svg { display: block; }
+.bottom-nav__label { line-height: 1; }
 .bottom-nav__link.is-active { color: var(--accent-ink); }
 .bottom-nav__link.is-active::before {
   content: ''; position: absolute; left: .9rem; right: .9rem; top: 0; height: 3px;

@@ -1791,46 +1791,101 @@ function renderActivitiesPanel() {
   return box;
 }
 function describeActivityRules(act) {
-  const parts = act.includeRules.map(r => {
-    const bits = [];
-    if (r.category) bits.push(G.category(r.category).name);
-    if (r.subcategory) bits.push('› ' + (G.subcategory(r.subcategory)?.name || ''));
-    if (r.requiredTags?.length) bits.push('+ ' + r.requiredTags.map(t => G.tag(t).name).join('+'));
-    if (r.excludeTags?.length) bits.push('− ' + r.excludeTags.map(t => G.tag(t).name).join(','));
-    return bits.join(' ');
-  });
-  let str = 'Shows: ' + (parts.join('  |  ') || 'nothing configured');
-  const excl = [];
-  if (act.excludeSubcategories?.length) excl.push(act.excludeSubcategories.map(id => G.subcategory(id)?.name).filter(Boolean).join(', '));
-  if (act.excludeTags?.length) excl.push(act.excludeTags.map(id => G.tag(id).name).join(', '));
-  if (excl.length) str += `.  Always excludes: ${excl.join(', ')}`;
+  const catIds = [...new Set((act.includeRules || []).map(r => r.category).filter(Boolean))];
+  const catNames = catIds.map(id => G.category(id)?.name).filter(Boolean);
+  let str = catNames.length ? `Uses: ${catNames.join(', ')}` : 'No categories selected yet';
+  const avoid = [];
+  if (act.excludeSubcategories?.length) avoid.push(act.excludeSubcategories.map(id => G.subcategory(id)?.name).filter(Boolean).join(', '));
+  if (act.excludeTags?.length) avoid.push(act.excludeTags.map(id => G.tag(id)?.name).filter(Boolean).join(', '));
+  if (avoid.length) str += `  ·  avoiding ${avoid.join(', ')}`;
   return str;
+}
+
+/* Translate between the friendly "category builder" view and the raw
+   includeRules[] the engine actually runs on, so matchRule/matchActivity/
+   itemsForActivity never have to change.
+   Per category: included (on/off), subMode 'all'|'specific', which
+   subcategories, and an optional "also match if tagged" catch-all —
+   this is exactly the shape the shipped activities already use
+   (see defaultActivities in data.js). Anything that doesn't fit this
+   shape (hand-built via the old editor) is left untouched and still
+   editable via the "Advanced: edit raw rules" fallback below. */
+function parseActivityCatState(activity) {
+  const state = {};
+  Store.state.categories.forEach(c => { state[c.id] = { included: false, subMode: 'all', subs: new Set(), extraTags: new Set() }; });
+  const byCat = {};
+  (activity.includeRules || []).forEach(r => {
+    if (!r.category || !state[r.category]) return;
+    (byCat[r.category] ||= []).push(r);
+  });
+  Object.entries(byCat).forEach(([catId, rules]) => {
+    const st = state[catId];
+    st.included = true;
+    const anyRule = rules.find(r => !r.subcategory && !(r.requiredTags && r.requiredTags.length));
+    if (anyRule) { st.subMode = 'all'; return; }
+    st.subMode = 'specific';
+    rules.forEach(r => {
+      if (r.subcategory) st.subs.add(r.subcategory);
+      if (!r.subcategory && r.requiredTags?.length) r.requiredTags.forEach(t => st.extraTags.add(t));
+    });
+  });
+  return state;
+}
+function rulesFromCatState(catState) {
+  const rules = [];
+  Store.state.categories.forEach(c => {
+    const st = catState[c.id];
+    if (!st || !st.included) return;
+    if (st.subMode === 'all') { rules.push({ category: c.id }); return; }
+    st.subs.forEach(subId => rules.push({ category: c.id, subcategory: subId }));
+    if (st.extraTags.size) rules.push({ category: c.id, requiredTags: [...st.extraTags] });
+  });
+  return rules;
 }
 
 function openActivityModal(existing) {
   const s = Store.state;
   const isEdit = !!existing;
   const activity = existing ? JSON.parse(JSON.stringify(existing)) : {
-    id: uid('act'), name: '', includeRules: [{}], excludeCategories: [], excludeSubcategories: [], excludeTags: [],
+    id: uid('act'), name: '', includeRules: [], excludeCategories: [], excludeSubcategories: [], excludeTags: [],
   };
+  let catState = parseActivityCatState(activity);
+  const excludeSubs = new Set(activity.excludeSubcategories || []);
+  const excludeTagsSet = new Set(activity.excludeTags || []);
 
   const body = el(`
     <form class="form form--wide" id="activity-form">
       <label>Activity name
         <input type="text" name="name" value="${esc(activity.name)}" required placeholder="e.g. Weekend Hike">
       </label>
+
+      <div class="activity-preview" id="activity-preview">
+        <strong id="activity-preview-count">0 matching items</strong>
+        <div class="activity-preview__list" id="activity-preview-list"></div>
+      </div>
+
       <fieldset>
-        <legend>Show items that match ANY of these rules</legend>
+        <legend>What does this look use?</legend>
+        <p class="muted">Turn on the categories this activity draws from. Leave a category as "Any subcategory", or pick specific ones.</p>
+        <div id="cat-rules"></div>
+      </fieldset>
+
+      <details class="advanced-details" id="advanced-toggle">
+        <summary>Advanced: edit raw rules</summary>
+        <p class="muted">Full control over individual match rules — for anything the builder above can't express.</p>
         <div id="rule-rows"></div>
         <button type="button" class="btn btn--small btn--ghost" id="add-rule">+ Add rule</button>
-      </fieldset>
+      </details>
+
       <fieldset>
-        <legend>Always exclude</legend>
-        <label>Subcategories to always exclude</label>
-        <div class="tag-check-grid" id="excl-subs"></div>
-        <label>Tags to always exclude</label>
-        <div class="tag-check-grid" id="excl-tags"></div>
+        <legend>Always avoid</legend>
+        <p class="muted">Hidden from this activity no matter what matches above.</p>
+        <label class="small-label">Avoid subcategories</label>
+        <div id="excl-subs-grouped"></div>
+        <label class="small-label">Avoid tags</label>
+        <div class="chip-row" id="excl-tags"></div>
       </fieldset>
+
       <div class="form-actions">
         <button type="button" class="btn btn--ghost" id="act-cancel">Cancel</button>
         <button type="submit" class="btn btn--primary">${isEdit ? 'Save activity' : 'Create activity'}</button>
@@ -1839,8 +1894,90 @@ function openActivityModal(existing) {
 
   Modal.open(isEdit ? 'Edit activity' : 'New activity', body, {
     onMount: (root) => {
-      const ruleRows = qs('#rule-rows', root);
+      function updatePreview() {
+        const items = activeItems().filter(it => matchActivity(activity, it));
+        qs('#activity-preview-count', root).textContent = `${items.length} matching item${items.length === 1 ? '' : 's'}`;
+        const listEl = qs('#activity-preview-list', root);
+        if (!items.length) {
+          listEl.innerHTML = '<span class="muted">No items match yet — turn on a category below.</span>';
+        } else {
+          const shown = items.slice(0, 8);
+          listEl.innerHTML = shown.map(it => `<span class="tag-chip">${esc(itemTitle(it))}</span>`).join('')
+            + (items.length > shown.length ? `<span class="muted">+${items.length - shown.length} more</span>` : '');
+        }
+      }
 
+      /* ---------------- simple builder ---------------- */
+      function syncFromCatState() {
+        activity.includeRules = rulesFromCatState(catState);
+        updatePreview();
+      }
+
+      function renderCatRules() {
+        const wrap = qs('#cat-rules', root);
+        wrap.innerHTML = '';
+        s.categories.forEach(cat => {
+          const st = catState[cat.id];
+          const subs = G.subsFor(cat.id);
+          const row = el(`
+            <div class="cat-rule">
+              <label class="cat-rule__toggle">
+                <input type="checkbox" ${st.included ? 'checked' : ''}>
+                ${iconSvg(cat.icon, 17)}
+                <span>${esc(cat.name)}</span>
+              </label>
+              <div class="cat-rule__body"></div>
+            </div>`);
+          qs('input', row).addEventListener('change', (e) => {
+            st.included = e.target.checked;
+            syncFromCatState();
+            renderCatRules();
+          });
+
+          if (st.included) {
+            const bodyEl = qs('.cat-rule__body', row);
+            const chipRow = el(`<div class="chip-row"></div>`);
+            const anyChip = el(`<button type="button" class="subnav__link ${st.subMode === 'all' ? 'is-active' : ''}">Any subcategory</button>`);
+            anyChip.addEventListener('click', () => { st.subMode = 'all'; syncFromCatState(); renderCatRules(); });
+            chipRow.appendChild(anyChip);
+            subs.forEach(sc => {
+              const active = st.subMode === 'specific' && st.subs.has(sc.id);
+              const chip = el(`<button type="button" class="subnav__link ${active ? 'is-active' : ''}">${esc(sc.name)}</button>`);
+              chip.addEventListener('click', () => {
+                st.subMode = 'specific';
+                if (st.subs.has(sc.id)) st.subs.delete(sc.id); else st.subs.add(sc.id);
+                syncFromCatState(); renderCatRules();
+              });
+              chipRow.appendChild(chip);
+            });
+            bodyEl.appendChild(chipRow);
+
+            if (st.subMode === 'specific') {
+              const catTags = G.tagsForScope(cat.id);
+              if (catTags.length) {
+                const adv = el(`<details class="cat-rule__advanced" ${st.extraTags.size ? 'open' : ''}><summary>Also match if tagged…</summary></details>`);
+                const tagRow = el(`<div class="chip-row"></div>`);
+                catTags.forEach(t => {
+                  const tchip = el(`<button type="button" class="subnav__link chip-sm ${st.extraTags.has(t.id) ? 'is-active' : ''}">${esc(t.name)}</button>`);
+                  tchip.addEventListener('click', () => {
+                    if (st.extraTags.has(t.id)) st.extraTags.delete(t.id); else st.extraTags.add(t.id);
+                    syncFromCatState(); renderCatRules();
+                  });
+                  tagRow.appendChild(tchip);
+                });
+                adv.appendChild(tagRow);
+                bodyEl.appendChild(adv);
+              }
+            }
+          }
+          wrap.appendChild(row);
+        });
+      }
+      renderCatRules();
+      syncFromCatState();
+
+      /* ---------------- advanced / raw rule fallback ---------------- */
+      const ruleRows = qs('#rule-rows', root);
       function ruleRowEl(rule, idx) {
         const subs = rule.category ? G.subsFor(rule.category) : [];
         const row = el(`
@@ -1880,39 +2017,75 @@ function openActivityModal(existing) {
         catSel.addEventListener('change', () => {
           rule.category = catSel.value || undefined;
           rule.subcategory = undefined;
-          rerenderRules();
+          rerenderRawRules();
+          updatePreview();
         });
-        qs('[data-f="subcategory"]', row).addEventListener('change', (e) => { rule.subcategory = e.target.value || undefined; });
+        qs('[data-f="subcategory"]', row).addEventListener('change', (e) => { rule.subcategory = e.target.value || undefined; updatePreview(); });
         qs('[data-f="requiredTags"]', row).addEventListener('change', (e) => {
           rule.requiredTags = Array.from(e.target.selectedOptions).map(o => o.value);
+          updatePreview();
         });
         qs('[data-f="excludeTags"]', row).addEventListener('change', (e) => {
           rule.excludeTags = Array.from(e.target.selectedOptions).map(o => o.value);
+          updatePreview();
         });
         qs('[data-act="remove-rule"]', row).addEventListener('click', () => {
           activity.includeRules.splice(idx, 1);
-          rerenderRules();
+          rerenderRawRules();
+          updatePreview();
         });
         return row;
       }
-
-      function rerenderRules() {
+      function rerenderRawRules() {
         ruleRows.innerHTML = '';
-        activity.includeRules.forEach((r, i) => ruleRows.appendChild(ruleRowEl(r, i)));
+        (activity.includeRules || []).forEach((r, i) => ruleRows.appendChild(ruleRowEl(r, i)));
       }
-      rerenderRules();
-
       qs('#add-rule', root).addEventListener('click', () => {
         activity.includeRules.push({});
-        rerenderRules();
+        rerenderRawRules();
       });
 
-      qs('#excl-subs', root).innerHTML = s.subcategories.map(sc => `
-        <label class="tag-check"><input type="checkbox" value="${sc.id}" ${activity.excludeSubcategories?.includes(sc.id) ? 'checked' : ''}> ${esc(G.category(sc.categoryId).name)} › ${esc(sc.name)}</label>
-      `).join('');
-      qs('#excl-tags', root).innerHTML = s.tags.map(t => `
-        <label class="tag-check"><input type="checkbox" value="${t.id}" ${activity.excludeTags?.includes(t.id) ? 'checked' : ''}> ${esc(t.name)}</label>
-      `).join('');
+      const advancedToggle = qs('#advanced-toggle', root);
+      advancedToggle.addEventListener('toggle', () => {
+        if (advancedToggle.open) {
+          rerenderRawRules();
+        } else {
+          catState = parseActivityCatState(activity);
+          renderCatRules();
+        }
+        updatePreview();
+      });
+
+      /* ---------------- always-avoid ---------------- */
+      const subsWrap = qs('#excl-subs-grouped', root);
+      s.categories.forEach(cat => {
+        const subs = G.subsFor(cat.id);
+        if (!subs.length) return;
+        const group = el(`<div class="exclude-group"><small class="muted">${esc(cat.name)}</small><div class="chip-row"></div></div>`);
+        const chipRow = qs('.chip-row', group);
+        subs.forEach(sc => {
+          const chip = el(`<button type="button" class="subnav__link chip-sm ${excludeSubs.has(sc.id) ? 'is-active' : ''}">${esc(sc.name)}</button>`);
+          chip.addEventListener('click', () => {
+            if (excludeSubs.has(sc.id)) excludeSubs.delete(sc.id); else excludeSubs.add(sc.id);
+            activity.excludeSubcategories = [...excludeSubs];
+            chip.classList.toggle('is-active');
+            updatePreview();
+          });
+          chipRow.appendChild(chip);
+        });
+        subsWrap.appendChild(group);
+      });
+      const tagsWrap = qs('#excl-tags', root);
+      s.tags.forEach(t => {
+        const chip = el(`<button type="button" class="subnav__link chip-sm ${excludeTagsSet.has(t.id) ? 'is-active' : ''}">${esc(t.name)}</button>`);
+        chip.addEventListener('click', () => {
+          if (excludeTagsSet.has(t.id)) excludeTagsSet.delete(t.id); else excludeTagsSet.add(t.id);
+          activity.excludeTags = [...excludeTagsSet];
+          chip.classList.toggle('is-active');
+          updatePreview();
+        });
+        tagsWrap.appendChild(chip);
+      });
 
       qs('#act-cancel', root).addEventListener('click', () => Modal.close());
       qs('#activity-form', root).addEventListener('submit', (e) => {
@@ -1920,9 +2093,9 @@ function openActivityModal(existing) {
         const name = qs('[name="name"]', root).value.trim();
         if (!name) return;
         activity.name = name;
-        activity.excludeSubcategories = qsa('#excl-subs input:checked', root).map(c => c.value);
-        activity.excludeTags = qsa('#excl-tags input:checked', root).map(c => c.value);
-        activity.includeRules = activity.includeRules.filter(r => r.category || r.subcategory || r.requiredTags?.length || r.excludeTags?.length);
+        activity.excludeSubcategories = [...excludeSubs];
+        activity.excludeTags = [...excludeTagsSet];
+        activity.includeRules = (activity.includeRules || []).filter(r => r.category || r.subcategory || r.requiredTags?.length || r.excludeTags?.length);
 
         if (isEdit) {
           const idx = s.activities.findIndex(a => a.id === activity.id);

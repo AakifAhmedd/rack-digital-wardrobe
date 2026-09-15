@@ -440,6 +440,34 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 .rule-field small { color: var(--ink-soft); font-size: .68rem; }
 .rule-row select[multiple] { min-height: 66px; font-size: .78rem; }
 
+/* ---------------- activity builder ---------------- */
+.activity-preview {
+  position: sticky; top: -1.3rem; z-index: 5;
+  background: var(--surface); margin: 0 -1.3rem; padding: .7rem 1.3rem;
+  border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: .45rem;
+}
+.activity-preview__list { display: flex; flex-wrap: wrap; gap: .35rem; }
+.small-label { font-size: .78rem; color: var(--ink-soft); font-weight: 500; margin: .3rem 0 -.2rem; }
+
+.cat-rule { border-bottom: 1px solid var(--line); padding: .7rem 0; }
+.cat-rule:last-child { border-bottom: none; }
+.cat-rule__toggle { display: flex; flex-direction: row !important; align-items: center; gap: .55rem; cursor: pointer; font-weight: 500; font-size: .92rem; }
+.cat-rule__toggle input { width: 16px; height: 16px; accent-color: var(--ink); cursor: pointer; flex-shrink: 0; }
+.cat-rule__toggle svg { flex-shrink: 0; color: var(--ink-soft); }
+.cat-rule__body:not(:empty) { margin: .6rem 0 0 1.65rem; display: flex; flex-direction: column; gap: .55rem; }
+.chip-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip-sm { padding: .3rem .7rem !important; font-size: .78rem !important; }
+.cat-rule__advanced summary { cursor: pointer; font-size: .78rem; color: var(--ink-soft); }
+.cat-rule__advanced[open] summary { margin-bottom: .5rem; }
+
+.exclude-group { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .6rem; }
+.exclude-group:last-child { margin-bottom: 0; }
+.exclude-group > small { text-transform: uppercase; letter-spacing: .03em; font-size: .68rem; }
+
+.advanced-details { border: 1px solid var(--line); border-radius: var(--radius-s); padding: .7rem .8rem; }
+.advanced-details summary { cursor: pointer; font-size: .82rem; color: var(--ink-soft); }
+.advanced-details[open] summary { margin-bottom: .6rem; }
+
 /* ---------------- empty state ---------------- */
 .empty-state {
   text-align: center; padding: 4rem 1rem; background: var(--surface-raised);

@@ -1406,8 +1406,10 @@ function outfitItemTile(item, selected) {
   return el(`
     <button type="button" class="outfit-item-tile ${selected ? 'is-selected' : ''}">
       <span class="swatch swatch--sm" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
-      <span class="outfit-item-tile__title">${esc(itemTitle(item))}</span>
-      <span class="outfit-item-tile__meta muted">${item.wearCount || 0}&times; &middot; ${esc(fmtDateShort(item.lastWornAt))}</span>
+      <span class="outfit-item-tile__text">
+        <span class="outfit-item-tile__title">${esc(itemTitle(item))}</span>
+        <span class="outfit-item-tile__meta muted">${item.wearCount || 0}&times; &middot; ${esc(fmtDateShort(item.lastWornAt))}</span>
+      </span>
     </button>`);
 }
 

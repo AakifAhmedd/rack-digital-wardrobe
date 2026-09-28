@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinFlow Architect - Financial Flow Builder & Modelling Tool</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- D3.js and D3-Sankey -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .node-rect {
+            cursor: move;
+            transition: fill-opacity 0.2s, stroke-width 0.2s;
+        }
+        .node-rect:hover {
+            fill-opacity: 0.95;
+            stroke-width: 2px;
+        }
+        .sankey-link {
+            fill: none;
+            transition: stroke-opacity 0.25s ease, stroke-width 0.2s ease;
+        }
+        .sankey-link:hover {
+            stroke-opacity: 0.85 !important;
+        }
+        .sankey-link.highlighted {
+            stroke-opacity: 0.90 !important;
+        }
+        .sankey-link.dimmed {
+            stroke-opacity: 0.06 !important;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 4px;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: border-color 0.2s ease, transform 0.15s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .tab-btn.active {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden text-slate-100 bg-slate-950">
+
+    <!-- Top Header -->
+    <header class="glass-panel sticky top-0 z-30 px-4 md:px-6 py-3 flex flex-wrap items-center justify-between border-b border-slate-800 gap-4">
+        <!-- Logo & Title -->
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-xl text-slate-950 font-bold shadow-lg shadow-emerald-500/20">
+                <i class="fa-solid fa-diagram-project text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    FinFlow Architect
+                    <span class="text-[10px] md:text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium border border-emerald-500/30">Modeler</span>
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Design, edit & analyze your financial flow system</p>
+            </div>
+        </div>
+
+        <!-- Main View Mode Tabs Navigation -->
+        <nav class="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs font-medium">
+            <button id="tab-builder" class="tab-btn active px-3.5 py-1.5 rounded-lg border border-transparent transition-all flex items-center gap-2 text-slate-300 hover:text-white">
+                <i class="fa-solid fa-pen-ruler text-emerald-400"></i>
+                <span>Flow Builder</span>
+            </button>
+            <button id="tab-sankey" class="tab-btn px-3.5 py-1.5 rounded-lg border border-transparent transition-all flex items-center gap-2 text-slate-300 hover:text-white">
+                <i class="fa-solid fa-chart-sankey text-teal-400"></i>
+                <span>Visualization</span>
+            </button>
+            <button id="tab-analytics" class="tab-btn px-3.5 py-1.5 rounded-lg border border-transparent transition-all flex items-center gap-2 text-slate-300 hover:text-white">
+                <i class="fa-solid fa-chart-pie text-indigo-400"></i>
+                <span>Analysis</span>
+            </button>
+        </nav>
+
+        <!-- Metric Badges -->
+        <div class="hidden lg:flex items-center gap-4 text-xs">
+            <div class="bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] text-slate-400 block uppercase tracking-wider">Total Income</span>
+                <span id="metric-income" class="font-bold text-emerald-400 text-sm">$0</span>
+            </div>
+            <div class="bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] text-slate-400 block uppercase tracking-wider">Total Expenses</span>
+                <span id="metric-expenses" class="font-bold text-rose-400 text-sm">$0</span>
+            </div>
+            <div class="bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] text-slate-400 block uppercase tracking-wider">Savings / Surplus</span>
+                <span id="metric-savings" class="font-bold text-teal-300 text-sm">$0</span>
+            </div>
+            <div class="bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] text-slate-400 block uppercase tracking-wider">Savings Rate</span>
+                <span id="metric-savings-rate" class="font-bold text-amber-400 text-sm">0%</span>
+            </div>
+        </div>
+
+        <!-- Quick Header Actions -->
+        <div class="flex items-center gap-2">
+            <button id="btn-presets" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1.5 border border-slate-700 shadow-sm" title="Load Scenarios">
+                <i class="fa-solid fa-bookmark text-amber-400"></i>
+                <span class="hidden sm:inline">Presets</span>
+            </button>
+            <button id="btn-settings" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center gap-1.5 border border-slate-700 shadow-sm" title="Visualization Settings">
+                <i class="fa-solid fa-gear text-slate-400"></i>
+                <span class="hidden sm:inline">Settings</span>
+            </button>
+            <button id="btn-export-modal" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-md shadow-emerald-950">
+                <i class="fa-solid fa-download"></i>
+                <span class="hidden sm:inline">Export</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-1 overflow-hidden relative flex flex-col">
+        
+        <!-- VIEW 1: FLOW BUILDER / FINANCIAL MODEL EDITOR -->
+        <section id="view-builder" class="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto custom-scrollbar gap-6">
+            
+            <!-- Builder Control & Flow Health Bar -->
+            <div class="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 border border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <i class="fa-solid fa-sitemap"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-semibold text-white">Financial Structure Builder</h2>
+                        <p class="text-xs text-slate-400">Construct nodes and allocate cash flows through tier levels</p>
+                    </div>
+                </div>
+
+                <!-- Status Indicator -->
+                <div id="flow-balance-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/60 text-xs text-emerald-300">
+                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                    <span id="flow-balance-text">Inflow = Outflow (Balanced Model)</span>
+                </div>
+
+                <!-- Action Toolbar -->
+                <div class="flex items-center gap-2">
+                    <button id="btn-add-node-modal" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-md shadow-emerald-950">
+                        <i class="fa-solid fa-plus"></i> Add Node
+                    </button>
+                    <button id="btn-add-conn-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-md shadow-indigo-950">
+                        <i class="fa-solid fa-link"></i> Add Flow Connection
+                    </button>
+                    <button id="btn-quick-reset" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-lg text-xs font-medium border border-slate-700 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-left"></i> Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- TIER COLUMNS VISUAL SYSTEM -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+                
+                <!-- TIER 1: INCOME SOURCES -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-3 border border-emerald-900/30">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                            <i class="fa-solid fa-arrow-down-left"></i>
+                            <span>1. Income Sources</span>
+                        </div>
+                        <span id="badge-tier1-total" class="text-xs font-semibold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800/60">$0</span>
+                    </div>
+                    <div id="tier-1-container" class="space-y-3 min-h-[160px]">
+                        <!-- Populated Dynamically -->
+                    </div>
+                    <button data-tier="Income Source" class="btn-open-add-node-tier w-full py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 text-xs rounded-xl border border-dashed border-slate-800 hover:border-emerald-500/50 transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus text-[10px]"></i> Add Income Stream
+                    </button>
+                </div>
+
+                <!-- TIER 2: CENTRAL POOL -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-3 border border-blue-900/30">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-wider">
+                            <i class="fa-solid fa-arrows-split-up-and-left"></i>
+                            <span>2. Cash Flow Hub</span>
+                        </div>
+                        <span id="badge-tier2-total" class="text-xs font-semibold text-blue-300 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/60">$0</span>
+                    </div>
+                    <div id="tier-2-container" class="space-y-3 min-h-[160px]">
+                        <!-- Populated Dynamically -->
+                    </div>
+                    <button data-tier="Central Pool" class="btn-open-add-node-tier w-full py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-blue-400 text-xs rounded-xl border border-dashed border-slate-800 hover:border-blue-500/50 transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus text-[10px]"></i> Add Central Hub
+                    </button>
+                </div>
+
+                <!-- TIER 3: ALLOCATIONS & CATEGORIES -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-3 border border-amber-900/30">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                            <i class="fa-solid fa-diagram-next"></i>
+                            <span>3. Allocations</span>
+                        </div>
+                        <span id="badge-tier3-total" class="text-xs font-semibold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60">$0</span>
+                    </div>
+                    <div id="tier-3-container" class="space-y-3 min-h-[160px]">
+                        <!-- Populated Dynamically -->
+                    </div>
+                    <button data-tier="Allocation Category" class="btn-open-add-node-tier w-full py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-amber-400 text-xs rounded-xl border border-dashed border-slate-800 hover:border-amber-500/50 transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus text-[10px]"></i> Add Category
+                    </button>
+                </div>
+
+                <!-- TIER 4: EXPENSES & SAVINGS -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-3 border border-rose-900/30">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-wider">
+                            <i class="fa-solid fa-arrow-down-right"></i>
+                            <span>4. Expenses & Assets</span>
+                        </div>
+                        <span id="badge-tier4-total" class="text-xs font-semibold text-rose-300 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60">$0</span>
+                    </div>
+                    <div id="tier-4-container" class="space-y-3 min-h-[160px]">
+                        <!-- Populated Dynamically -->
+                    </div>
+                    <button data-tier="Expense / Savings" class="btn-open-add-node-tier w-full py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-rose-400 text-xs rounded-xl border border-dashed border-slate-800 hover:border-rose-500/50 transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus text-[10px]"></i> Add Expense / Savings
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- ALL FLOW CONNECTIONS MANAGEMENT TABLE -->
+            <div class="glass-panel p-5 rounded-2xl border border-slate-800 mt-2">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-indigo-400"></i>
+                            Active Connections Matrix
+                        </h3>
+                        <p class="text-xs text-slate-400">All money routing paths from source nodes to target nodes</p>
+                    </div>
+                    <button id="btn-add-conn-table" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-lg text-xs font-medium border border-slate-700 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> New Connection Path
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider">
+                                <th class="pb-2.5 px-3">Source Node (From)</th>
+                                <th class="pb-2.5 px-3">Target Node (To)</th>
+                                <th class="pb-2.5 px-3">Assigned Flow Amount</th>
+                                <th class="pb-2.5 px-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="connections-table-body" class="divide-y divide-slate-800/60">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- VIEW 2: SANKEY VISUALIZATION -->
+        <section id="view-sankey" class="flex-1 hidden flex-col p-4 relative overflow-hidden bg-slate-950/60">
+            <!-- Canvas Container with Horizontal Scroll Support for Mobile -->
+            <div id="chart-container" class="flex-1 w-full h-full relative rounded-2xl border border-slate-800/80 bg-slate-900/40 p-2 overflow-hidden flex items-center justify-center">
+                
+                <div id="sankey-scroll-wrapper" class="w-full h-full overflow-x-auto overflow-y-hidden custom-scrollbar relative">
+                    <svg id="sankey-svg" class="min-w-[720px] md:min-w-full w-full h-full overflow-visible block"></svg>
+                </div>
+                
+                <!-- Floating Tooltip -->
+                <div id="tooltip" class="absolute hidden pointer-events-none z-50 glass-panel px-3.5 py-2.5 rounded-xl text-xs shadow-2xl border border-slate-700 text-slate-100 max-w-xs transition-opacity duration-150"></div>
+
+                <!-- Floating Canvas Overlay Controls -->
+                <div class="absolute bottom-4 left-4 z-20 flex items-center gap-2 glass-panel p-2 rounded-xl border border-slate-800 shadow-xl">
+                    <span class="text-[11px] text-slate-400 px-2"><i class="fa-solid fa-hand-pointer me-1 text-emerald-400"></i> Drag nodes to reorder</span>
+                    <button id="btn-quick-settings" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition">
+                        <i class="fa-solid fa-sliders me-1"></i> Tune Layout
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 3: ANALYTICS & INSIGHTS -->
+        <section id="view-analytics" class="flex-1 hidden flex-col p-4 md:p-6 overflow-y-auto custom-scrollbar gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <!-- Health Card 1 -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800 flex flex-col gap-3">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Savings Rate Health</span>
+                    <div id="analytics-savings-rate" class="text-3xl font-extrabold text-amber-400">0%</div>
+                    <p id="analytics-savings-msg" class="text-xs text-slate-400 leading-relaxed">Calculating financial health metrics...</p>
+                    <div class="w-full bg-slate-800 rounded-full h-2 mt-auto">
+                        <div id="analytics-savings-bar" class="bg-amber-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Health Card 2 -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800 flex flex-col gap-3">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Income Diversity Index</span>
+                    <div id="analytics-income-count" class="text-3xl font-extrabold text-emerald-400">0 Streams</div>
+                    <p class="text-xs text-slate-400 leading-relaxed">Having multiple revenue streams increases financial resilience and reduces reliance on a single employer.</p>
+                </div>
+
+                <!-- Health Card 3 -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800 flex flex-col gap-3">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider">Net Monthly Surplus</span>
+                    <div id="analytics-surplus" class="text-3xl font-extrabold text-teal-300">$0</div>
+                    <p class="text-xs text-slate-400 leading-relaxed">Unallocated funds earmarked for debt reduction, emergency reserves, or high-yield investments.</p>
+                </div>
+            </div>
+
+            <!-- Detailed Breakdown Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- Income Breakdown Card -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-wallet"></i> Income Sources Breakdown
+                    </h3>
+                    <div id="analytics-income-breakdown" class="space-y-3">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Expense Category Breakdown Card -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <h3 class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie"></i> Expense Category Breakdown
+                    </h3>
+                    <div id="analytics-expense-breakdown" class="space-y-3">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL 1: SETTINGS & VISUALIZATION CONTROLS -->
+    <div id="modal-settings" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col gap-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-400"></i> Settings & Preferences
+                </h3>
+                <button id="btn-close-settings" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Currency Selector -->
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Currency Format</label>
+                <select id="select-currency" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <option value="$">USD ($)</option>
+                    <option value="€">EUR (€)</option>
+                    <option value="£">GBP (£)</option>
+                    <option value="₹">INR (₹)</option>
+                    <option value="¥">JPY (¥)</option>
+                    <option value="C$">CAD (C$)</option>
+                    <option value="LKR">LKR (Rs.)</option>
+                </select>
+            </div>
+
+            <!-- Colour Mode Switcher -->
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Colour Mode</label>
+                <select id="select-color-mode" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <option value="theme">Existing Theme</option>
+                    <option value="monotone">Monotone (Single Colour)</option>
+                    <option value="duotone">Duotone (Two Colours)</option>
+                </select>
+            </div>
+
+            <!-- Option A: Existing Theme Switcher -->
+            <div id="container-theme-select">
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Sankey Palette Theme</label>
+                <select id="select-theme" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <option value="emerald">Emerald Finance (Vibrant)</option>
+                    <option value="neon">Cyber Neon</option>
+                    <option value="sunset">Warm Sunset</option>
+                    <option value="classic">Classic Monokai</option>
+                </select>
+            </div>
+
+            <!-- Option B: Monotone Base Color Picker -->
+            <div id="container-monotone-select" class="hidden">
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Base Colour</label>
+                <div class="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-lg p-2">
+                    <input type="color" id="input-monotone-color" value="#10b981" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                    <span id="label-monotone-hex" class="text-xs font-mono text-slate-300">#10b981</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Generates shaded levels from a single primary hue.</p>
+            </div>
+
+            <!-- Option C: Duotone Dual Color Pickers -->
+            <div id="container-duotone-select" class="hidden space-y-3">
+                <div>
+                    <label class="text-xs text-slate-300 mb-1.5 block font-medium">Colour A (Source Gradient)</label>
+                    <div class="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-lg p-2">
+                        <input type="color" id="input-duotone-color-a" value="#06b6d4" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                        <span id="label-duotone-a-hex" class="text-xs font-mono text-slate-300">#06b6d4</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-300 mb-1.5 block font-medium">Colour B (Destination Gradient)</label>
+                    <div class="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-lg p-2">
+                        <input type="color" id="input-duotone-color-b" value="#8b5cf6" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                        <span id="label-duotone-b-hex" class="text-xs font-mono text-slate-300">#8b5cf6</span>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-slate-800">
+
+            <!-- Node Layout Options -->
+            <div class="space-y-4">
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sankey Layout Options</h4>
+                
+                <div>
+                    <div class="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>Node Width</span>
+                        <span id="val-node-width">18px</span>
+                    </div>
+                    <input type="range" id="input-node-width" min="10" max="40" value="18" class="w-full accent-emerald-500 bg-slate-800 h-1.5 rounded-lg cursor-pointer">
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>Node Vertical Padding</span>
+                        <span id="val-node-padding">18px</span>
+                    </div>
+                    <input type="range" id="input-node-padding" min="8" max="40" value="18" class="w-full accent-emerald-500 bg-slate-800 h-1.5 rounded-lg cursor-pointer">
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>Flow Ribbon Opacity</span>
+                        <span id="val-link-opacity">0.45</span>
+                    </div>
+                    <input type="range" id="input-link-opacity" min="0.1" max="0.8" step="0.05" value="0.45" class="w-full accent-emerald-500 bg-slate-800 h-1.5 rounded-lg cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="text-xs text-slate-300 mb-1.5 block">Horizontal Alignment</label>
+                    <select id="select-align" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                        <option value="sankeyJustify">Justify (Spread Wide)</option>
+                        <option value="sankeyLeft">Align Left</option>
+                        <option value="sankeyRight">Align Right</option>
+                        <option value="sankeyCenter">Center</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <button id="btn-save-settings" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition shadow-md">
+                    Apply & Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: EXPORT CHART OPTIONS -->
+    <div id="modal-export" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i class="fa-solid fa-file-export text-emerald-400"></i> Export Visual Sankey
+                </h3>
+                <button id="btn-close-export" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-400">Select format to save your styled chart with current nodes, flows, labels, and color theme:</p>
+
+            <div class="space-y-2.5">
+                <button id="btn-export-png" class="w-full p-3 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700 text-left transition flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-image text-emerald-400 text-lg"></i>
+                        <div>
+                            <span class="text-xs font-semibold text-white block group-hover:text-emerald-300">PNG Image</span>
+                            <span class="text-[10px] text-slate-400">High-resolution raster graphic</span>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-download text-xs text-slate-500 group-hover:text-white"></i>
+                </button>
+
+                <button id="btn-export-jpeg" class="w-full p-3 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700 text-left transition flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-file-image text-teal-400 text-lg"></i>
+                        <div>
+                            <span class="text-xs font-semibold text-white block group-hover:text-teal-300">JPEG Image</span>
+                            <span class="text-[10px] text-slate-400">Compressed dark-theme image</span>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-download text-xs text-slate-500 group-hover:text-white"></i>
+                </button>
+
+                <button id="btn-export-svg" class="w-full p-3 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700 text-left transition flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-code text-indigo-400 text-lg"></i>
+                        <div>
+                            <span class="text-xs font-semibold text-white block group-hover:text-indigo-300">SVG Vector</span>
+                            <span class="text-[10px] text-slate-400">Scalable vector graphics XML format</span>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-download text-xs text-slate-500 group-hover:text-white"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: ADD NODE -->
+    <div id="modal-add-node" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col gap-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i class="fa-solid fa-square-plus text-emerald-400"></i> Add New Flow Node
+                </h3>
+                <button id="btn-close-add-node" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Node Name</label>
+                <input type="text" id="input-node-name" placeholder="e.g., Rental Income, Groceries, Emergency Fund" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Node Tier Category</label>
+                <select id="input-node-tier" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <option value="Income Source">1. Income Source (Inflow)</option>
+                    <option value="Central Pool">2. Central Cash Flow Hub</option>
+                    <option value="Allocation Category">3. Allocation Category</option>
+                    <option value="Expense / Savings">4. Expense / Asset Destination</option>
+                </select>
+            </div>
+
+            <div class="pt-2 flex justify-end gap-2">
+                <button id="btn-cancel-add-node" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium">Cancel</button>
+                <button id="btn-submit-add-node" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium shadow-md">Create Node</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADD CONNECTION -->
+    <div id="modal-add-conn" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col gap-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i class="fa-solid fa-link text-indigo-400"></i> Add Cash Flow Connection
+                </h3>
+                <button id="btn-close-add-conn" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Source Node (From)</label>
+                <select id="select-conn-source" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Target Node (To)</label>
+                <select id="select-conn-target" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-300 mb-1.5 block font-medium">Assigned Flow Amount</label>
+                <input type="number" id="input-conn-amount" placeholder="e.g. 1500" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+            </div>
+
+            <div class="pt-2 flex justify-end gap-2">
+                <button id="btn-cancel-add-conn" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium">Cancel</button>
+                <button id="btn-submit-add-conn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-medium shadow-md">Connect Flow</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: PRESETS -->
+    <div id="modal-presets" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                    <i class="fa-solid fa-bookmark text-amber-400"></i> Budget Scenario Presets
+                </h3>
+                <button id="btn-close-presets" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3">
+                <button data-preset="tech" class="btn-preset-item w-full p-3.5 bg-slate-800/60 hover:bg-slate-800 rounded-xl text-left border border-slate-700/60 transition group">
+                    <div class="font-semibold text-xs text-teal-400 group-hover:text-teal-300">High Savings & Investment Focus</div>
+                    <div class="text-[11px] text-slate-400 mt-0.5">Tech salary with equity/dividends aggressively allocated towards index funds, retirement & reserves.</div>
+                </button>
+                <button data-preset="lkr_plan" class="btn-preset-item w-full p-3.5 bg-slate-800/60 hover:bg-slate-800 rounded-xl text-left border border-slate-700/60 transition group">
+                    <div class="font-semibold text-xs text-amber-400 group-hover:text-amber-300">Sri Lanka Household Flow (LKR Rs.)</div>
+                    <div class="text-[11px] text-slate-400 mt-0.5">Tailored Sri Lankan budget with local salary, freelance earnings, rent, statutory deductions, and living expenses.</div>
+                </button>
+                <button data-preset="freelance" class="btn-preset-item w-full p-3.5 bg-slate-800/60 hover:bg-slate-800 rounded-xl text-left border border-slate-700/60 transition group">
+                    <div class="font-semibold text-xs text-indigo-400 group-hover:text-indigo-300">Freelancer & Business Owner Flow</div>
+                    <div class="text-[11px] text-slate-400 mt-0.5">Multiple revenue channels, business operations, estimated taxes, and variable lifestyle costs.</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-emerald-600 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 transition-all transform translate-y-2">
+        <i class="fa-solid fa-circle-check text-sm"></i>
+        <span id="toast-message">Action completed successfully</span>
+    </div>
+
+    <script>
+        // Preset Scenarios (Standard Household preset removed as requested)
+        const PRESETS = {
+            tech: [
+                { source: "Base Salary", target: "Total Cash Flow", value: 10500 },
+                { source: "Stock Vests (RSU)", target: "Total Cash Flow", value: 3500 },
+                { source: "Consulting", target: "Total Cash Flow", value: 2000 },
+
+                { source: "Total Cash Flow", target: "Taxes", value: 4200 },
+                { source: "Total Cash Flow", target: "Essentials", value: 3200 },
+                { source: "Total Cash Flow", target: "Discretionary", value: 1800 },
+                { source: "Total Cash Flow", target: "Wealth Building", value: 6800 },
+
+                { source: "Taxes", target: "Federal & State Tax", value: 4200 },
+                { source: "Essentials", target: "Luxury Rent", value: 2500 },
+                { source: "Essentials", target: "Groceries & Health", value: 700 },
+                { source: "Discretionary", target: "Travel & Vacations", value: 1200 },
+                { source: "Discretionary", target: "Gadgets & Dining", value: 600 },
+                { source: "Wealth Building", target: "Index Funds", value: 4500 },
+                { source: "Wealth Building", target: "Crypto Portfolio", value: 1000 },
+                { source: "Wealth Building", target: "High Yield Savings", value: 1300 }
+            ],
+            lkr_plan: [
+                { source: "Primary Tech Salary", target: "Total Cash Flow", value: 450000 },
+                { source: "Foreign Freelance Retainer", target: "Total Cash Flow", value: 250000 },
+
+                { source: "Total Cash Flow", target: "Statutory Deductions", value: 70000 },
+                { source: "Total Cash Flow", target: "Housing & Rent", value: 180000 },
+                { source: "Total Cash Flow", target: "Daily Living Costs", value: 220000 },
+                { source: "Total Cash Flow", target: "Savings & FD Wealth", value: 230000 },
+
+                { source: "Statutory Deductions", target: "EPF & APIT Tax", value: 70000 },
+
+                { source: "Housing & Rent", target: "Apartment Rent", value: 140000 },
+                { source: "Housing & Rent", target: "Electricity & Water (CEB)", value: 25000 },
+                { source: "Housing & Rent", target: "SLT Fiber Internet", value: 15000 },
+
+                { source: "Daily Living Costs", target: "Supermarket & Groceries", value: 120000 },
+                { source: "Daily Living Costs", target: "Fuel & Transportation", value: 50000 },
+                { source: "Daily Living Costs", target: "Dining & Family Expenses", value: 50000 },
+
+                { source: "Savings & FD Wealth", target: "High Yield Bank FD", value: 150000 },
+                { source: "Savings & FD Wealth", target: "Unit Trust / Stocks", value: 80000 }
+            ],
+            freelance: [
+                { source: "Client Retainers", target: "Gross Revenue", value: 8000 },
+                { source: "Project Bonuses", target: "Gross Revenue", value: 2500 },
+                { source: "Digital Products", target: "Gross Revenue", value: 1500 },
+
+                { source: "Gross Revenue", target: "Business Operations", value: 2000 },
+                { source: "Gross Revenue", target: "Personal Take-Home", value: 10000 },
+
+                { source: "Business Operations", target: "Software & SaaS", value: 600 },
+                { source: "Business Operations", target: "Contractors & Legal", value: 1400 },
+
+                { source: "Personal Take-Home", target: "Taxes & Reserve", value: 2800 },
+                { source: "Personal Take-Home", target: "Personal Housing", value: 2400 },
+                { source: "Personal Take-Home", target: "Personal Lifestyle", value: 2800 },
+                { source: "Personal Take-Home", target: "Personal Savings", value: 2000 }
+            ]
+        };
+
+        // Global Application State
+        let currentFlows = JSON.parse(JSON.stringify(PRESETS.tech));
+        let currencySymbol = "$";
+        let colorTheme = "emerald";
+        let colorMode = "theme"; // "theme" | "monotone" | "duotone"
+        let monotoneColor = "#10b981";
+        let duotoneColorA = "#06b6d4";
+        let duotoneColorB = "#8b5cf6";
+
+        let sankeyConfig = {
+            nodeWidth: 18,
+            nodePadding: 18,
+            linkOpacity: 0.45,
+            align: d3.sankeyJustify,
+            alignKey: "sankeyJustify"
+        };
+
+        // Explicit Custom Node Tier Overrides
+        let customNodeTiers = new Map();
+
+        const LOCAL_STORAGE_KEY = "finflow_architect_model_v2";
+
+        function saveStateToLocalStorage() {
+            try {
+                const payload = {
+                    currentFlows,
+                    currencySymbol,
+                    colorTheme,
+                    colorMode,
+                    monotoneColor,
+                    duotoneColorA,
+                    duotoneColorB,
+                    sankeyConfig: {
+                        nodeWidth: sankeyConfig.nodeWidth,
+                        nodePadding: sankeyConfig.nodePadding,
+                        linkOpacity: sankeyConfig.linkOpacity,
+                        alignKey: sankeyConfig.alignKey || "sankeyJustify"
+                    },
+                    customNodeTiers: Array.from(customNodeTiers.entries())
+                };
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(payload));
+            } catch (err) {
+                console.warn("Unable to save state to localStorage:", err);
+            }
+        }
+
+        function loadStateFromLocalStorage() {
+            try {
+                const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+
+                if (parsed.currentFlows && Array.isArray(parsed.currentFlows) && parsed.currentFlows.length > 0) {
+                    currentFlows = parsed.currentFlows;
+                }
+                if (parsed.currencySymbol) currencySymbol = parsed.currencySymbol;
+                if (parsed.colorTheme) colorTheme = parsed.colorTheme;
+                if (parsed.colorMode) colorMode = parsed.colorMode;
+                if (parsed.monotoneColor) monotoneColor = parsed.monotoneColor;
+                if (parsed.duotoneColorA) duotoneColorA = parsed.duotoneColorA;
+                if (parsed.duotoneColorB) duotoneColorB = parsed.duotoneColorB;
+
+                if (parsed.sankeyConfig) {
+                    sankeyConfig.nodeWidth = parsed.sankeyConfig.nodeWidth || 18;
+                    sankeyConfig.nodePadding = parsed.sankeyConfig.nodePadding || 18;
+                    sankeyConfig.linkOpacity = parsed.sankeyConfig.linkOpacity || 0.45;
+                    const alignKey = parsed.sankeyConfig.alignKey || "sankeyJustify";
+                    if (d3[alignKey]) {
+                        sankeyConfig.align = d3[alignKey];
+                        sankeyConfig.alignKey = alignKey;
+                    }
+                }
+
+                if (parsed.customNodeTiers) {
+                    customNodeTiers = new Map(parsed.customNodeTiers);
+                }
+            } catch (err) {
+                console.warn("Unable to load state from localStorage:", err);
+            }
+        }
+
+        const COLOR_THEMES = {
+            emerald: {
+                incomes: ["#10b981", "#34d399", "#059669", "#6ee7b7", "#047857"],
+                center: "#3b82f6",
+                categories: ["#ef4444", "#f59e0b", "#ec4899", "#14b8a6", "#8b5cf6"],
+                expenses: ["#f87171", "#fbbf24", "#f472b6", "#2dd4bf", "#a78bfa", "#fb923c", "#38bdf8"]
+            },
+            neon: {
+                incomes: ["#00f5d4", "#7b2cbf", "#00bbf9", "#f15bb5"],
+                center: "#fee440",
+                categories: ["#ff007f", "#9d4edd", "#ff5400", "#3a86ff"],
+                expenses: ["#ff70a6", "#ff9770", "#ffd670", "#e9ff70", "#70d6ff"]
+            },
+            sunset: {
+                incomes: ["#d97706", "#f59e0b", "#fbbf24", "#fcd34d"],
+                center: "#4f46e5",
+                categories: ["#e11d48", "#c026d3", "#9333ea", "#2563eb"],
+                expenses: ["#fda4af", "#f0abfc", "#c084fc", "#93c5fd", "#86efac"]
+            },
+            classic: {
+                incomes: ["#26a69a", "#2b908f", "#90ee7e", "#f45b5b"],
+                center: "#775dd0",
+                categories: ["#f9a3a4", "#feb019", "#ff4560", "#008ffb"],
+                expenses: ["#a5c7fe", "#fdca83", "#f898bf", "#8ee2a9"]
+            }
+        };
+
+        let nodeColorMap = new Map();
+
+        function formatCurrency(val) {
+            const num = Math.round(val || 0);
+            if (currencySymbol === "LKR") {
+                return `Rs. ${num.toLocaleString('en-LK')}`;
+            } else if (currencySymbol === "₹") {
+                return `₹${num.toLocaleString('en-IN')}`;
+            } else if (currencySymbol === "€") {
+                return `€${num.toLocaleString('de-DE')}`;
+            } else if (currencySymbol === "£") {
+                return `£${num.toLocaleString('en-GB')}`;
+            } else if (currencySymbol === "¥") {
+                return `¥${num.toLocaleString('ja-JP')}`;
+            } else {
+                return `${currencySymbol}${num.toLocaleString('en-US')}`;
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toast");
+            document.getElementById("toast-message").textContent = message;
+            toast.classList.remove("hidden");
+            setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 2500);
+        }
+
+        // Get unique node names
+        function getUniqueNodeNames() {
+            const names = new Set();
+            currentFlows.forEach(f => {
+                if (f.source) names.add(f.source);
+                if (f.target) names.add(f.target);
+            });
+            return Array.from(names);
+        }
+
+        // Determine node tier automatically based on incoming/outgoing connections
+        function getNodeTier(nodeName) {
+            if (customNodeTiers.has(nodeName)) {
+                return customNodeTiers.get(nodeName);
+            }
+            const incoming = currentFlows.filter(f => f.target === nodeName);
+            const outgoing = currentFlows.filter(f => f.source === nodeName);
+
+            const isCenter = nodeName.toLowerCase().includes("total") || nodeName.toLowerCase().includes("gross") || nodeName.toLowerCase().includes("hub");
+            
+            if (incoming.length === 0) return "Income Source";
+            if (isCenter) return "Central Pool";
+            if (outgoing.length === 0) return "Expense / Savings";
+            return "Allocation Category";
+        }
+
+        function renderFlowBuilder() {
+            const nodeNames = getUniqueNodeNames();
+
+            // Group nodes by Tier
+            const tiers = {
+                "Income Source": [],
+                "Central Pool": [],
+                "Allocation Category": [],
+                "Expense / Savings": []
+            };
+
+            nodeNames.forEach(name => {
+                const tier = getNodeTier(name);
+                if (tiers[tier]) {
+                    tiers[tier].push(name);
+                } else {
+                    tiers["Allocation Category"].push(name);
+                }
+            });
+
+            // Calculate totals per tier
+            let t1Total = 0, t2Total = 0, t3Total = 0, t4Total = 0;
+
+            // Render Tier Containers
+            [1, 2, 3, 4].forEach(tierNum => {
+                const tierKey = tierNum === 1 ? "Income Source" : tierNum === 2 ? "Central Pool" : tierNum === 3 ? "Allocation Category" : "Expense / Savings";
+                const container = document.getElementById(`tier-${tierNum}-container`);
+                container.innerHTML = "";
+
+                const nodesInTier = tiers[tierKey];
+
+                nodesInTier.forEach(nodeName => {
+                    const incoming = currentFlows.filter(f => f.target === nodeName);
+                    const outgoing = currentFlows.filter(f => f.source === nodeName);
+
+                    const totalIn = incoming.reduce((acc, f) => acc + Number(f.value), 0);
+                    const totalOut = outgoing.reduce((acc, f) => acc + Number(f.value), 0);
+                    const nodeVal = Math.max(totalIn, totalOut);
+
+                    if (tierNum === 1) t1Total += nodeVal;
+                    if (tierNum === 2) t2Total += nodeVal;
+                    if (tierNum === 3) t3Total += nodeVal;
+                    if (tierNum === 4) t4Total += nodeVal;
+
+                    // Build Card for each Node
+                    const card = document.createElement("div");
+                    card.className = "glass-card p-3 rounded-xl flex flex-col gap-2 relative group";
+
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <h4 class="font-bold text-xs text-white group-hover:text-emerald-300 transition flex items-center gap-1.5">
+                                    ${nodeName}
+                                </h4>
+                                <span class="text-[11px] font-semibold text-emerald-400 block mt-0.5">${formatCurrency(nodeVal)}</span>
+                            </div>
+                            <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                                <button data-node="${nodeName}" class="btn-edit-node-name text-slate-400 hover:text-white text-[11px] p-1" title="Rename Node">
+                                    <i class="fa-solid fa-pen text-[10px]"></i>
+                                </button>
+                                <button data-node="${nodeName}" class="btn-delete-node text-slate-500 hover:text-rose-400 text-[11px] p-1" title="Delete Node">
+                                    <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        ${outgoing.length > 0 ? `
+                            <div class="text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 mt-1 space-y-1">
+                                <span class="block text-[9px] uppercase tracking-wider text-slate-500 font-medium">Outflow Routes (${outgoing.length})</span>
+                                ${outgoing.map((f, i) => `
+                                    <div class="flex items-center justify-between text-slate-300">
+                                        <span class="truncate max-w-[100px] text-slate-400">&rarr; ${f.target}</span>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" value="${f.value}" data-source="${f.source}" data-target="${f.target}" class="input-inline-flow w-16 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[10px] text-emerald-300 focus:outline-none focus:border-emerald-500 text-right">
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        <button data-node="${nodeName}" class="btn-quick-connect w-full mt-1 py-1 bg-slate-900/90 hover:bg-slate-800 text-[10px] text-slate-300 rounded border border-slate-800 transition flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-plus text-[9px] text-indigo-400"></i> Outflow Connection
+                        </button>
+                    `;
+
+                    container.appendChild(card);
+                });
+            });
+
+            // Update Tier Total Badges
+            document.getElementById("badge-tier1-total").textContent = formatCurrency(t1Total);
+            document.getElementById("badge-tier2-total").textContent = formatCurrency(t2Total);
+            document.getElementById("badge-tier3-total").textContent = formatCurrency(t3Total);
+            document.getElementById("badge-tier4-total").textContent = formatCurrency(t4Total);
+
+            // Update Flow Balance Badge
+            const balanceBadge = document.getElementById("flow-balance-badge");
+            const balanceText = document.getElementById("flow-balance-text");
+            if (t1Total === t4Total && t1Total > 0) {
+                balanceBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/60 text-xs text-emerald-300";
+                balanceText.textContent = `Balanced Model (${formatCurrency(t1Total)})`;
+            } else if (t1Total > t4Total) {
+                balanceBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-950/50 border border-amber-800/60 text-xs text-amber-300";
+                balanceText.textContent = `Unallocated Surplus: ${formatCurrency(t1Total - t4Total)}`;
+            } else {
+                balanceBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-950/50 border border-rose-800/60 text-xs text-rose-300";
+                balanceText.textContent = `Deficit: ${formatCurrency(t4Total - t1Total)}`;
+            }
+
+            // Render Connection Matrix Table
+            renderConnectionsTable();
+
+            // Calculate Overall Header Metrics
+            updateGlobalMetrics();
+
+            // Persist changes
+            saveStateToLocalStorage();
+        }
+
+        // Render Connections Table in Flow Builder
+        function renderConnectionsTable() {
+            const tbody = document.getElementById("connections-table-body");
+            tbody.innerHTML = "";
+
+            currentFlows.forEach((flow, idx) => {
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-slate-800/30 transition";
+                tr.innerHTML = `
+                    <td class="py-2 px-3 font-medium text-slate-200">
+                        <span class="inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle text-[6px] text-emerald-400"></i>
+                            ${flow.source}
+                        </span>
+                    </td>
+                    <td class="py-2 px-3 font-medium text-slate-200">
+                        <span class="inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle text-[6px] text-teal-400"></i>
+                            ${flow.target}
+                        </span>
+                    </td>
+                    <td class="py-2 px-3">
+                        <div class="flex items-center gap-1 max-w-[140px]">
+                            <span class="text-slate-500 font-sans">${currencySymbol}</span>
+                            <input type="number" value="${flow.value}" data-idx="${idx}" class="input-table-flow-val w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </td>
+                    <td class="py-2 px-3 text-right">
+                        <button data-idx="${idx}" class="btn-delete-flow-row text-slate-500 hover:text-rose-400 p-1.5 transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Bind Inline table listeners
+            document.querySelectorAll(".input-table-flow-val").forEach(input => {
+                input.addEventListener("change", (e) => {
+                    const idx = parseInt(e.target.getAttribute("data-idx"));
+                    const val = parseFloat(e.target.value) || 0;
+                    if (val >= 0) {
+                        currentFlows[idx].value = val;
+                        renderFlowBuilder();
+                        showToast("Flow value updated");
+                    }
+                });
+            });
+
+            document.querySelectorAll(".input-inline-flow").forEach(input => {
+                input.addEventListener("change", (e) => {
+                    const source = e.target.getAttribute("data-source");
+                    const target = e.target.getAttribute("data-target");
+                    const val = parseFloat(e.target.value) || 0;
+                    const flow = currentFlows.find(f => f.source === source && f.target === target);
+                    if (flow) {
+                        flow.value = val;
+                        renderFlowBuilder();
+                        showToast("Flow path updated");
+                    }
+                });
+            });
+
+            document.querySelectorAll(".btn-delete-flow-row").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const idx = parseInt(e.currentTarget.getAttribute("data-idx"));
+                    currentFlows.splice(idx, 1);
+                    renderFlowBuilder();
+                    showToast("Connection deleted");
+                });
+            });
+
+            // Node Action Handlers
+            document.querySelectorAll(".btn-delete-node").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const nodeName = e.currentTarget.getAttribute("data-node");
+                    currentFlows = currentFlows.filter(f => f.source !== nodeName && f.target !== nodeName);
+                    customNodeTiers.delete(nodeName);
+                    renderFlowBuilder();
+                    showToast(`Node "${nodeName}" removed`);
+                });
+            });
+
+            document.querySelectorAll(".btn-edit-node-name").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const oldName = e.currentTarget.getAttribute("data-node");
+                    const newName = prompt("Enter new name for node:", oldName);
+                    if (newName && newName.trim() !== "" && newName !== oldName) {
+                        const trimmed = newName.trim();
+                        currentFlows.forEach(f => {
+                            if (f.source === oldName) f.source = trimmed;
+                            if (f.target === oldName) f.target = trimmed;
+                        });
+                        if (customNodeTiers.has(oldName)) {
+                            const tier = customNodeTiers.get(oldName);
+                            customNodeTiers.delete(oldName);
+                            customNodeTiers.set(trimmed, tier);
+                        }
+                        renderFlowBuilder();
+                        showToast("Node renamed successfully");
+                    }
+                });
+            });
+
+            document.querySelectorAll(".btn-quick-connect").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const sourceNode = e.currentTarget.getAttribute("data-node");
+                    openAddConnectionModal(sourceNode);
+                });
+            });
+        }
+
+        function updateGlobalMetrics() {
+            const nodeNames = getUniqueNodeNames();
+            
+            // Nodes with no incoming links -> Total Inflow Income
+            const incomeNodes = nodeNames.filter(name => getNodeTier(name) === "Income Source");
+            let totalIncome = 0;
+            incomeNodes.forEach(name => {
+                const outgoing = currentFlows.filter(f => f.source === name);
+                totalIncome += outgoing.reduce((acc, f) => acc + Number(f.value), 0);
+            });
+
+            // Find Savings Nodes
+            const savingsNodes = nodeNames.filter(name => {
+                const lower = name.toLowerCase();
+                return lower.includes("savings") || lower.includes("investment") || lower.includes("wealth") || lower.includes("401k") || lower.includes("reserve") || lower.includes("stock") || lower.includes("fd");
+            });
+
+            let totalSavings = 0;
+            savingsNodes.forEach(name => {
+                const incoming = currentFlows.filter(f => f.target === name);
+                totalSavings += incoming.reduce((acc, f) => acc + Number(f.value), 0);
+            });
+
+            const totalExpenses = Math.max(0, totalIncome - totalSavings);
+            const savingsRate = totalIncome > 0 ? Math.min(100, (totalSavings / totalIncome) * 100) : 0;
+
+            // DOM Update
+            document.getElementById("metric-income").textContent = formatCurrency(totalIncome);
+            document.getElementById("metric-expenses").textContent = formatCurrency(totalExpenses);
+            document.getElementById("metric-savings").textContent = formatCurrency(totalSavings);
+            document.getElementById("metric-savings-rate").textContent = `${savingsRate.toFixed(1)}%`;
+        }
+
+        function assignColors(nodes) {
+            nodeColorMap.clear();
+
+            if (colorMode === "monotone") {
+                // Monotone Mode: Single base color with shade depth levels based on node tier
+                const base = d3.hsl(monotoneColor || "#10b981");
+                nodes.forEach(node => {
+                    const tier = getNodeTier(node.name);
+                    let shaded;
+                    if (tier === "Income Source") {
+                        shaded = base.brighter(0.6).formatRgb();
+                    } else if (tier === "Central Pool") {
+                        shaded = base.brighter(0.2).formatRgb();
+                    } else if (tier === "Allocation Category") {
+                        shaded = base.darker(0.35).formatRgb();
+                    } else { // Expense / Savings
+                        shaded = base.darker(0.85).formatRgb();
+                    }
+                    nodeColorMap.set(node.name, shaded);
+                });
+            } else if (colorMode === "duotone") {
+                // Duotone Mode: Transition across tiers from Colour A to Colour B
+                const cA = duotoneColorA || "#06b6d4";
+                const cB = duotoneColorB || "#8b5cf6";
+                const interpolator = d3.interpolateRgb(cA, cB);
+
+                nodes.forEach(node => {
+                    const tier = getNodeTier(node.name);
+                    let color;
+                    if (tier === "Income Source") {
+                        color = interpolator(0.0);
+                    } else if (tier === "Central Pool") {
+                        color = interpolator(0.35);
+                    } else if (tier === "Allocation Category") {
+                        color = interpolator(0.68);
+                    } else { // Expense / Savings
+                        color = interpolator(1.0);
+                    }
+                    nodeColorMap.set(node.name, color);
+                });
+            } else {
+                // Existing Theme Palette Mode
+                const palette = COLOR_THEMES[colorTheme] || COLOR_THEMES.emerald;
+                let incomeIdx = 0;
+                let catIdx = 0;
+
+                nodes.forEach(node => {
+                    const tier = getNodeTier(node.name);
+                    if (tier === "Central Pool") {
+                        nodeColorMap.set(node.name, palette.center);
+                    } else if (tier === "Income Source") {
+                        nodeColorMap.set(node.name, palette.incomes[incomeIdx % palette.incomes.length]);
+                        incomeIdx++;
+                    } else if (tier === "Expense / Savings") {
+                        nodeColorMap.set(node.name, palette.expenses[catIdx % palette.expenses.length]);
+                        catIdx++;
+                    } else {
+                        nodeColorMap.set(node.name, palette.categories[catIdx % palette.categories.length]);
+                        catIdx++;
+                    }
+                });
+            }
+        }
+
+        function getNodeColor(name) {
+            return nodeColorMap.get(name) || "#94a3b8";
+        }
+
+        function renderSankey() {
+            const container = document.getElementById("chart-container");
+            const scrollWrapper = document.getElementById("sankey-scroll-wrapper");
+            const svg = d3.select("#sankey-svg");
+            
+            svg.selectAll("*").remove();
+
+            // Calculate width ensuring minimum internal width for mobile scrollability
+            const containerWidth = scrollWrapper.clientWidth || 800;
+            const width = Math.max(containerWidth, 720);
+            const height = Math.max(container.clientHeight - 20, 450);
+
+            if (width <= 0 || height <= 0) return;
+
+            svg.attr("width", width).attr("height", height);
+
+            const nodeNames = getUniqueNodeNames();
+            const nodes = nodeNames.map(name => ({ name }));
+
+            const links = currentFlows.map(d => ({
+                source: nodeNames.indexOf(d.source),
+                target: nodeNames.indexOf(d.target),
+                value: Number(d.value)
+            })).filter(l => l.value > 0 && l.source !== -1 && l.target !== -1);
+
+            if (nodes.length === 0 || links.length === 0) return;
+
+            const sankey = d3.sankey()
+                .nodeWidth(sankeyConfig.nodeWidth)
+                .nodePadding(sankeyConfig.nodePadding)
+                .nodeAlign(sankeyConfig.align || d3.sankeyJustify)
+                .extent([[15, 20], [width - 15, height - 20]]);
+
+            let graph;
+            try {
+                graph = sankey({
+                    nodes: nodes.map(d => Object.assign({}, d)),
+                    links: links.map(d => Object.assign({}, d))
+                });
+            } catch (err) {
+                console.error("Sankey render error:", err);
+                return;
+            }
+
+            assignColors(graph.nodes);
+
+            const defs = svg.append("defs");
+
+            graph.links.forEach((link, i) => {
+                const gradientId = `gradient-${i}`;
+                const gradient = defs.append("linearGradient")
+                    .attr("id", gradientId)
+                    .attr("gradientUnits", "userSpaceOnUse")
+                    .attr("x1", link.source.x1)
+                    .attr("x2", link.target.x0);
+
+                gradient.append("stop")
+                    .attr("offset", "0%")
+                    .attr("stop-color", getNodeColor(link.source.name));
+
+                gradient.append("stop")
+                    .attr("offset", "100%")
+                    .attr("stop-color", getNodeColor(link.target.name));
+
+                link.gradientId = gradientId;
+            });
+
+            // Links
+            const linkGroup = svg.append("g")
+                .attr("fill", "none")
+                .selectAll("path")
+                .data(graph.links)
+                .join("path")
+                .attr("class", "sankey-link")
+                .attr("d", d3.sankeyLinkHorizontal())
+                .attr("stroke", d => `url(#${d.gradientId})`)
+                .attr("stroke-width", d => Math.max(1, d.width))
+                .attr("stroke-opacity", sankeyConfig.linkOpacity)
+                .on("mouseover", handleLinkMouseOver)
+                .on("mousemove", handleMouseMove)
+                .on("mouseout", handleMouseOut);
+
+            // Nodes
+            const nodeGroup = svg.append("g")
+                .selectAll("g")
+                .data(graph.nodes)
+                .join("g")
+                .call(d3.drag()
+                    .subject(d => d)
+                    .on("start", function() { this.parentNode.appendChild(this); })
+                    .on("drag", dragNode)
+                );
+
+            nodeGroup.append("rect")
+                .attr("class", "node-rect")
+                .attr("x", d => d.x0)
+                .attr("y", d => d.y0)
+                .attr("height", d => Math.max(3, d.y1 - d.y0))
+                .attr("width", d => d.x1 - d.x0)
+                .attr("fill", d => getNodeColor(d.name))
+                .attr("rx", 4)
+                .attr("stroke", "#020617")
+                .attr("stroke-width", 1)
+                .on("mouseover", handleNodeMouseOver)
+                .on("mousemove", handleMouseMove)
+                .on("mouseout", handleMouseOut);
+
+            nodeGroup.append("text")
+                .attr("x", d => d.x0 < width / 2 ? d.x1 + 8 : d.x0 - 8)
+                .attr("y", d => (d.y1 + d.y0) / 2)
+                .attr("dy", "0.35em")
+                .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
+                .attr("fill", "#f8fafc")
+                .attr("font-size", "11px")
+                .attr("font-weight", "600")
+                .text(d => d.name)
+                .append("tspan")
+                .attr("fill", "#94a3b8")
+                .attr("font-weight", "400")
+                .attr("dx", "4px")
+                .text(d => `(${formatCurrency(d.value)})`);
+
+            function dragNode(event, d) {
+                d.y0 = Math.max(0, Math.min(height - (d.y1 - d.y0), event.y));
+                d.y1 = d.y0 + (d.y1 - d.y0);
+                d3.select(this).select("rect").attr("y", d.y0);
+                d3.select(this).select("text").attr("y", (d.y1 + d.y0) / 2);
+                
+                sankey.update(graph);
+                
+                linkGroup.attr("d", d3.sankeyLinkHorizontal())
+                    .attr("stroke-width", l => Math.max(1, l.width));
+
+                graph.links.forEach((link) => {
+                    d3.select(`#${link.gradientId}`)
+                        .attr("x1", link.source.x1)
+                        .attr("x2", link.target.x0);
+                });
+            }
+        }
+
+        // Tooltip Interaction Handlers
+        const tooltip = d3.select("#tooltip");
+
+        function handleLinkMouseOver(event, d) {
+            d3.selectAll(".sankey-link").classed("dimmed", true);
+            d3.select(event.currentTarget).classed("highlighted", true).classed("dimmed", false);
+
+            tooltip.html(`
+                <div class="font-bold text-emerald-400 mb-1 flex items-center gap-1.5">
+                    <span>${d.source.name}</span>
+                    <i class="fa-solid fa-arrow-right text-[10px] text-slate-400"></i>
+                    <span>${d.target.name}</span>
+                </div>
+                <div class="text-sm font-semibold text-white mb-0.5">${formatCurrency(d.value)}</div>
+                <div class="text-[11px] text-slate-400">
+                    Share of ${d.source.name}: <span class="text-slate-200 font-medium">${((d.value / d.source.value) * 100).toFixed(1)}%</span>
+                </div>
+            `).style("display", "block");
+        }
+
+        function handleNodeMouseOver(event, d) {
+            d3.selectAll(".sankey-link").classed("dimmed", true);
+            
+            d3.selectAll(".sankey-link")
+                .filter(l => l.source === d || l.target === d)
+                .classed("highlighted", true)
+                .classed("dimmed", false);
+
+            const incomingTotal = d3.sum(d.targetLinks, l => l.value);
+            const outgoingTotal = d3.sum(d.sourceLinks, l => l.value);
+
+            tooltip.html(`
+                <div class="font-bold text-white text-xs mb-1">${d.name}</div>
+                <div class="text-sm font-bold text-emerald-400 mb-1">${formatCurrency(d.value)}</div>
+                ${incomingTotal > 0 ? `<div class="text-[11px] text-slate-400">Total Inflow: <span class="text-slate-200">${formatCurrency(incomingTotal)}</span></div>` : ''}
+                ${outgoingTotal > 0 ? `<div class="text-[11px] text-slate-400">Total Outflow: <span class="text-slate-200">${formatCurrency(outgoingTotal)}</span></div>` : ''}
+            `).style("display", "block");
+        }
+
+        function handleMouseMove(event) {
+            const container = document.getElementById("chart-container");
+            const wrapper = document.getElementById("sankey-scroll-wrapper");
+            const containerRect = container.getBoundingClientRect();
+            
+            // Calculate cursor offset with scrollLeft support
+            const x = event.clientX - containerRect.left + 15;
+            const y = event.clientY - containerRect.top - 15;
+
+            tooltip
+                .style("left", `${x}px`)
+                .style("top", `${y}px`);
+        }
+
+        function handleMouseOut() {
+            d3.selectAll(".sankey-link").classed("highlighted", false).classed("dimmed", false);
+            tooltip.style("display", "none");
+        }
+
+        function renderAnalytics() {
+            const nodeNames = getUniqueNodeNames();
+            const incomeNodes = nodeNames.filter(name => getNodeTier(name) === "Income Source");
+            
+            let totalIncome = 0;
+            const incomeBreakdownList = document.getElementById("analytics-income-breakdown");
+            incomeBreakdownList.innerHTML = "";
+
+            incomeNodes.forEach(name => {
+                const outgoing = currentFlows.filter(f => f.source === name);
+                const val = outgoing.reduce((acc, f) => acc + Number(f.value), 0);
+                totalIncome += val;
+            });
+
+            incomeNodes.forEach(name => {
+                const outgoing = currentFlows.filter(f => f.source === name);
+                const val = outgoing.reduce((acc, f) => acc + Number(f.value), 0);
+                const pct = totalIncome > 0 ? ((val / totalIncome) * 100).toFixed(1) : 0;
+
+                const item = document.createElement("div");
+                item.className = "flex justify-between items-center p-2.5 rounded-xl bg-slate-900/80 border border-slate-800";
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle text-[8px] text-emerald-400"></i>
+                        <span class="text-xs font-medium text-slate-200">${name}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-bold text-white block">${formatCurrency(val)}</span>
+                        <span class="text-[10px] text-slate-400">${pct}% of Total</span>
+                    </div>
+                `;
+                incomeBreakdownList.appendChild(item);
+            });
+
+            // Category Expenses Breakdown
+            const categoryNodes = nodeNames.filter(name => getNodeTier(name) === "Allocation Category");
+            const expenseBreakdownList = document.getElementById("analytics-expense-breakdown");
+            expenseBreakdownList.innerHTML = "";
+
+            categoryNodes.forEach(name => {
+                const incoming = currentFlows.filter(f => f.target === name);
+                const val = incoming.reduce((acc, f) => acc + Number(f.value), 0);
+                const pct = totalIncome > 0 ? ((val / totalIncome) * 100).toFixed(1) : 0;
+
+                const item = document.createElement("div");
+                item.className = "flex justify-between items-center p-2.5 rounded-xl bg-slate-900/80 border border-slate-800";
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle text-[8px] text-amber-400"></i>
+                        <span class="text-xs font-medium text-slate-200">${name}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-bold text-white block">${formatCurrency(val)}</span>
+                        <span class="text-[10px] text-slate-400">${pct}% of Income</span>
+                    </div>
+                `;
+                expenseBreakdownList.appendChild(item);
+            });
+
+            // Health Cards
+            const savingsNodes = nodeNames.filter(name => {
+                const lower = name.toLowerCase();
+                return lower.includes("savings") || lower.includes("investment") || lower.includes("wealth") || lower.includes("401k") || lower.includes("reserve") || lower.includes("fd");
+            });
+
+            let totalSavings = 0;
+            savingsNodes.forEach(name => {
+                const incoming = currentFlows.filter(f => f.target === name);
+                totalSavings += incoming.reduce((acc, f) => acc + Number(f.value), 0);
+            });
+
+            const savingsRate = totalIncome > 0 ? Math.min(100, (totalSavings / totalIncome) * 100) : 0;
+            
+            document.getElementById("analytics-savings-rate").textContent = `${savingsRate.toFixed(1)}%`;
+            document.getElementById("analytics-savings-bar").style.width = `${Math.min(100, savingsRate)}%`;
+            document.getElementById("analytics-income-count").textContent = `${incomeNodes.length} Streams`;
+            document.getElementById("analytics-surplus").textContent = formatCurrency(totalIncome - totalSavings);
+
+            const msg = document.getElementById("analytics-savings-msg");
+            if (savingsRate >= 20) {
+                msg.textContent = "Excellent savings rate! You exceed the standard 20% wealth creation benchmark.";
+            } else if (savingsRate >= 10) {
+                msg.textContent = "Moderate savings rate. Consider allocating more surplus into long-term assets.";
+            } else {
+                msg.textContent = "Low savings rate. Review fixed category allocations to improve monthly surplus.";
+            }
+        }
+
+        function openAddConnectionModal(defaultSource = "") {
+            const nodeNames = getUniqueNodeNames();
+            const sourceSelect = document.getElementById("select-conn-source");
+            const targetSelect = document.getElementById("select-conn-target");
+
+            sourceSelect.innerHTML = "";
+            targetSelect.innerHTML = "";
+
+            nodeNames.forEach(name => {
+                const opt1 = document.createElement("option");
+                opt1.value = name;
+                opt1.textContent = `${name} (${getNodeTier(name)})`;
+                if (name === defaultSource) opt1.selected = true;
+                sourceSelect.appendChild(opt1);
+
+                const opt2 = document.createElement("option");
+                opt2.value = name;
+                opt2.textContent = `${name} (${getNodeTier(name)})`;
+                targetSelect.appendChild(opt2);
+            });
+
+            document.getElementById("modal-add-conn").classList.remove("hidden");
+        }
+
+        // Export Utilities for SVG, PNG, and JPEG
+        function exportSVG() {
+            const svgEl = document.getElementById("sankey-svg");
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svgEl);
+
+            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            if(!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)){
+                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+            }
+
+            source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+
+            const downloadLink = document.createElement("a");
+            downloadLink.href = url;
+            downloadLink.download = "finflow_sankey_model.svg";
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+
+            showToast("Sankey diagram exported as SVG!");
+        }
+
+        function exportImageFormat(format) {
+            const svgEl = document.getElementById("sankey-svg");
+            const bbox = svgEl.getBoundingClientRect();
+            
+            // Render high-DPI raster graphic canvas
+            const scale = 2; // 2x resolution
+            const width = (parseInt(svgEl.getAttribute("width")) || bbox.width || 800) * scale;
+            const height = (parseInt(svgEl.getAttribute("height")) || bbox.height || 500) * scale;
+
+            const serializer = new XMLSerializer();
+            let svgString = serializer.serializeToString(svgEl);
+
+            if(!svgString.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+                svgString = svgString.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+
+            // Fill background color matching theme
+            ctx.fillStyle = "#020617"; // Slate 950
+            ctx.fillRect(0, 0, width, height);
+
+            const img = new Image();
+            const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, width, height);
+                URL.revokeObjectURL(url);
+
+                const mimeType = format === "png" ? "image/png" : "image/jpeg";
+                const imgData = canvas.toDataURL(mimeType, 0.95);
+
+                const downloadLink = document.createElement("a");
+                downloadLink.href = imgData;
+                downloadLink.download = `finflow_sankey_model.${format}`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+                showToast(`Sankey diagram exported as ${format.toUpperCase()}!`);
+            };
+
+            img.src = url;
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Load state from local storage before rendering
+            loadStateFromLocalStorage();
+
+            // Synchronize UI Inputs with loaded state
+            document.getElementById("select-currency").value = currencySymbol;
+            document.getElementById("select-color-mode").value = colorMode;
+            document.getElementById("select-theme").value = colorTheme;
+            document.getElementById("input-monotone-color").value = monotoneColor;
+            document.getElementById("label-monotone-hex").textContent = monotoneColor;
+            document.getElementById("input-duotone-color-a").value = duotoneColorA;
+            document.getElementById("label-duotone-a-hex").textContent = duotoneColorA;
+            document.getElementById("input-duotone-color-b").value = duotoneColorB;
+            document.getElementById("label-duotone-b-hex").textContent = duotoneColorB;
+
+            document.getElementById("input-node-width").value = sankeyConfig.nodeWidth;
+            document.getElementById("val-node-width").textContent = `${sankeyConfig.nodeWidth}px`;
+            document.getElementById("input-node-padding").value = sankeyConfig.nodePadding;
+            document.getElementById("val-node-padding").textContent = `${sankeyConfig.nodePadding}px`;
+            document.getElementById("input-link-opacity").value = sankeyConfig.linkOpacity;
+            document.getElementById("val-link-opacity").textContent = sankeyConfig.linkOpacity;
+            document.getElementById("select-align").value = sankeyConfig.alignKey || "sankeyJustify";
+
+            updateColorModeContainers();
+
+            // Initial Flow Render
+            renderFlowBuilder();
+
+            // Tab Navigation
+            const tabs = [
+                { btn: "tab-builder", view: "view-builder" },
+                { btn: "tab-sankey", view: "view-sankey" },
+                { btn: "tab-analytics", view: "view-analytics" }
+            ];
+
+            tabs.forEach(t => {
+                document.getElementById(t.btn).addEventListener("click", () => {
+                    tabs.forEach(o => {
+                        document.getElementById(o.btn).classList.remove("active");
+                        document.getElementById(o.view).classList.add("hidden");
+                        document.getElementById(o.view).classList.remove("flex");
+                    });
+
+                    document.getElementById(t.btn).classList.add("active");
+                    const viewEl = document.getElementById(t.view);
+                    viewEl.classList.remove("hidden");
+                    viewEl.classList.add("flex");
+
+                    if (t.view === "view-sankey") {
+                        setTimeout(renderSankey, 50);
+                    } else if (t.view === "view-analytics") {
+                        renderAnalytics();
+                    }
+                });
+            });
+
+            // Settings Modal & Color Mode Toggle Logic
+            const modalSettings = document.getElementById("modal-settings");
+            document.getElementById("btn-settings").addEventListener("click", () => modalSettings.classList.remove("hidden"));
+            document.getElementById("btn-quick-settings").addEventListener("click", () => modalSettings.classList.remove("hidden"));
+            document.getElementById("btn-close-settings").addEventListener("click", () => modalSettings.classList.add("hidden"));
+            document.getElementById("btn-save-settings").addEventListener("click", () => {
+                saveStateToLocalStorage();
+                modalSettings.classList.add("hidden");
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) {
+                    renderSankey();
+                }
+            });
+
+            function updateColorModeContainers() {
+                const mode = document.getElementById("select-color-mode").value;
+                colorMode = mode;
+
+                document.getElementById("container-theme-select").classList.toggle("hidden", mode !== "theme");
+                document.getElementById("container-monotone-select").classList.toggle("hidden", mode !== "monotone");
+                document.getElementById("container-duotone-select").classList.toggle("hidden", mode !== "duotone");
+            }
+
+            document.getElementById("select-color-mode").addEventListener("change", (e) => {
+                updateColorModeContainers();
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            document.getElementById("input-monotone-color").addEventListener("input", (e) => {
+                monotoneColor = e.target.value;
+                document.getElementById("label-monotone-hex").textContent = monotoneColor;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            document.getElementById("input-duotone-color-a").addEventListener("input", (e) => {
+                duotoneColorA = e.target.value;
+                document.getElementById("label-duotone-a-hex").textContent = duotoneColorA;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            document.getElementById("input-duotone-color-b").addEventListener("input", (e) => {
+                duotoneColorB = e.target.value;
+                document.getElementById("label-duotone-b-hex").textContent = duotoneColorB;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            // Settings Inputs
+            document.getElementById("select-currency").addEventListener("change", (e) => {
+                currencySymbol = e.target.value;
+                renderFlowBuilder();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) {
+                    renderSankey();
+                }
+            });
+
+            document.getElementById("select-theme").addEventListener("change", (e) => {
+                colorTheme = e.target.value;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) {
+                    renderSankey();
+                }
+            });
+
+            document.getElementById("input-node-width").addEventListener("input", (e) => {
+                sankeyConfig.nodeWidth = parseInt(e.target.value);
+                document.getElementById("val-node-width").textContent = `${e.target.value}px`;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            document.getElementById("input-node-padding").addEventListener("input", (e) => {
+                sankeyConfig.nodePadding = parseInt(e.target.value);
+                document.getElementById("val-node-padding").textContent = `${e.target.value}px`;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            document.getElementById("input-link-opacity").addEventListener("input", (e) => {
+                sankeyConfig.linkOpacity = parseFloat(e.target.value);
+                document.getElementById("val-link-opacity").textContent = e.target.value;
+                d3.selectAll(".sankey-link").attr("stroke-opacity", sankeyConfig.linkOpacity);
+                saveStateToLocalStorage();
+            });
+
+            document.getElementById("select-align").addEventListener("change", (e) => {
+                sankeyConfig.align = d3[e.target.value];
+                sankeyConfig.alignKey = e.target.value;
+                saveStateToLocalStorage();
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) renderSankey();
+            });
+
+            // Export Modal
+            const modalExport = document.getElementById("modal-export");
+            document.getElementById("btn-export-modal").addEventListener("click", () => modalExport.classList.remove("hidden"));
+            document.getElementById("btn-close-export").addEventListener("click", () => modalExport.classList.add("hidden"));
+
+            document.getElementById("btn-export-svg").addEventListener("click", () => {
+                modalExport.classList.add("hidden");
+                exportSVG();
+            });
+
+            document.getElementById("btn-export-png").addEventListener("click", () => {
+                modalExport.classList.add("hidden");
+                exportImageFormat("png");
+            });
+
+            document.getElementById("btn-export-jpeg").addEventListener("click", () => {
+                modalExport.classList.add("hidden");
+                exportImageFormat("jpeg");
+            });
+
+            // Presets Modal
+            const modalPresets = document.getElementById("modal-presets");
+            document.getElementById("btn-presets").addEventListener("click", () => modalPresets.classList.remove("hidden"));
+            document.getElementById("btn-close-presets").addEventListener("click", () => modalPresets.classList.add("hidden"));
+
+            document.querySelectorAll(".btn-preset-item").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const presetKey = e.currentTarget.getAttribute("data-preset");
+                    if (PRESETS[presetKey]) {
+                        currentFlows = JSON.parse(JSON.stringify(PRESETS[presetKey]));
+                        if (presetKey === "lkr_plan") {
+                            currencySymbol = "LKR";
+                            document.getElementById("select-currency").value = "LKR";
+                        }
+                        renderFlowBuilder();
+                        modalPresets.classList.add("hidden");
+                        showToast("Preset scenario loaded!");
+                    }
+                });
+            });
+
+            // Add Node Modal
+            const modalAddNode = document.getElementById("modal-add-node");
+            document.getElementById("btn-add-node-modal").addEventListener("click", () => modalAddNode.classList.remove("hidden"));
+            document.getElementById("btn-close-add-node").addEventListener("click", () => modalAddNode.classList.add("hidden"));
+            document.getElementById("btn-cancel-add-node").addEventListener("click", () => modalAddNode.classList.add("hidden"));
+
+            document.querySelectorAll(".btn-open-add-node-tier").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const tier = e.currentTarget.getAttribute("data-tier");
+                    document.getElementById("input-node-tier").value = tier;
+                    modalAddNode.classList.remove("hidden");
+                });
+            });
+
+            document.getElementById("btn-submit-add-node").addEventListener("click", () => {
+                const name = document.getElementById("input-node-name").value.trim();
+                const tier = document.getElementById("input-node-tier").value;
+
+                if (name !== "") {
+                    customNodeTiers.set(name, tier);
+                    if (tier !== "Income Source") {
+                        const targetNode = name;
+                        const defaultSource = tier === "Expense / Savings" ? "Housing & Utilities" : "Total Cash Flow";
+                        currentFlows.push({ source: defaultSource, target: targetNode, value: 500 });
+                    } else {
+                        currentFlows.push({ source: name, target: "Total Cash Flow", value: 1000 });
+                    }
+
+                    document.getElementById("input-node-name").value = "";
+                    modalAddNode.classList.add("hidden");
+                    renderFlowBuilder();
+                    showToast(`Created node "${name}"`);
+                }
+            });
+
+            // Add Connection Modal
+            const modalAddConn = document.getElementById("modal-add-conn");
+            document.getElementById("btn-add-conn-modal").addEventListener("click", () => openAddConnectionModal());
+            document.getElementById("btn-add-conn-table").addEventListener("click", () => openAddConnectionModal());
+            document.getElementById("btn-close-add-conn").addEventListener("click", () => modalAddConn.classList.add("hidden"));
+            document.getElementById("btn-cancel-add-conn").addEventListener("click", () => modalAddConn.classList.add("hidden"));
+
+            document.getElementById("btn-submit-add-conn").addEventListener("click", () => {
+                const source = document.getElementById("select-conn-source").value;
+                const target = document.getElementById("select-conn-target").value;
+                const amount = parseFloat(document.getElementById("input-conn-amount").value) || 0;
+
+                if (source && target && source !== target && amount > 0) {
+                    currentFlows.push({ source, target, value: amount });
+                    document.getElementById("input-conn-amount").value = "";
+                    modalAddConn.classList.add("hidden");
+                    renderFlowBuilder();
+                    showToast("Flow connection added!");
+                } else {
+                    alert("Please select distinct source and target nodes with a value greater than 0.");
+                }
+            });
+
+            // Reset
+            document.getElementById("btn-quick-reset").addEventListener("click", () => {
+                currentFlows = JSON.parse(JSON.stringify(PRESETS.tech));
+                customNodeTiers.clear();
+                renderFlowBuilder();
+                showToast("Reset to default model!");
+            });
+
+            // Window Resize
+            window.addEventListener("resize", () => {
+                if (!document.getElementById("view-sankey").classList.contains("hidden")) {
+                    renderSankey();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

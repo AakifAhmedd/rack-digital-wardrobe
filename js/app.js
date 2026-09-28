@@ -281,6 +281,47 @@ function svgHBarChart(rows, opts = {}) {
 
   return `<svg viewBox="0 0 ${width} ${Math.max(height, rowH)}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'chart')}">${tracks}${gridlines}${bars}</svg>`;
 }
+/* Two-column Sankey: rows = { label, iconKey, count, flows: [n per tier] }, tiers = [{ label, color }].
+   Left nodes are categories, right nodes are tiers; link width = item count. */
+function svgSankey(rows, tiers, opts = {}) {
+  const width = 560, height = 280, labelW = 34, nodeW = 12, rightW = 118, gap = 8;
+  const leftX = labelW, rightX = width - rightW - nodeW;
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const tierTotals = tiers.map((_, t) => rows.reduce((s, r) => s + r.flows[t], 0));
+  const liveTiers = tiers.map((_, t) => t).filter(t => tierTotals[t] > 0);
+  const scale = Math.min(
+    (height - gap * (rows.length - 1)) / total,
+    (height - gap * (liveTiers.length - 1)) / total
+  );
+  const leftUsed = total * scale + gap * (rows.length - 1);
+  const rightUsed = total * scale + gap * (liveTiers.length - 1);
+  let y = (height - leftUsed) / 2;
+  const lNodes = rows.map(r => { const n = { r, y, h: r.count * scale, off: 0 }; y += n.h + gap; return n; });
+  y = (height - rightUsed) / 2;
+  const rNodes = {};
+  liveTiers.forEach(t => { rNodes[t] = { y, h: tierTotals[t] * scale, off: 0 }; y += rNodes[t].h + gap; });
+
+  const mid = (leftX + nodeW + rightX) / 2;
+  let links = '', nodes = '', labels = '';
+  lNodes.forEach(ln => {
+    liveTiers.forEach(t => {
+      const n = ln.r.flows[t];
+      if (!n) return;
+      const rn = rNodes[t], h = n * scale;
+      const y0 = ln.y + ln.off + h / 2, y1 = rn.y + rn.off + h / 2;
+      ln.off += h; rn.off += h;
+      links += `<path d="M${leftX + nodeW},${y0} C${mid},${y0} ${mid},${y1} ${rightX},${y1}" fill="none" stroke="${tiers[t].color}" stroke-opacity=".38" stroke-width="${Math.max(1, h)}"><title>${esc(ln.r.label)} → ${esc(tiers[t].label)}: ${n}</title></path>`;
+    });
+    nodes += `<rect x="${leftX}" y="${ln.y}" width="${nodeW}" height="${Math.max(2, ln.h)}" rx="2" fill="var(--ink-soft)"></rect>`;
+    labels += `<svg x="4" y="${ln.y + ln.h / 2 - 10}" width="20" height="20" viewBox="0 0 24 24" class="chart-icon"><title>${esc(ln.r.label)}</title>${iconMarkup(ln.r.iconKey)}</svg>`;
+  });
+  liveTiers.forEach(t => {
+    const rn = rNodes[t];
+    nodes += `<rect x="${rightX}" y="${rn.y}" width="${nodeW}" height="${Math.max(2, rn.h)}" rx="2" fill="${tiers[t].color}"></rect>`;
+    labels += `<text x="${rightX + nodeW + 8}" y="${rn.y + rn.h / 2 + 4}" class="chart-label">${esc(tiers[t].label)} <tspan class="chart-value">${tierTotals[t]}</tspan></text>`;
+  });
+  return `<svg viewBox="0 0 ${width} ${height}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'sankey chart')}">${links}${nodes}${labels}</svg>`;
+}
 function chartEmpty(msg) {
   return `<p class="muted" style="padding:.5rem 0;">${esc(msg)}</p>`;
 }
@@ -590,13 +631,22 @@ function renderDashboard() {
       ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', useIcons: true, format: v => fmtMoney(v), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
     </div>`));
 
-  const countRows = Object.entries(byCategoryCount)
-    .map(([id, n]) => ({ label: G.category(id).name, iconKey: G.category(id).icon, value: n }))
-    .sort((a, b) => b.value - a.value).slice(0, 8);
+  const TIERS = [
+    { label: 'Never worn', color: 'var(--thread)', test: w => w === 0 },
+    { label: '1–4 wears', color: 'var(--ink-soft)', test: w => w >= 1 && w <= 4 },
+    { label: '5–14 wears', color: 'var(--accent)', test: w => w >= 5 && w <= 14 },
+    { label: '15+ wears', color: 'var(--good)', test: w => w >= 15 }
+  ];
+  const flowRows = Object.entries(byCategoryCount)
+    .map(([id, n]) => {
+      const flows = TIERS.map(t => items.filter(i => i.categoryId === id && t.test(i.wearCount || 0)).length);
+      return { label: G.category(id).name, iconKey: G.category(id).icon, count: n, flows };
+    })
+    .sort((a, b) => b.count - a.count);
   chartCols.appendChild(el(`
     <div class="panel">
-      <h3>Wardrobe composition</h3>
-      ${svgHBarChart(countRows, { color: 'var(--good)', useIcons: true, aria: 'Item count by category' })}
+      <h3>Wardrobe utilization</h3>
+      ${svgSankey(flowRows, TIERS, { aria: 'Items flowing from category to wear frequency' })}
     </div>`));
 
   if (retired.length) {

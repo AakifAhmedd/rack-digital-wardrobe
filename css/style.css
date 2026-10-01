@@ -221,12 +221,14 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 .stat-card__num { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; }
 .stat-card__label { font-size: .8rem; color: var(--ink-soft); }
 /* hero metric: one dominant figure, supporting numbers small beneath */
-.stat-hero { grid-column: 1 / -1; padding: 1.3rem 1.4rem; gap: .35rem; }
-.stat-hero .stat-card__num { font-size: 2.8rem; line-height: 1.1; }
+.stat-hero { grid-column: 1 / -1; padding: .9rem 1.2rem; gap: .2rem; }
+.stat-hero .stat-card__num { font-size: 1.9rem; line-height: 1.1; }
 .stat-hero__meta {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .75rem 1rem;
-  margin-top: .75rem; padding-top: .8rem; border-top: 1px dashed var(--line);
+  margin-top: .45rem; padding-top: .6rem; border-top: 1px dashed var(--line);
 }
+.stat-grid .stat-card:not(.stat-hero) { padding: .7rem 1rem; }
+.stat-grid .stat-card:not(.stat-hero) .stat-card__num { font-size: 1.35rem; }
 .stat-hero__item { display: flex; flex-direction: column; gap: .05rem; min-width: 0; }
 .stat-hero__val { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
 

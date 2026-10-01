@@ -239,11 +239,27 @@ function itemsForActivity(activityId) {
 }
 
 /* ---------------- item helpers ---------------- */
+/* an item is one piece, so "Polo Shirts" reads as "Polo Shirt" — except things that are naturally a pair/plural */
+const PLURAL_ONLY = new Set(['pants', 'trousers', 'jeans', 'shorts', 'chinos', 'joggers', 'leggings', 'tights', 'shoes', 'sandals',
+  'slippers', 'sneakers', 'boots', 'loafers', 'heels', 'flops', 'socks', 'gloves', 'sunglasses', 'glasses', 'goggles',
+  'cufflinks', 'boxers', 'briefs', 'trunks']);
+function singularNoun(name) {
+  const m = String(name || '').match(/^(.*?)([A-Za-z]+)$/);
+  if (!m) return name;
+  const [, head, word] = m;
+  const lower = word.toLowerCase();
+  if (PLURAL_ONLY.has(lower)) return name;
+  let out = word;
+  if (/(ch|sh|ss|x|z)es$/i.test(word)) out = word.slice(0, -2);
+  else if (/ies$/i.test(word)) out = word.slice(0, -1);
+  else if (/[^s]s$/i.test(word)) out = word.slice(0, -1);
+  return head + out;
+}
 function itemTitle(item) {
   const brand = G.brand(item.brandId);
   const color = G.color(item.colorId);
   const sub = G.subcategory(item.subcategoryId);
-  const parts = [brand?.name, color?.name, sub?.name].filter(Boolean);
+  const parts = [brand?.name, color?.name, sub ? singularNoun(sub.name) : null].filter(Boolean);
   return parts.join(' ') || 'Unnamed item';
 }
 function costPerWear(item) {
@@ -923,7 +939,7 @@ function renderItemGrid() {
     if (f.activity && !matchActivity(G.activity(f.activity), i)) return false;
     if (f.search) {
       const tagNames = (i.tags || []).map(tid => G.tag(tid)?.name || '').join(' ');
-      const haystack = `${itemTitle(i)} ${tagNames}`.toLowerCase();
+      const haystack = `${itemTitle(i)} ${G.subcategory(i.subcategoryId)?.name || ''} ${tagNames}`.toLowerCase();
       if (!haystack.includes(f.search.trim().toLowerCase())) return false;
     }
     return true;

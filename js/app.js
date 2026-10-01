@@ -514,8 +514,13 @@ function initSyncIndicator() {
   const pullBtn = qs('#sync-pull-btn');
   const settingsBtn = qs('#sync-popover-settings');
 
-  const closePopover = () => popover.classList.remove('is-open');
-  btn.addEventListener('click', (e) => { e.stopPropagation(); popover.classList.toggle('is-open'); });
+  const scrim = qs('#sync-scrim');
+  const closePopover = () => { popover.classList.remove('is-open'); scrim.classList.remove('is-open'); };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = popover.classList.toggle('is-open');
+    scrim.classList.toggle('is-open', open);
+  });
   document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) closePopover(); });
 
   settingsBtn.addEventListener('click', () => {

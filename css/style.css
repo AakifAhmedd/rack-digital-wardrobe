@@ -51,7 +51,7 @@ a { color: var(--accent); }
 
 /* ---------------- header / nav ---------------- */
 .app-header {
-  position: sticky; top: 0; left: 0; z-index: 20;
+  position: sticky; top: 0; left: 0; z-index: 48;
   width: 100%;
   background: var(--ink);
   color: var(--accent-ink);
@@ -117,6 +117,15 @@ a { color: var(--accent); }
   padding: .9rem; width: 240px;
 }
 .sync-popover.is-open { display: block; }
+/* fluted-glass scrim behind the popover */
+.sync-scrim {
+  display: none; position: fixed; inset: 0; z-index: 44;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0, rgba(255,255,255,.03) 6px, rgba(0,0,0,.07) 12px, rgba(255,255,255,.14) 12px),
+    rgba(255,255,255,.10);
+  backdrop-filter: blur(12px) saturate(140%); -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+.sync-scrim.is-open { display: block; }
 .sync-popover__status { font-size: .82rem; color: var(--ink-soft); margin: 0 0 .7rem; }
 .sync-popover__actions { display: flex; gap: .5rem; }
 .sync-popover__actions .btn { flex: 1; }
@@ -544,7 +553,7 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 640px) {
-  .app-header { position: static; }
+  .app-header { position: relative; }
   .app-header__inner { gap: 1rem; }
   .brand small { display: none; }
   .nav { display: none; }

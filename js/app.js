@@ -165,6 +165,11 @@ function applyTheme(themeId) {
   root.setProperty('--accent', theme.accent);
   root.setProperty('--thread', theme.thread);
   root.setProperty('--good', theme.good);
+  // light/dark tone of the canvas, so styles (neumorphic shadows) can adapt
+  const hex = String(theme.canvas).replace('#', '');
+  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+  const lum = (parseInt(full.slice(0, 2), 16) * 0.299 + parseInt(full.slice(2, 4), 16) * 0.587 + parseInt(full.slice(4, 6), 16) * 0.114) / 255;
+  document.documentElement.setAttribute('data-tone', lum < 0.45 ? 'dark' : 'light');
   // Only persist (and bump meta.updatedAt) when the choice actually changed —
   // re-applying the already-saved theme on every app load shouldn't count
   // as a local edit for sync purposes.
@@ -184,10 +189,19 @@ function applyFont(fontId) {
     Store.save();
   }
 }
+function applyStyle(styleId) {
+  if (!defaultStyles().some(s => s.id === styleId)) styleId = 'classic';
+  document.documentElement.setAttribute('data-style', styleId);
+  if (Store.state.appearance.styleId !== styleId) {
+    Store.state.appearance.styleId = styleId;
+    Store.save();
+  }
+}
 function applyStoredAppearance() {
   const a = Store.state.appearance;
   applyTheme(a.themeId);
   applyFont(a.fontId);
+  applyStyle(a.styleId);
 }
 
 /* ---------------- rule engine ---------------- */
@@ -2313,6 +2327,32 @@ function renderAppearanceSettings() {
   const s = Store.state;
   const wrap = el(`<div class="settings-grid settings-grid--appearance"></div>`);
 
+  /* -- style -- */
+  const stylePanel = el(`
+    <div class="panel panel--wide">
+      <h3>Style</h3>
+      <p class="muted">Surface look, applied on top of the colour theme.</p>
+      <div class="font-grid" id="style-grid"></div>
+    </div>`);
+  const styleGrid = qs('#style-grid', stylePanel);
+  defaultStyles().forEach(st => {
+    const isActive = s.appearance.styleId === st.id;
+    const card = el(`
+      <div class="font-card ${isActive ? 'is-active' : ''}">
+        <div class="style-card__sample" data-preview="${st.id}"><span>Aa</span></div>
+        <p class="font-card__name">${esc(st.name)}</p>
+        <div class="theme-card__actions">
+          <button class="btn btn--tiny ${isActive ? 'btn--primary' : 'btn--ghost'}" data-act="apply">${isActive ? 'Active' : 'Apply'}</button>
+        </div>
+      </div>`);
+    qs('[data-act="apply"]', card).addEventListener('click', () => {
+      applyStyle(st.id);
+      render();
+      toast(`Style set to ${st.name}`);
+    });
+    styleGrid.appendChild(card);
+  });
+
   /* -- themes -- */
   const themePanel = el(`
     <div class="panel panel--wide">
@@ -2397,6 +2437,7 @@ function renderAppearanceSettings() {
   });
   qs('#add-font', fontPanel).addEventListener('click', () => openFontModal());
 
+  wrap.appendChild(stylePanel);
   wrap.appendChild(themePanel);
   wrap.appendChild(fontPanel);
   return wrap;

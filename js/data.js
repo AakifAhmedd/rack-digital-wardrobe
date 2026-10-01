@@ -142,6 +142,7 @@ function buildDefaultState() {
     appearance: {
       themeId: 'theme_canvas',
       fontId: 'font_fraunces_plex',
+      styleId: 'classic',
       customThemes: [],
       customFonts: [],
     },
@@ -170,6 +171,16 @@ function defaultThemes() {
       canvas: '#E4E7EC', surfaceRaised: '#FFFFFF', text: '#1E2733', ink: '#1E2733',
       accentInk: '#F4F6F8', accent: '#3B6EA5', thread: '#B4483D', good: '#3F7A5D',
     },
+  ];
+}
+
+/* surface styles — a separate axis from the colour theme; CSS keys off <html data-style> */
+function defaultStyles() {
+  return [
+    { id: 'classic', name: 'Classic' },
+    { id: 'neumorphic', name: 'Neumorphic' },
+    { id: 'glass', name: 'Glass' },
+    { id: 'brutalist', name: 'Neobrutalist' },
   ];
 }
 
@@ -223,11 +234,12 @@ const Store = {
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
-    if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', customThemes: [], customFonts: [] };
+    if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', customThemes: [], customFonts: [] };
     if (!s.appearance.customThemes) s.appearance.customThemes = [];
     if (!s.appearance.customFonts) s.appearance.customFonts = [];
     if (!s.appearance.themeId) s.appearance.themeId = 'theme_canvas';
     if (!s.appearance.fontId) s.appearance.fontId = 'font_fraunces_plex';
+    if (!s.appearance.styleId) s.appearance.styleId = 'classic';
     s.categories.forEach(c => { if (!c.icon) c.icon = DEFAULT_CATEGORY_ICON; });
     s.items.forEach(i => {
       if (!i.status) i.status = 'active';

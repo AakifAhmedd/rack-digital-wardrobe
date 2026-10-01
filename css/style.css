@@ -219,6 +219,10 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 }
 .stat-card__num { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; }
 .stat-card__label { font-size: .8rem; color: var(--ink-soft); }
+.stat-card--duo { gap: .6rem; justify-content: center; }
+.stat-duo__cell { display: flex; flex-direction: column; gap: .1rem; }
+.stat-duo__cell + .stat-duo__cell { border-top: 1px solid var(--line); padding-top: .6rem; }
+.stat-duo__cell .stat-card__num { font-size: 1.4rem; }
 
 .dash-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
 .panel {

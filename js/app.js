@@ -604,6 +604,10 @@ function renderDashboard() {
 
   const totalValue = items.reduce((s, i) => s + (Number(i.cost) || 0), 0);
   const neverWorn = items.filter(i => !i.wearCount).length;
+  const DORMANT_DAYS = 60;
+  const idleDays = i => Math.floor((Date.now() - (i.lastWornAt || i.createdAt || Date.now())) / 86400000);
+  const dormant = items.filter(i => idleDays(i) >= DORMANT_DAYS).length;
+  const longestIdle = [...items].sort((a, b) => idleDays(b) - idleDays(a))[0];
   const totalWears = items.reduce((s, i) => s + (i.wearCount || 0), 0);
   const avgCPW = avgCostPerWear();
 
@@ -629,9 +633,12 @@ function renderDashboard() {
 
   wrap.appendChild(el(`
     <div class="stat-grid">
-      <div class="stat-card"><span class="stat-card__num">${items.length}</span><span class="stat-card__label">Items in rack</span></div>
-      <div class="stat-card"><span class="stat-card__num">${totalWears}</span><span class="stat-card__label">Total wears logged</span></div>
-      <div class="stat-card"><span class="stat-card__num">${neverWorn}</span><span class="stat-card__label">Never worn</span></div>
+      <div class="stat-card stat-card--duo">
+        <div class="stat-duo__cell"><span class="stat-card__num">${items.length}</span><span class="stat-card__label">Items in rack</span></div>
+        <div class="stat-duo__cell"><span class="stat-card__num">${totalWears}</span><span class="stat-card__label">Total wears logged</span></div>
+      </div>
+      <div class="stat-card"><span class="stat-card__num">${dormant}</span><span class="stat-card__label">Dormant (${DORMANT_DAYS}+ days)</span></div>
+      <div class="stat-card"><span class="stat-card__num">${longestIdle ? idleDays(longestIdle) + ' days' : '—'}</span><span class="stat-card__label">Longest idle${longestIdle ? ': ' + esc(itemTitle(longestIdle)) : ''}</span></div>
       <div class="stat-card"><span class="stat-card__num">${fmtMoney(totalValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
       <div class="stat-card"><span class="stat-card__num">${avgCPW !== null ? fmtMoney(avgCPW) : '—'}</span><span class="stat-card__label">Avg. cost per wear</span></div>
       <div class="stat-card"><span class="stat-card__num">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span><span class="stat-card__label">Most-worn subcategory</span></div>

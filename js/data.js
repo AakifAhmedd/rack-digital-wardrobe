@@ -143,6 +143,7 @@ function buildDefaultState() {
       themeId: 'theme_canvas',
       fontId: 'font_fraunces_plex',
       styleId: 'classic',
+      popoverBlur: 'frosted',
       customThemes: [],
       customFonts: [],
     },
@@ -234,12 +235,13 @@ const Store = {
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
-    if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', customThemes: [], customFonts: [] };
+    if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', popoverBlur: 'frosted', customThemes: [], customFonts: [] };
     if (!s.appearance.customThemes) s.appearance.customThemes = [];
     if (!s.appearance.customFonts) s.appearance.customFonts = [];
     if (!s.appearance.themeId) s.appearance.themeId = 'theme_canvas';
     if (!s.appearance.fontId) s.appearance.fontId = 'font_fraunces_plex';
     if (!s.appearance.styleId) s.appearance.styleId = 'classic';
+    if (!s.appearance.popoverBlur) s.appearance.popoverBlur = 'frosted';
     s.categories.forEach(c => { if (!c.icon) c.icon = DEFAULT_CATEGORY_ICON; });
     s.items.forEach(i => {
       if (!i.status) i.status = 'active';

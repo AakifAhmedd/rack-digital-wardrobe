@@ -117,9 +117,13 @@ a { color: var(--accent); }
   padding: .9rem; width: 240px;
 }
 .sync-popover.is-open { display: block; }
-/* fluted-glass scrim behind the popover */
+/* scrim behind the popover: frosted (default) or fluted, via <html data-popover-blur> */
 .sync-scrim {
   display: none; position: fixed; inset: 0; z-index: 44;
+  background: rgba(255,255,255,.18);
+  backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+[data-popover-blur="fluted"] .sync-scrim {
   background:
     repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0, rgba(255,255,255,.03) 6px, rgba(0,0,0,.07) 12px, rgba(255,255,255,.14) 12px),
     rgba(255,255,255,.10);

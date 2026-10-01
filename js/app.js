@@ -197,11 +197,20 @@ function applyStyle(styleId) {
     Store.save();
   }
 }
+function applyPopoverBlur(id) {
+  if (id !== 'fluted') id = 'frosted';
+  document.documentElement.setAttribute('data-popover-blur', id);
+  if (Store.state.appearance.popoverBlur !== id) {
+    Store.state.appearance.popoverBlur = id;
+    Store.save();
+  }
+}
 function applyStoredAppearance() {
   const a = Store.state.appearance;
   applyTheme(a.themeId);
   applyFont(a.fontId);
   applyStyle(a.styleId);
+  applyPopoverBlur(a.popoverBlur);
 }
 
 /* ---------------- rule engine ---------------- */
@@ -2358,6 +2367,21 @@ function renderAppearanceSettings() {
     styleGrid.appendChild(card);
   });
 
+  /* -- popover backdrop -- */
+  const blurPanel = el(`
+    <div class="panel panel--wide">
+      <h3>Popover backdrop</h3>
+      <p class="muted">Blur behind the sync popover.</p>
+      <div class="theme-card__actions" id="blur-toggle"></div>
+    </div>`);
+  const blurToggle = qs('#blur-toggle', blurPanel);
+  [['frosted', 'Frosted'], ['fluted', 'Fluted']].forEach(([id, name]) => {
+    const on = (s.appearance.popoverBlur || 'frosted') === id;
+    const b = el(`<button class="btn btn--small ${on ? 'btn--primary' : 'btn--ghost'}">${name}</button>`);
+    b.addEventListener('click', () => { applyPopoverBlur(id); render(); toast(`Popover backdrop: ${name}`); });
+    blurToggle.appendChild(b);
+  });
+
   /* -- themes -- */
   const themePanel = el(`
     <div class="panel panel--wide">
@@ -2443,6 +2467,7 @@ function renderAppearanceSettings() {
   qs('#add-font', fontPanel).addEventListener('click', () => openFontModal());
 
   wrap.appendChild(stylePanel);
+  wrap.appendChild(blurPanel);
   wrap.appendChild(themePanel);
   wrap.appendChild(fontPanel);
   return wrap;

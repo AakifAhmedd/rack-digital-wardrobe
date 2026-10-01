@@ -213,17 +213,22 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 .search-input { flex: 1 1 180px; min-width: 0; max-width: 260px; }
 
 /* ---------------- stat grid (dashboard) ---------------- */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
 .stat-card {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
   padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .2rem;
 }
 .stat-card__num { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; }
 .stat-card__label { font-size: .8rem; color: var(--ink-soft); }
-.stat-card--duo { gap: .6rem; justify-content: center; }
-.stat-duo__cell { display: flex; flex-direction: column; gap: .1rem; }
-.stat-duo__cell + .stat-duo__cell { border-top: 1px solid var(--line); padding-top: .6rem; }
-.stat-duo__cell .stat-card__num { font-size: 1.4rem; }
+/* hero metric: one dominant figure, supporting numbers small beneath */
+.stat-hero { grid-column: 1 / -1; padding: 1.3rem 1.4rem; gap: .35rem; }
+.stat-hero .stat-card__num { font-size: 2.8rem; line-height: 1.1; }
+.stat-hero__meta {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .75rem 1rem;
+  margin-top: .75rem; padding-top: .8rem; border-top: 1px dashed var(--line);
+}
+.stat-hero__item { display: flex; flex-direction: column; gap: .05rem; min-width: 0; }
+.stat-hero__val { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
 
 .dash-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
 .panel {
@@ -232,6 +237,9 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 }
 .panel--accent { border-color: var(--accent); background: #FBF6EA; }
 .panel--danger { border-color: var(--warn-bg); }
+.panel--quiet { padding: .75rem 1.2rem; }
+.panel--quiet h3 { font-size: .85rem; color: var(--ink-soft); margin: 0 0 .3rem; }
+.panel--quiet .mini-row { font-size: .82rem; }
 .mini-list { display: flex; flex-direction: column; gap: .1rem; }
 .mini-row {
   display: flex; justify-content: space-between; align-items: center; gap: .5rem;

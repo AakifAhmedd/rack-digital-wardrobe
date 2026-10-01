@@ -649,15 +649,18 @@ function renderDashboard() {
 
   wrap.appendChild(el(`
     <div class="stat-grid">
-      <div class="stat-card stat-card--duo">
-        <div class="stat-duo__cell"><span class="stat-card__num">${items.length}</span><span class="stat-card__label">Items in rack</span></div>
-        <div class="stat-duo__cell"><span class="stat-card__num">${totalWears}</span><span class="stat-card__label">Total wears logged</span></div>
+      <div class="stat-card stat-hero">
+        <span class="stat-card__label">Avg. cost per wear</span>
+        <span class="stat-card__num">${avgCPW !== null ? fmtMoney(avgCPW) : '—'}</span>
+        <div class="stat-hero__meta">
+          <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items in rack</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${totalWears}</span><span class="stat-card__label">Total wears logged</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(totalValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span><span class="stat-card__label">Most-worn subcategory</span></div>
+        </div>
       </div>
       <div class="stat-card"><span class="stat-card__num">${dormant}</span><span class="stat-card__label">Dormant (${DORMANT_DAYS}+ days)</span></div>
       <div class="stat-card"><span class="stat-card__num">${longestIdle ? idleDays(longestIdle) + ' days' : '—'}</span><span class="stat-card__label">Longest idle${longestIdle ? ': ' + esc(itemTitle(longestIdle)) : ''}</span></div>
-      <div class="stat-card"><span class="stat-card__num">${fmtMoney(totalValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
-      <div class="stat-card"><span class="stat-card__num">${avgCPW !== null ? fmtMoney(avgCPW) : '—'}</span><span class="stat-card__label">Avg. cost per wear</span></div>
-      <div class="stat-card"><span class="stat-card__num">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span><span class="stat-card__label">Most-worn subcategory</span></div>
     </div>
   `));
 
@@ -722,28 +725,30 @@ function renderDashboard() {
 
   /* ---- lists ---- */
   const cols = el(`<div class="dash-cols"></div>`);
+  const quietCols = el(`<div class="dash-cols"></div>`);
 
-  const mkList = (title, list, renderRow) => {
-    const box = el(`<div class="panel"><h3>${esc(title)}</h3><div class="mini-list"></div></div>`);
+  const mkList = (title, list, renderRow, quiet = false) => {
+    const box = el(`<div class="panel${quiet ? ' panel--quiet' : ''}"><h3>${esc(title)}</h3><div class="mini-list"></div></div>`);
     const mini = qs('.mini-list', box);
     if (!list.length) mini.appendChild(el(`<p class="muted">Nothing yet.</p>`));
     list.forEach(i => mini.appendChild(renderRow(i)));
     return box;
   };
 
-  cols.appendChild(mkList('Most worn', mostWorn, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip">${i.wearCount || 0}×</span></div>`)));
-
   cols.appendChild(mkList('Rarely worn — consider donating', leastWorn, i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--muted">${i.wearCount || 0}×</span></div>`)));
-
-  cols.appendChild(mkList('Best value per wear', bestValue, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--good">${fmtMoney(costPerWear(i))}</span></div>`)));
 
   cols.appendChild(mkList('Worst value per wear', worstValue, i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--warn">${fmtMoney(costPerWear(i))}</span></div>`)));
 
+  quietCols.appendChild(mkList('Most worn', mostWorn.slice(0, 3), i => el(`
+    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip">${i.wearCount || 0}×</span></div>`), true));
+
+  quietCols.appendChild(mkList('Best value per wear', bestValue, i => el(`
+    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--good">${fmtMoney(costPerWear(i))}</span></div>`), true));
+
   wrap.appendChild(cols);
+  wrap.appendChild(quietCols);
 
   if (neverWorn > 0) {
     const donate = el(`

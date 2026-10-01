@@ -164,6 +164,7 @@ a { color: var(--accent); }
 /* ---------------- layout ---------------- */
 .app-main { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 .view-section { display: flex; flex-direction: column; gap: 1.25rem; }
+.wardrobe-block, #outfit-body { display: flex; flex-direction: column; gap: 1.25rem; }
 
 /* ---------------- buttons ---------------- */
 .btn {

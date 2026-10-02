@@ -967,6 +967,43 @@ function renderItemGrid() {
     return;
   }
   items.forEach(item => grid.appendChild(wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item)));
+  fitCardTags(grid);
+}
+
+/* Keep every card's tag row to a single line: tags that don't fit are hidden
+   behind a "+N" chip that expands the full list in place. */
+function fitCardTags(root) {
+  qsa('.item-card__tags', root).forEach(box => {
+    qsa('.tag-chip--more', box).forEach(b => b.remove());
+    const chips = qsa('.tag-chip', box);
+    chips.forEach(c => { c.hidden = false; });
+    box.classList.remove('is-expanded');
+    if (chips.length < 2) return;
+    const firstTop = chips[0].offsetTop;
+    if (chips[chips.length - 1].offsetTop <= firstTop) return; // already one line
+    const more = el('<button type="button" class="tag-chip tag-chip--more"></button>');
+    box.appendChild(more);
+    let hiddenCount = 0;
+    const setLabel = () => { more.textContent = box.classList.contains('is-expanded') ? 'Less' : `+${hiddenCount}`; };
+    for (let i = chips.length - 1; i > 0; i--) {
+      more.textContent = `+${hiddenCount}`;
+      if (more.offsetTop <= firstTop && chips[i].offsetTop <= firstTop) break;
+      chips[i].hidden = true; hiddenCount++;
+    }
+    setLabel();
+    more.addEventListener('click', () => {
+      const expanded = box.classList.toggle('is-expanded');
+      chips.forEach(c => { c.hidden = expanded ? false : chips.indexOf(c) >= chips.length - hiddenCount; });
+      setLabel();
+    });
+  });
+}
+let __tagFitBound = false;
+if (!__tagFitBound) {
+  __tagFitBound = true;
+  let t;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { const g = qs('#item-grid'); if (g && !g.classList.contains('item-grid--list')) fitCardTags(g); }, 150); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const g = qs('#item-grid'); if (g && !g.classList.contains('item-grid--list')) fitCardTags(g); });
 }
 
 /* Shared action wiring — both the card and the compact list row use the

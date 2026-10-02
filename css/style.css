@@ -205,7 +205,8 @@ a { color: var(--accent); }
 .filter-count-badge[hidden] { display: none; }
 .filters-backdrop { display: none; }
 .filters-done-btn { display: none; }
-select, input[type="text"], input[type="number"], input[type="password"], input[type="search"] {
+select, input[type="text"], input[type="number"], input[type="password"], input[type="search"],
+input[type="date"] {
   font-family: var(--font-body); font-size: .87rem;
   padding: .5rem .6rem; border-radius: var(--radius-s); border: 1px solid var(--line);
   background: var(--surface-raised); color: var(--text);
@@ -711,7 +712,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 
 /* inputs: pressed-in */
 [data-style="neumorphic"] select, [data-style="neumorphic"] input[type="text"], [data-style="neumorphic"] input[type="number"],
-[data-style="neumorphic"] input[type="password"], [data-style="neumorphic"] input[type="search"] {
+[data-style="neumorphic"] input[type="password"], [data-style="neumorphic"] input[type="search"],
+[data-style="neumorphic"] input[type="date"] {
   background: var(--canvas); border-color: transparent; box-shadow: var(--nm-in);
 }
 
@@ -797,7 +799,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="glass"] .icon-picker__btn { background: var(--glass-bg); border-color: var(--glass-border); }
 [data-style="glass"] .icon-picker__btn.is-selected { background: var(--ink); }
 [data-style="glass"] select, [data-style="glass"] input[type="text"], [data-style="glass"] input[type="number"],
-[data-style="glass"] input[type="password"], [data-style="glass"] input[type="search"] {
+[data-style="glass"] input[type="password"], [data-style="glass"] input[type="search"],
+[data-style="glass"] input[type="date"] {
   background: color-mix(in srgb, var(--surface-raised) 70%, transparent); border-color: var(--glass-border);
 }
 
@@ -895,7 +898,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="brutalist"] .btn--tiny:hover { box-shadow: 2px 2px 0 var(--text); }
 
 [data-style="brutalist"] select, [data-style="brutalist"] input[type="text"], [data-style="brutalist"] input[type="number"],
-[data-style="brutalist"] input[type="password"], [data-style="brutalist"] input[type="search"] {
+[data-style="brutalist"] input[type="password"], [data-style="brutalist"] input[type="search"],
+[data-style="brutalist"] input[type="date"] {
   border: 2px solid var(--text); background: var(--surface-raised);
 }
 [data-style="brutalist"] select:focus, [data-style="brutalist"] input:focus { outline: none; box-shadow: 3px 3px 0 var(--accent); }

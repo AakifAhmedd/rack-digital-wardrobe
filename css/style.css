@@ -376,7 +376,11 @@ input[type="date"] {
 /* ---------------- outfit builder ---------------- */
 .outfit-question { font-family: var(--font-display); font-size: 1.3rem; margin: 0; }
 .outfit-view { max-width: 760px; width: 100%; margin: 0 auto; }
-.outfit-activity-chips { border-bottom: none; padding-bottom: 0; }
+.outfit-activity-chips {
+  border-bottom: none; padding: .6rem 1.25rem; margin: 0 -1.25rem;
+  position: sticky; top: var(--app-header-h, 0px); z-index: 20;
+  background: var(--canvas);
+}
 .outfit-hint { padding: .5rem 0; }
 .outfit-category h3 {
   display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;
@@ -938,3 +942,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .brand-logo-editor__preview .brand-logo { margin: 0; opacity: 1; }
 .brand-logo-editor .confirm__actions { align-self: stretch; }
 
+/* sticky activity bar per surface style */
+[data-style="glass"] .outfit-activity-chips {
+  background: var(--glass-strong); border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+[data-style="brutalist"] .outfit-activity-chips { border-bottom: 2px solid var(--text); }

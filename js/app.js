@@ -1001,6 +1001,13 @@ function fitCardTags(root) {
     });
   });
 }
+/* Offset for elements that stick below the (desktop-only) sticky header. */
+(function () {
+  const hdr = qs('.app-header');
+  if (!hdr) return;
+  const setH = () => document.documentElement.style.setProperty('--app-header-h', (getComputedStyle(hdr).position === 'sticky' ? hdr.offsetHeight : 0) + 'px');
+  setH(); window.addEventListener('resize', setH);
+})();
 let __tagFitBound = false;
 if (!__tagFitBound) {
   __tagFitBound = true;

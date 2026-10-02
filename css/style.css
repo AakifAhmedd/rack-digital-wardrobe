@@ -387,6 +387,9 @@ input[type="date"] {
 }
 .outfit-activity-chips::-webkit-scrollbar { display: none; }
 .outfit-activity-chips .subnav__link { pointer-events: auto; flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 640px) {
+  .outfit-activity-chips.is-stuck { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+}
 .outfit-hint { padding: .5rem 0; }
 .outfit-category h3 {
   display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;

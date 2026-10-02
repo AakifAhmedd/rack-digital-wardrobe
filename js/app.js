@@ -1008,14 +1008,6 @@ function fitCardTags(root) {
   const setH = () => document.documentElement.style.setProperty('--app-header-h', (getComputedStyle(hdr).position === 'sticky' ? hdr.offsetHeight : 0) + 'px');
   setH(); window.addEventListener('resize', setH);
 })();
-/* Outfit activity bar: flag it once it is stuck to the top so mobile can blur what scrolls beneath it. */
-function updateChipStuck() {
-  const r = qs('.outfit-activity-chips');
-  if (!r) return;
-  const top = parseFloat(getComputedStyle(r).top) || 0;
-  r.classList.toggle('is-stuck', window.scrollY > 0 && r.getBoundingClientRect().top <= top + 1);
-}
-window.addEventListener('scroll', updateChipStuck, { passive: true });
 let __tagFitBound = false;
 if (!__tagFitBound) {
   __tagFitBound = true;

@@ -381,7 +381,12 @@ input[type="date"] {
   position: sticky; top: var(--app-header-h, 0px); z-index: 20;
   pointer-events: none; /* free-floating chips: taps in the empty space reach the content below */
 }
-.outfit-activity-chips .subnav__link { pointer-events: auto; }
+.subnav.outfit-activity-chips {
+  border-bottom: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.outfit-activity-chips::-webkit-scrollbar { display: none; }
+.outfit-activity-chips .subnav__link { pointer-events: auto; flex: 0 0 auto; white-space: nowrap; }
 .outfit-hint { padding: .5rem 0; }
 .outfit-category h3 {
   display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;

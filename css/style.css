@@ -266,6 +266,9 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 .tag-chip--good { background: var(--good-bg); color: var(--good); border-color: transparent; }
 .tag-chip--warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
 .tag-chip--muted { opacity: .7; }
+.tag-chip--more { cursor: pointer; font-family: var(--font-mono); line-height: inherit; color: var(--text); }
+.tag-chip--more:hover { border-color: var(--ink-soft); }
+.tag-chip[hidden] { display: none; }
 
 /* ---------------- item grid & cards ---------------- */
 .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 1rem; }
@@ -727,6 +730,8 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 
 /* overlays */
 [data-style="neumorphic"] .modal-box, [data-style="neumorphic"] .sync-popover { background: var(--canvas); border-color: transparent; box-shadow: var(--nm-out); }
+[data-style="neumorphic"] .item-row__menu { background: var(--canvas); border-color: transparent; box-shadow: var(--nm-out-s); }
+[data-style="neumorphic"] .item-row__menu button:hover { box-shadow: var(--nm-in); }
 [data-style="neumorphic"] .toast { background: var(--canvas); color: var(--text); box-shadow: var(--nm-out-s); }
 [data-style="neumorphic"] .toast--warn { color: var(--thread); }
 @media (max-width: 640px) {
@@ -807,6 +812,12 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
   background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
   backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%);
 }
+[data-style="glass"] .item-row__menu {
+  background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+[data-style="glass"] .item-row__menu button { border-bottom-color: var(--glass-border); }
+[data-style="glass"] .item-row__menu button:hover { background: var(--glass-bg); }
 [data-style="glass"] .activity-preview { background: var(--glass-strong); }
 [data-style="glass"] .toast { background: color-mix(in srgb, var(--ink) 85%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 @media (max-width: 640px) {

@@ -551,16 +551,18 @@ select, input[type="text"], input[type="number"], input[type="password"], input[
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(35,32,27,0.55);
   display: none; align-items: flex-start; justify-content: center;
-  padding: 5vh 1rem; overflow-y: auto; z-index: 50;
+  padding: 5vh 1rem; overflow: hidden; overscroll-behavior: contain; z-index: 50;
 }
+html.modal-open, html.modal-open body { overflow: hidden; }
 .modal-overlay.is-open { display: flex; }
 .modal-box {
   background: var(--surface); border-radius: var(--radius-m); max-width: 720px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  display: flex; flex-direction: column; max-height: 100%; overflow: hidden;
 }
-.modal__header { display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.3rem; border-bottom: 1px solid var(--line); }
+.modal__header { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.3rem; border-bottom: 1px solid var(--line); }
 .modal__header h3 { margin: 0; }
-.modal__body { padding: 1.3rem; max-height: 78vh; overflow-y: auto; }
+.modal__body { padding: 1.3rem; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .confirm__actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1rem; }
 
 /* ---------------- toast ---------------- */

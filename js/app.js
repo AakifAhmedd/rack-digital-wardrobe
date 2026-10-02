@@ -377,11 +377,13 @@ const Modal = {
     box.appendChild(header);
     box.appendChild(body);
     overlay.classList.add('is-open');
+    document.documentElement.classList.add('modal-open');
     qs('#modal-close').addEventListener('click', () => Modal.close());
     if (opts.onMount) opts.onMount(body);
   },
   close() {
     qs('#modal-overlay').classList.remove('is-open');
+    document.documentElement.classList.remove('modal-open');
     qs('#modal-box').innerHTML = '';
   },
   confirm(message, onYes, opts = {}) {

@@ -1488,6 +1488,7 @@ function renderOutfitBuilder() {
     chipRow.appendChild(chip);
   });
   wrap.appendChild(chipRow);
+  requestAnimationFrame(() => { const act = qs('.is-active', chipRow); if (act) chipRow.scrollLeft = Math.max(0, act.offsetLeft - 20); });
 
   const body = el(`<div id="outfit-body"></div>`);
   wrap.appendChild(body);

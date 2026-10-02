@@ -115,6 +115,7 @@ function iconSvg(key, size = 18, extraAttrs = '') {
 
 /* Stat-card icons (Lucide, MIT) — kept separate from ICONS/ICON_KEYS so they never show up in the category icon picker. */
 const STAT_ICONS = {
+  image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
   wears: '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>',
   calendar: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
   wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
@@ -1076,7 +1077,7 @@ function itemCard(item) {
       <div class="item-card__top">
         <span class="swatch" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
         <div class="item-card__titles">
-          <h4>${esc(itemTitle(item))}</h4>
+          <h4>${BrandLogo.html(G.brand(item.brandId), 16)}${esc(itemTitle(item))}</h4>
           <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
         </div>
         <div class="item-card__overflow item-row__overflow">
@@ -1819,6 +1820,32 @@ function openTagModal(existing) {
 }
 
 /* ---- Brands (simple list, reused pattern) ---- */
+/* Brand logo editor: upload/replace a custom logo, or remove it (falls back to the built-in one, if any). */
+function openBrandLogoModal(brand) {
+  const body = el(`
+    <div class="brand-logo-editor">
+      <div class="brand-logo-editor__preview">${BrandLogo.html(brand, 56) || '<span class="muted">No logo</span>'}</div>
+      <p class="muted">${brand.logo ? 'Custom logo.' : (BrandLogo.hasBuiltin(brand) ? 'Built-in logo.' : 'No logo set.')} It is shrunk to a small icon.</p>
+      <input type="file" accept="image/*" id="brand-logo-file" hidden>
+      <div class="confirm__actions">
+        ${brand.logo ? '<button type="button" class="btn btn--ghost" id="brand-logo-remove">Remove</button>' : ''}
+        <button type="button" class="btn btn--primary" id="brand-logo-pick">${brand.logo ? 'Replace' : 'Upload logo'}</button>
+      </div>
+    </div>`);
+  const fileInput = qs('#brand-logo-file', body);
+  qs('#brand-logo-pick', body).addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    try { brand.logo = await BrandLogo.fromFile(f); }
+    catch (e) { alert('Could not read that image.'); return; }
+    Store.save(); Modal.close(); render();
+  });
+  const rm = qs('#brand-logo-remove', body);
+  if (rm) rm.addEventListener('click', () => { delete brand.logo; Store.save(); Modal.close(); render(); });
+  Modal.open(`${brand.name} logo`, body);
+}
+
 function renderSimpleListPanel(stateKey, label) {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
@@ -1838,11 +1865,14 @@ function renderSimpleListPanel(stateKey, label) {
     const count = s.items.filter(i => i[`${stateKey.slice(0, -1)}Id`] === x.id).length;
     const chip = el(`
       <div class="chip-card">
+        ${stateKey === 'brands' ? BrandLogo.html(x, 18) : ''}
         <span>${esc(x.name)}</span>
         <span class="muted">${count}</span>
+        ${stateKey === 'brands' ? '<button data-act="logo" title="Logo">' + statIconSvg('image', 14) + '</button>' : ''}
         <button data-act="rename" title="Rename">✎</button>
         <button data-act="delete" title="Delete">&times;</button>
       </div>`);
+    if (stateKey === 'brands') qs('[data-act="logo"]', chip).addEventListener('click', () => openBrandLogoModal(x));
     qs('[data-act="rename"]', chip).addEventListener('click', () => {
       const name = prompt('Rename:', x.name);
       if (!name || !name.trim()) return;

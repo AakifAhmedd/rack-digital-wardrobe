@@ -929,3 +929,12 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 @media (max-width: 640px) {
   [data-style="brutalist"] .toolbar__filters.is-open { border-top: 3px solid var(--text); border-radius: 0; box-shadow: none; background: var(--surface-raised); }
 }
+
+/* ---------------- brand logos ---------------- */
+.brand-logo { display: inline-block; vertical-align: -3px; margin-right: .35rem; object-fit: contain; flex-shrink: 0; opacity: .85; }
+.chip-card .brand-logo { margin-right: 0; vertical-align: middle; }
+.brand-logo-editor { display: flex; flex-direction: column; gap: .8rem; align-items: flex-start; }
+.brand-logo-editor__preview { min-height: 56px; display: flex; align-items: center; }
+.brand-logo-editor__preview .brand-logo { margin: 0; opacity: 1; }
+.brand-logo-editor .confirm__actions { align-self: stretch; }
+

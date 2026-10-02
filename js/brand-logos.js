@@ -4,12 +4,14 @@ const BUILTIN_BRAND_LOGOS = {"nike": "M24 7.8L6.442 15.276c-1.456.616-2.679.925-
 
 const BrandLogo = {
   /* HTML for a small logo (uploaded image wins over built-in), or '' when the brand has none. */
-  html(brand, size = 16) {
+  html(brand, size = 16, title = '') {
+    const t = title ? ` title="${title}"` : '';
     if (!brand) return '';
-    if (brand.logo) return `<img class="brand-logo" src="${brand.logo}" width="${size}" height="${size}" alt="" loading="lazy">`;
+    if (brand.logo) return `<img class="brand-logo"${t} src="${brand.logo}" width="${size}" height="${size}" alt="" loading="lazy">`;
     const d = BUILTIN_BRAND_LOGOS[String(brand.name || '').trim().toLowerCase()];
-    return d ? `<svg class="brand-logo" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>` : '';
+    return d ? `<svg class="brand-logo"${t} viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>` : '';
   },
+  has(brand) { return !!brand && (!!brand.logo || this.hasBuiltin(brand)); },
   hasBuiltin(brand) { return !!BUILTIN_BRAND_LOGOS[String(brand?.name || '').trim().toLowerCase()]; },
   /* Downscale an uploaded image file to a small PNG data URL so synced data stays tiny. */
   async fromFile(file, max = 96) {

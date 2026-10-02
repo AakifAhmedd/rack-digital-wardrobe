@@ -256,11 +256,11 @@ function singularNoun(name) {
   else if (/[^s]s$/i.test(word)) out = word.slice(0, -1);
   return head + out;
 }
-function itemTitle(item) {
+function itemTitle(item, opts = {}) {
   const brand = G.brand(item.brandId);
   const color = G.color(item.colorId);
   const sub = G.subcategory(item.subcategoryId);
-  const parts = [brand?.name, color?.name, sub ? singularNoun(sub.name) : null].filter(Boolean);
+  const parts = [opts.omitBrand ? null : brand?.name, color?.name, sub ? singularNoun(sub.name) : null].filter(Boolean);
   return parts.join(' ') || 'Unnamed item';
 }
 function costPerWear(item) {
@@ -1084,7 +1084,7 @@ function itemCard(item) {
       <div class="item-card__top">
         <span class="swatch" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
         <div class="item-card__titles">
-          <h4>${BrandLogo.html(G.brand(item.brandId), 16)}${esc(itemTitle(item))}</h4>
+          <h4 ${BrandLogo.has(G.brand(item.brandId)) ? `aria-label="${esc(itemTitle(item))}"` : ''}>${BrandLogo.has(G.brand(item.brandId)) ? BrandLogo.html(G.brand(item.brandId), 20, esc(G.brand(item.brandId).name)) : ''}${esc(itemTitle(item, { omitBrand: BrandLogo.has(G.brand(item.brandId)) }))}</h4>
           <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
         </div>
         <div class="item-card__overflow item-row__overflow">

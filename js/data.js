@@ -26,6 +26,7 @@ function defaultCategories() {
     { name: 'Shoes', icon: 'shoe', subs: ['Running Shoes', 'Casual Shoes', 'Formal Shoes', 'Sandals', 'Sports Shoes'] },
     { name: 'Outerwear', icon: 'jacket', subs: ['Jackets', 'Hoodies', 'Sweaters'] },
     { name: 'Accessories', icon: 'bag', subs: ['Watches', 'Belts', 'Cufflinks', 'Ties', 'Bags', 'Sunglasses', 'Hats'] },
+    { name: 'Perfumes', icon: 'perfume', subs: ['Floral', 'Oriental', 'Woody', 'Fresh', 'Citrus', 'Aquatic', 'Gourmand', 'Fougère', 'Chypre', 'Green'] },
   ];
   const categories = [];
   const subcategories = [];
@@ -72,6 +73,11 @@ function defaultTags(categories, subcategories) {
     { name: 'Stretch', cats: ['Pants', 'Shoes'] },
     { name: 'Leather', cats: ['Shoes', 'Accessories'] },
     { name: 'Gifted', cats: ['Shirts', 'Pants', 'Shoes', 'Accessories', 'Outerwear'] },
+    { name: 'EDT', cats: ['Perfumes'] },
+    { name: 'EDP', cats: ['Perfumes'] },
+    { name: 'Parfum', cats: ['Perfumes'] },
+    { name: 'EDC', cats: ['Perfumes'] },
+    { name: 'Oil', cats: ['Perfumes'] },
   ];
 
   return defs.map(d => ({
@@ -254,6 +260,22 @@ const Store = {
         id: 'tag_gifted', name: 'Gifted',
         categoryIds: s.categories.map(c => c.id),
         subcategoryIds: [], custom: false,
+      });
+    }
+
+    // Perfumes category, subcategories, and concentration tags may be missing.
+    if (!s.categories.find(c => c.id === 'cat_perfumes')) {
+      // Add category
+      s.categories.push({ id: 'cat_perfumes', name: 'Perfumes', icon: 'perfume', custom: false });
+      // Add subcategories
+      const perfumeSubs = ['Floral', 'Oriental', 'Woody', 'Fresh', 'Citrus', 'Aquatic', 'Gourmand', 'Fougère', 'Chypre', 'Green'];
+      perfumeSubs.forEach(sub => {
+        s.subcategories.push({ id: 'sub_perfumes_' + slugify(sub), name: sub, categoryId: 'cat_perfumes', custom: false });
+      });
+      // Add concentration tags
+      const perfumeTags = ['EDT', 'EDP', 'Parfum', 'EDC', 'Oil'];
+      perfumeTags.forEach(tag => {
+        s.tags.push({ id: 'tag_' + slugify(tag), name: tag, categoryIds: ['cat_perfumes'], subcategoryIds: [], custom: false });
       });
     }
   },

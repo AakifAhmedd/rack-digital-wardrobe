@@ -76,7 +76,17 @@ const RETIRE_REASONS = [
   { id: 'sold', label: 'Sold' },
   { id: 'disposed', label: 'Disposed' },
   { id: 'other', label: 'Other' },
+  { id: 'finished', label: 'Finished' },
+  { id: 'empty', label: 'Empty' },
 ];
+/* Perfumes wear out rather than fall out of favour, so they get "Finished"/"Empty"
+   instead of the donate/sell framing. RETIRE_REASONS stays the full lookup table
+   (existing retired items must still resolve their stored reason). */
+const PERFUME_RETIRE_IDS = ['finished', 'empty', 'sold', 'other'];
+function retireReasonsFor(item) {
+  const ids = item?.categoryId === 'cat_perfumes' ? PERFUME_RETIRE_IDS : ['donated', 'sold', 'disposed', 'other'];
+  return RETIRE_REASONS.filter(r => ids.includes(r.id));
+}
 function activeItems() { return Store.state.items.filter(i => i.status !== 'retired'); }
 function retiredItems() { return Store.state.items.filter(i => i.status === 'retired'); }
 
@@ -104,6 +114,7 @@ const ICONS = {
   gloves: '<path d="M17.5 13.5V8.5M17.5 8.5V6C17.5 4.1144 17.5 3.1716 16.9142 2.5858C16.3285 2 15.3856 2 13.5 2H7.5C5.6144 2 4.6716 2 4.0858 2.5858C3.5 3.1716 3.5 4.1144 3.5 6V22H17.5V18.5C17.5 18.5 21 18.5 21 15.5C21 14.5 21 13 21 11.5C21 8.5 17.5 8.5 17.5 8.5Z"/><path d="M7 11V2"/><path d="M10.5 11V2"/><path d="M14 11V2"/><path d="M6 2H15"/>',
   umbrella: '<path d="M4 12a8 8 0 0 1 16 0l-16 0"/><path d="M12 12v6a2 2 0 0 0 4 0"/>',
   ring: '<circle cx="12.5" cy="14.5" r="7.5"/><path d="M9 4L10.5 2H12.567H14.5268L16 4L12.5 7L9 4Z"/>',
+  perfume: '<path d="M6 4h12v8h-12zM12 2v2"/>',
 };
 const ICON_KEYS = Object.keys(ICONS);
 function iconMarkup(key) {
@@ -257,10 +268,20 @@ function singularNoun(name) {
   return head + out;
 }
 function itemTitle(item, opts = {}) {
-  const brand = G.brand(item.brandId);
-  const color = G.color(item.colorId);
-  const sub = G.subcategory(item.subcategoryId);
-  const parts = [opts.omitBrand ? null : brand?.name, color?.name, sub ? singularNoun(sub.name) : null].filter(Boolean);
+  const brandObj = G.brand(item.brandId);
+  const brandName = brandObj ? brandObj.name : '';
+  const catId = item.categoryId;
+  const subtext = item.subtext?.trim() ?? '';
+  if (catId === 'cat_perfumes' && subtext) {
+    const omitBrand = !!opts.omitBrand;
+    const brandPart = omitBrand ? '' : brandName;
+    const spacer = brandPart && subtext ? ' ' : '';
+    return (brandPart + spacer + subtext) || 'Unnamed item';
+  }
+  // fallback original
+  const colorObj = G.color(item.colorId);
+  const subObj = G.subcategory(item.subcategoryId);
+  const parts = [opts.omitBrand ? null : brandName, colorObj?.name, subObj ? singularNoun(subObj.name) : null].filter(Boolean);
   return parts.join(' ') || 'Unnamed item';
 }
 function costPerWear(item) {
@@ -648,8 +669,9 @@ function renderDashboard() {
     return wrap;
   }
 
-  const totalValue = items.reduce((s, i) => s + (Number(i.cost) || 0), 0);
-  const neverWorn = items.filter(i => !i.wearCount).length;
+  const perfumeValue = items.filter(i => i.categoryId === 'cat_perfumes').reduce((s, i) => s + (Number(i.cost) || 0), 0);
+  const wardrobeValue = items.filter(i => i.categoryId !== 'cat_perfumes').reduce((s, i) => s + (Number(i.cost) || 0), 0);
+  const neverWorn = items.filter(i => !i.wearCount && i.categoryId !== 'cat_perfumes').length;
   const DORMANT_DAYS = 60;
   const idleDays = i => Math.floor((Date.now() - (i.lastWornAt || i.createdAt || Date.now())) / 86400000);
   const dormant = items.filter(i => idleDays(i) >= DORMANT_DAYS).length;
@@ -685,7 +707,8 @@ function renderDashboard() {
         <div class="stat-hero__meta">
           <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items in rack</span></div>
           <div class="stat-hero__item"><span class="stat-hero__val">${totalWears}</span><span class="stat-card__label">Total wears logged</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(totalValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(wardrobeValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(perfumeValue)}</span><span class="stat-card__label">Fragrance value</span></div>
           <div class="stat-hero__item"><span class="stat-hero__val">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span><span class="stat-card__label">Most-worn subcategory</span></div>
         </div>
       </div>
@@ -1289,12 +1312,13 @@ function openBackfillModal(item) {
 }
 
 function openRetireModal(item) {
+  const reasons = retireReasonsFor(item);
   const body = el(`
     <form class="form" id="retire-form">
       <p class="muted">Retiring keeps "${esc(itemTitle(item))}" and its wear history on record, just out of your active rack.</p>
       <label>Reason
         <select name="reason">
-          ${RETIRE_REASONS.map(r => `<option value="${r.id}" ${r.id === 'donated' ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+          ${reasons.map(r => `<option value="${r.id}" ${r.id === reasons[0].id ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
         </select>
       </label>
       <div class="form-actions">
@@ -1351,14 +1375,14 @@ function openItemModal(existing) {
           <button type="button" class="btn btn--small btn--ghost" id="new-brand-cancel" hidden>Cancel</button>
         </div>
       </label>
-      <label>Color
-        <select name="colorId" required>
+      <label>Color <span class="muted" id="color-optional-hint" style="display:none;">(optional for perfumes)</span>
+        <select name="colorId" id="color-select">
           <option value="">Select color…</option>
           ${s.colors.map(c => `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
         </select>
       </label>
-      <label>Additional description <span class="muted">(model, product name — optional)</span>
-        <input type="text" name="subtext" value="${esc(item.subtext || '')}" placeholder="e.g. Air Zoom Pegasus 40">
+      <label><span id="subtext-label-text">Additional description</span> <span class="muted" id="subtext-hint-text">(model, product name — optional)</span>
+        <input type="text" name="subtext" id="subtext-input" value="${esc(item.subtext || '')}" placeholder="e.g. Air Zoom Pegasus 40">
       </label>
       <fieldset>
         <legend>Tags <span class="muted">(only tags relevant to this category show up)</span></legend>
@@ -1413,9 +1437,24 @@ function openItemModal(existing) {
           </label>`).join('');
       }
 
+      const colorSelect = qs('#color-select', root);
+      function updateColorRequirement() {
+        const isPerfume = catSelect.value === 'cat_perfumes';
+        colorSelect.required = !isPerfume;
+        const hint = qs('#color-optional-hint', root);
+        if (hint) hint.style.display = isPerfume ? 'inline' : 'none';
+        const subtextLabel = qs('#subtext-label-text', root);
+        const subtextHint = qs('#subtext-hint-text', root);
+        const subtextInput = qs('#subtext-input', root);
+        if (subtextLabel) subtextLabel.textContent = isPerfume ? 'Perfume name' : 'Additional description';
+        if (subtextHint) subtextHint.textContent = isPerfume ? '(e.g. Black Orchid — shown as the item title)' : '(model, product name — optional)';
+        if (subtextInput) subtextInput.placeholder = isPerfume ? 'e.g. Black Orchid' : 'e.g. Air Zoom Pegasus 40';
+      }
+
       refreshSubs();
       refreshTags();
-      catSelect.addEventListener('change', () => { refreshSubs(); refreshTags(); updateGiftedHint(); });
+      updateColorRequirement();
+      catSelect.addEventListener('change', () => { refreshSubs(); refreshTags(); updateGiftedHint(); updateColorRequirement(); });
       subSelect.addEventListener('change', () => { refreshTags(); updateGiftedHint(); });
 
       function updateGiftedHint() {
@@ -1458,8 +1497,12 @@ function openItemModal(existing) {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        if (!fd.get('categoryId') || !fd.get('subcategoryId') || !fd.get('colorId')) {
-          toast('Category, subcategory, and color are required', 'warn');
+        const catId = fd.get('categoryId');
+        const missingColor = catId !== 'cat_perfumes' && !fd.get('colorId');
+        if (!catId || !fd.get('subcategoryId') || missingColor) {
+          toast(!catId || !fd.get('subcategoryId')
+            ? 'Category and subcategory are required'
+            : 'Color is required', 'warn');
           return;
         }
         item.categoryId = fd.get('categoryId');

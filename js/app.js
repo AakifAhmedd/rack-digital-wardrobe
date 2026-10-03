@@ -971,6 +971,17 @@ function renderItemGrid() {
   }
   items.forEach(item => grid.appendChild(wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item)));
   fitCardTags(grid);
+  fitCardStats(grid);
+}
+
+/* Shrink a stat value's font just enough that it isn't cut off with an ellipsis. */
+function fitCardStats(root) {
+  qsa('.item-card .stat-cell__text .mono', root).forEach(n => {
+    n.style.fontSize = '';
+    if (n.scrollWidth <= n.clientWidth) return;
+    let px = parseFloat(getComputedStyle(n).fontSize);
+    while (n.scrollWidth > n.clientWidth && px > 9) { px -= 0.5; n.style.fontSize = px + 'px'; }
+  });
 }
 
 /* Keep every card's tag row to a single line: tags that don't fit are hidden
@@ -1012,8 +1023,8 @@ let __tagFitBound = false;
 if (!__tagFitBound) {
   __tagFitBound = true;
   let t;
-  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { const g = qs('#item-grid'); if (g && !g.classList.contains('item-grid--list')) fitCardTags(g); }, 150); });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const g = qs('#item-grid'); if (g && !g.classList.contains('item-grid--list')) fitCardTags(g); });
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { const g = qs('#item-grid'); if (g && !g.classList.contains('item-grid--list')) { fitCardTags(g); fitCardStats(g); } }, 150); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const g = qs('#item-grid'); if (g && !g.classList.contains('item-grid--list')) { fitCardTags(g); fitCardStats(g); } });
 }
 
 /* Shared action wiring — both the card and the compact list row use the

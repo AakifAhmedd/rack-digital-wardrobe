@@ -45,6 +45,22 @@ This is a plain HTML/CSS/JS app — no build step, no framework — which keeps 
 
 Your token never leaves your browser except to call `api.github.com` directly, and it's never committed to this repository.
 
+## Versioning
+
+The live version shows in the header next to the RACK wordmark. It's read at load time from the plain-text `VERSION` file at the repo root (one line, no build step) and rendered as `v<number>`.
+
+**To release a new version:** edit `VERSION`, commit, push. The published page picks it up on next load.
+
+```
+VERSION
+------
+1.1.0
+```
+
+Bump `VERSION` whenever you ship a change worth calling out. Separately, the `?v=…` query strings on the CSS/JS `<link>`/`<script>` tags in `index.html` bust browser caches — bump that token too when you change those files, or visitors may keep an old cached copy. The two are independent: `VERSION` is what you *display*, `?v=` is what forces a *re-fetch*.
+
+`.nojekyll` is present so GitHub Pages serves the site as-is (no Jekyll processing).
+
 ## Local development
 
 No build step. Serve the folder with any static server and open `index.html`:
@@ -58,6 +74,7 @@ python3 -m http.server 8000
 
 ```
 index.html        entry point
+VERSION            displayed app version (plain text, one line)
 css/style.css      design system
 js/data.js         default master data + localStorage persistence
 js/sync.js         optional GitHub Gist cloud sync

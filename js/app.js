@@ -404,6 +404,33 @@ const Modal = {
     });
   },
 };
+Modal.prompt = function (title, fields, onSubmit, opts = {}) {
+  const body = el(`
+    <form class="form">
+      ${fields.map(f => `<label>${esc(f.label)}${f.hint ? ` <span class="muted">${esc(f.hint)}</span>` : ''}
+        <input type="text" name="${f.name}" value="${esc(f.value || '')}" placeholder="${esc(f.placeholder || '')}" autocomplete="off" ${f.required ? 'required' : ''}>
+      </label>`).join('')}
+      <div class="confirm__actions">
+        <button type="button" class="btn btn--ghost" id="prompt-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">${esc(opts.okLabel || 'Save')}</button>
+      </div>
+    </form>`);
+  Modal.open(title, body, {
+    onMount: (root) => {
+      const form = qs('form', root);
+      qs('#prompt-cancel', root).addEventListener('click', () => Modal.close());
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const values = {};
+        fields.forEach(f => { values[f.name] = form.elements[f.name].value.trim(); });
+        onSubmit(values);
+        Modal.close();
+      });
+      const first = form.elements[fields[0].name];
+      first.focus(); first.select();
+    },
+  });
+};
 qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'modal-overlay') Modal.close(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Modal.close(); });
 
@@ -1361,8 +1388,9 @@ function openItemModal(existing) {
       const brandSelect = form.brandId;
 
       function refreshBrands() {
-        brandSelect.innerHTML = '<option value="">No brand / unbranded</option>' +
-          s.brands.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${esc(b.name)}</option>`).join('');
+        const logoOrGap = (b) => BrandLogo.html(b, 16) || '<span class="brand-logo brand-logo--none"></span>';
+        brandSelect.innerHTML = `<option value="">${logoOrGap(null)}<span>No brand / unbranded</span></option>` +
+          s.brands.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
       }
       refreshBrands();
 
@@ -1778,11 +1806,14 @@ function openCategoryModal(existing) {
   });
 }
 function promptSubcategory(cat, existing) {
-  const name = prompt(existing ? 'Rename subcategory:' : `New subcategory under ${cat.name}:`, existing?.name || '');
-  if (!name || !name.trim()) return;
-  if (existing) { existing.name = name.trim(); }
-  else { Store.state.subcategories.push({ id: uid('sub'), name: name.trim(), categoryId: cat.id, custom: true }); }
-  Store.save(); render();
+  Modal.prompt(existing ? 'Rename subcategory' : `New subcategory under ${cat.name}`,
+    [{ name: 'name', label: 'Name', value: existing?.name || '', required: true }],
+    ({ name }) => {
+      if (!name) return;
+      if (existing) { existing.name = name; }
+      else { Store.state.subcategories.push({ id: uid('sub'), name, categoryId: cat.id, custom: true }); }
+      Store.save(); render();
+    }, { okLabel: existing ? 'Rename' : 'Add' });
 }
 
 /* ---- Tags ---- */
@@ -1894,10 +1925,11 @@ function renderSimpleListPanel(stateKey, label) {
       <button class="btn btn--primary btn--small" id="add-simple">+ Add ${label.toLowerCase()}</button>
     </div>`));
   qs('#add-simple', box).addEventListener('click', () => {
-    const name = prompt(`New ${label.toLowerCase()} name:`);
-    if (!name || !name.trim()) return;
-    s[stateKey].push({ id: uid(stateKey.slice(0, 3)), name: name.trim(), custom: true });
-    Store.save(); render();
+    Modal.prompt(`New ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', required: true }], ({ name }) => {
+      if (!name) return;
+      s[stateKey].push({ id: uid(stateKey.slice(0, 3)), name, custom: true });
+      Store.save(); render();
+    }, { okLabel: 'Add' });
   });
   const grid = el(`<div class="chip-grid"></div>`);
   s[stateKey].forEach(x => {
@@ -1913,9 +1945,10 @@ function renderSimpleListPanel(stateKey, label) {
       </div>`);
     if (stateKey === 'brands') qs('[data-act="logo"]', chip).addEventListener('click', () => openBrandLogoModal(x));
     qs('[data-act="rename"]', chip).addEventListener('click', () => {
-      const name = prompt('Rename:', x.name);
-      if (!name || !name.trim()) return;
-      x.name = name.trim(); Store.save(); render();
+      Modal.prompt(`Rename ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', value: x.name, required: true }], ({ name }) => {
+        if (!name) return;
+        x.name = name; Store.save(); render();
+      }, { okLabel: 'Rename' });
     });
     qs('[data-act="delete"]', chip).addEventListener('click', () => {
       Modal.confirm(`Delete "${x.name}"?`, () => {
@@ -1939,11 +1972,14 @@ function renderColorsPanel() {
       <button class="btn btn--primary btn--small" id="add-color">+ Add color</button>
     </div>`));
   qs('#add-color', box).addEventListener('click', () => {
-    const name = prompt('New color name:');
-    if (!name || !name.trim()) return;
-    const hex = prompt('Hex code (e.g. #445566), or leave blank for multi-color:', '#888888') || 'multi';
-    s.colors.push({ id: uid('col'), name: name.trim(), hex, custom: true });
-    Store.save(); render();
+    Modal.prompt('New color', [
+      { name: 'name', label: 'Name', required: true },
+      { name: 'hex', label: 'Hex code', hint: '(e.g. #445566 — blank for multi-color)', value: '#888888' },
+    ], ({ name, hex }) => {
+      if (!name) return;
+      s.colors.push({ id: uid('col'), name, hex: hex || 'multi', custom: true });
+      Store.save(); render();
+    }, { okLabel: 'Add' });
   });
   const grid = el(`<div class="chip-grid"></div>`);
   s.colors.forEach(c => {

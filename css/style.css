@@ -993,3 +993,10 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   [data-style="brutalist"] select:not([multiple]) option:hover,
   [data-style="brutalist"] select:not([multiple]) option:focus-visible { background: color-mix(in srgb, var(--accent) 30%, var(--surface-raised) 70%); }
 }
+
+/* brand dropdown: logo + name; brands without a logo get an equal-width gap so names stay aligned */
+.brand-logo--none { width: 16px; height: 16px; opacity: 0; }
+@supports (appearance: base-select) {
+  select[name="brandId"] option, select[name="brandId"] selectedcontent { display: flex; align-items: center; gap: .5rem; }
+  select[name="brandId"] .brand-logo { margin-right: 0; vertical-align: middle; }
+}

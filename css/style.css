@@ -487,7 +487,7 @@ input[type="date"] {
 .form { display: flex; flex-direction: column; gap: .9rem; }
 .form--wide { min-width: min(640px, 80vw); }
 .form label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; font-weight: 500; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; align-items: end; }
 .form fieldset { border: 1px solid var(--line); border-radius: var(--radius-s); padding: .8rem; }
 .form legend { font-size: .8rem; color: var(--ink-soft); padding: 0 .3rem; }
 .tag-check-grid { display: flex; flex-wrap: wrap; gap: .5rem .9rem; }

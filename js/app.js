@@ -1319,6 +1319,9 @@ function openItemModal(existing) {
         <div class="inline-add">
           <select name="brandId"></select>
           <button type="button" class="btn btn--small btn--ghost" id="quick-add-brand">+ New</button>
+          <input type="text" id="new-brand-input" placeholder="New brand name" autocomplete="off" hidden>
+          <button type="button" class="btn btn--small btn--primary" id="new-brand-save" hidden>Add</button>
+          <button type="button" class="btn btn--small btn--ghost" id="new-brand-cancel" hidden>Cancel</button>
         </div>
       </label>
       <label>Color
@@ -1395,14 +1398,31 @@ function openItemModal(existing) {
       qs('#tag-checks', root).addEventListener('change', updateGiftedHint);
       updateGiftedHint();
 
-      qs('#quick-add-brand', root).addEventListener('click', () => {
-        const name = prompt('New brand name:');
-        if (!name || !name.trim()) return;
-        const b = { id: uid('brand'), name: name.trim(), custom: true };
+      const brandInput = qs('#new-brand-input', root);
+      const brandAddBtns = ['#new-brand-save', '#new-brand-cancel'].map(q => qs(q, root));
+      function setBrandAdding(on) {
+        brandSelect.hidden = on;
+        qs('#quick-add-brand', root).hidden = on;
+        brandInput.hidden = !on;
+        brandAddBtns.forEach(b => { b.hidden = !on; });
+        if (on) { brandInput.value = ''; brandInput.focus(); }
+      }
+      function saveNewBrand() {
+        const name = brandInput.value.trim();
+        if (!name) { setBrandAdding(false); return; }
+        const b = { id: uid('brand'), name, custom: true };
         s.brands.push(b);
         Store.save();
         refreshBrands();
         brandSelect.value = b.id;
+        setBrandAdding(false);
+      }
+      qs('#quick-add-brand', root).addEventListener('click', () => setBrandAdding(true));
+      qs('#new-brand-save', root).addEventListener('click', saveNewBrand);
+      qs('#new-brand-cancel', root).addEventListener('click', () => setBrandAdding(false));
+      brandInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); saveNewBrand(); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setBrandAdding(false); }
       });
 
       qs('#item-cancel', root).addEventListener('click', () => Modal.close());

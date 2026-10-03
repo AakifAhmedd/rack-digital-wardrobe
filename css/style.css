@@ -493,7 +493,8 @@ input[type="date"] {
 .tag-check-grid { display: flex; flex-wrap: wrap; gap: .5rem .9rem; }
 .tag-check { flex-direction: row !important; align-items: center; gap: .4rem !important; font-weight: 400 !important; }
 .inline-add { display: flex; gap: .4rem; }
-.inline-add select { flex: 1; }
+.inline-add select, .inline-add input { flex: 1; min-width: 0; }
+.inline-add [hidden] { display: none !important; }
 .form-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
 
 .rule-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1.3fr auto; gap: .5rem; align-items: end; margin-bottom: .8rem; }

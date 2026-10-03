@@ -2772,9 +2772,26 @@ function openFontModal() {
 /* ================================================================
    INIT
    ================================================================ */
+/* Version comes from VERSION at the repo root — plain text, one line,
+   served verbatim by GitHub Pages. Bump that file and every deployed
+   page shows the new number on next load. Best-effort: a missing or
+   unreadable VERSION just leaves the badge blank. */
+async function initVersion() {
+  const badge = qs('#app-version');
+  if (!badge) return;
+  try {
+    const res = await fetch(`VERSION?v=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const v = (await res.text()).trim().split('\n')[0].trim();
+    if (!v) return;
+    badge.textContent = 'v' + v.replace(/^v/i, '');
+  } catch (e) { /* offline or blocked — badge stays blank */ }
+}
+
 function init() {
   if (!Store.state.meta.currency) { Store.state.meta.currency = 'LKR'; Store.save(); }
   applyStoredAppearance();
+  initVersion();
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__icon[data-icon]').forEach(span => { span.innerHTML = navIconSvg(span.dataset.icon); });

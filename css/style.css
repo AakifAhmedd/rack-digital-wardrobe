@@ -345,6 +345,7 @@ input[type="date"] {
   font-family: var(--font-body); font-size: .82rem; color: var(--ink-soft); cursor: pointer;
 }
 .view-toggle__btn.is-active { background: var(--ink); color: var(--accent-ink); }
+.segment-toggle { align-self: flex-start; }
 
 /* ---------------- compact list view ---------------- */
 .item-grid--list { display: flex; flex-direction: column; gap: .4rem; }

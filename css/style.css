@@ -190,8 +190,10 @@ a { color: var(--accent); }
 
 /* ---------------- toolbar / filters ---------------- */
 .toolbar {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: .75rem;
 }
+/* search, filters and view toggle cluster left; the create action sits alone on the far right */
+#add-item-btn { margin-left: auto; }
 .toolbar__filters { display: none; flex-wrap: wrap; gap: .5rem; flex-basis: 100%; width: 100%; }
 .toolbar__filters.is-open {
   display: flex; margin-top: .5rem; padding-top: .75rem; border-top: 1px dashed var(--line);
@@ -344,7 +346,8 @@ input[type="date"] {
   background: var(--surface-raised); border: none; padding: .55rem 1rem;
   font-family: var(--font-body); font-size: .9rem; color: var(--ink-soft); cursor: pointer;
 }
-.view-toggle__btn.is-active { background: var(--ink); color: var(--accent-ink); }
+/* selected state is a soft accent tint so + Add item stays the only solid dark button in the row */
+.view-toggle__btn.is-active { background: color-mix(in srgb, var(--accent) 20%, var(--surface-raised)); color: var(--text); font-weight: 600; }
 .segment-toggle { align-self: flex-start; }
 
 /* ---------------- compact list view ---------------- */
@@ -813,7 +816,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="glass"] .btn--ghost:hover { background: var(--glass-strong); }
 [data-style="glass"] .view-toggle { border-color: var(--glass-border); }
 [data-style="glass"] .view-toggle__btn { background: var(--glass-bg); }
-[data-style="glass"] .view-toggle__btn.is-active { background: var(--ink); }
+[data-style="glass"] .view-toggle__btn.is-active { background: color-mix(in srgb, var(--accent) 24%, var(--glass-bg)); }
 [data-style="glass"] .subnav__link { background: var(--glass-bg); border-color: var(--glass-border); }
 [data-style="glass"] .subnav__link.is-active { background: var(--ink); }
 [data-style="glass"] .icon-picker__btn { background: var(--glass-bg); border-color: var(--glass-border); }

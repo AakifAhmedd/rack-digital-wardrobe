@@ -28,6 +28,20 @@ const PERFUME_CONCENTRATIONS = ['EDT', 'EDP', 'Parfum', 'EDC', 'Oil'];
    convert an old subcategory into a tag instead of losing the information. */
 const LEGACY_PERFUME_SCENTS = PERFUME_SCENT_FAMILIES;
 
+/* ---------- brand scope ---------- */
+/* Which parts of the wardrobe a brand belongs to. Absent means 'clothing', so
+   pre-scope brands keep behaving exactly as they did. */
+const BRAND_SCOPES = ['clothing', 'perfumes', 'both'];
+/* Seeded fragrance houses. Deterministic ids ('brand_' + slug) so two devices
+   seeding independently produce identical entries instead of duplicates. */
+const DEFAULT_PERFUME_BRANDS = [
+  // Middle Eastern
+  'Lattafa', 'Khadlaj', 'Armaf', 'Rasasi', 'Ajmal', 'Swiss Arabian',
+  // Designer
+  'Burberry', 'Dior', 'Chanel', 'Versace', 'Tom Ford', 'Yves Saint Laurent',
+  'Paco Rabanne', 'Jean Paul Gaultier', 'Calvin Klein', 'Hugo Boss',
+];
+
 /* ---------- default masters ---------- */
 
 function defaultCategories() {
@@ -299,6 +313,42 @@ const Store = {
       if (!s.subcategories.find(sc => sc.id === id)) {
         s.subcategories.push({ id, name: sub, categoryId: 'cat_perfumes', custom: false });
       }
+    });
+
+    this._scopeBrandsByUsage(s);
+    this._seedPerfumeBrands(s);
+  },
+
+  /* One-time: infer each existing brand's scope from what it is actually used
+     by. Brands with no items at all stay 'clothing' (the default), which is
+     what they behaved as before. Idempotent — a brand that already has a scope
+     is left alone. */
+  _scopeBrandsByUsage(s) {
+    s.brands.forEach(b => {
+      if (BRAND_SCOPES.includes(b.scope)) return;
+      const used = s.items.filter(i => i.brandId === b.id);
+      const usesPerfume = used.some(i => i.categoryId === 'cat_perfumes');
+      const usesClothing = used.some(i => i.categoryId !== 'cat_perfumes');
+      b.scope = usesPerfume ? (usesClothing ? 'both' : 'perfumes') : 'clothing';
+    });
+  },
+
+  /* Seed the default fragrance houses exactly once. The marker means a default
+     the owner later deletes stays deleted. Names are matched case-insensitively
+     so an existing brand is widened to 'both' rather than duplicated. */
+  _seedPerfumeBrands(s) {
+    if (!s.meta) s.meta = {};
+    if (s.meta.perfumeBrandsSeeded) return;
+    s.meta.perfumeBrandsSeeded = 1;
+    DEFAULT_PERFUME_BRANDS.forEach(name => {
+      const existing = s.brands.find(b => String(b.name || '').trim().toLowerCase() === name.toLowerCase());
+      if (existing) {
+        /* The owner already has this house under another scope — it clearly
+           covers perfumes too, so widen it instead of adding a rival entry. */
+        existing.scope = 'both';
+        return;
+      }
+      s.brands.push({ id: 'brand_' + slugify(name), name, scope: 'perfumes', custom: false });
     });
   },
 

@@ -55,7 +55,7 @@ The live version shows in the header next to the RACK wordmark. It's read at loa
 ```
 VERSION
 ------
-1.1.0
+1.1.1
 ```
 
 Bump `VERSION` whenever you ship a change worth calling out. Separately, the `?v=…` query strings on the CSS/JS `<link>`/`<script>` tags in `index.html` bust browser caches — bump that token too when you change those files, or visitors may keep an old cached copy. The two are independent: `VERSION` is what you *display*, `?v=` is what forces a *re-fetch*.

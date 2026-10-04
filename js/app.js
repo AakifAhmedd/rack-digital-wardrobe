@@ -77,15 +77,21 @@ const RETIRE_REASONS = [
   { id: 'disposed', label: 'Disposed' },
   { id: 'other', label: 'Other' },
   { id: 'finished', label: 'Finished' },
-  { id: 'empty', label: 'Empty' },
+  /* 'empty' is retired-only: bottles are collected, so "used up" is the same
+     event as "empty", and the label offers nothing extra. Kept in this table
+     so items retired before the consolidation still resolve. */
+  { id: 'empty', label: 'Empty', retiredOnly: true },
 ];
-/* Perfumes wear out rather than fall out of favour, so they get "Finished"/"Empty"
-   instead of the donate/sell framing. RETIRE_REASONS stays the full lookup table
-   (existing retired items must still resolve their stored reason). */
-const PERFUME_RETIRE_IDS = ['finished', 'empty', 'sold', 'other'];
+/* Perfumes get used up rather than falling out of favour, so they retire as
+   "Finished" instead of the donate/sell/dispose framing. Finished leads the
+   list because it is the common case and pre-selects as the default. */
+const PERFUME_RETIRE_IDS = ['finished', 'sold', 'other'];
 function retireReasonsFor(item) {
   const ids = item?.categoryId === 'cat_perfumes' ? PERFUME_RETIRE_IDS : ['donated', 'sold', 'disposed', 'other'];
-  return RETIRE_REASONS.filter(r => ids.includes(r.id));
+  /* Map through `ids`, not RETIRE_REASONS, so the order is the list above and
+     the first entry is what pre-selects. Filtering the table directly would
+     inherit global order and pre-select "Sold" for a bottle just used up. */
+  return ids.map(id => RETIRE_REASONS.find(r => r.id === id)).filter(Boolean);
 }
 function activeItems() { return Store.state.items.filter(i => i.status !== 'retired'); }
 function retiredItems() { return Store.state.items.filter(i => i.status === 'retired'); }
@@ -1390,15 +1396,25 @@ function openRetireModal(item) {
 
 /* A second bottle of the same scent is a real thing, not a data-entry slip.
    Perfumes are the only category where the same brand+name legitimately
-   repeats (a spare bottle, a re-buy), so only they get this treatment. */
+   repeats (a spare bottle, or the re-buy months after a bottle ran out), so
+   only they get this treatment. Retired bottles count too: finishing a bottle
+   you love and buying it again is exactly when you want to be told the last
+   one is already on record, so the new bottle inherits its details instead of
+   starting from a blank slate. */
 const normPerfumeName = s => (s || '').trim().toLowerCase();
 function findPerfumeTwin(brandId, name) {
   const brand = (brandId || '').trim();
   const nm = normPerfumeName(name);
   if (!nm) return null;
-  return Store.state.items.find(i =>
-    i.categoryId === 'cat_perfumes' && i.status !== 'retired' &&
-    (i.brandId || '') === brand && normPerfumeName(i.subtext) === nm) || null;
+  const matches = Store.state.items.filter(i =>
+    i.categoryId === 'cat_perfumes' &&
+    (i.brandId || '') === brand && normPerfumeName(i.subtext) === nm);
+  /* Prefer a bottle still in the rack — that is the "spare bottle" case the
+     prompt was built for. Fall back to a retired one, preferring the most
+     recently retired so the carried-over details are the freshest. */
+  const active = matches.filter(i => i.status !== 'retired');
+  if (active.length) return active[0];
+  return matches.sort((a, b) => (b.retiredAt || 0) - (a.retiredAt || 0))[0] || null;
 }
 /* What the "Add another bottle" prompt shows, and what it carries over. */
 function perfumeTwinDetails(twin) {
@@ -1406,8 +1422,13 @@ function perfumeTwinDetails(twin) {
   const scent = names.find(n => PERFUME_SCENT_FAMILIES.includes(n));
   const conc = names.find(n => PERFUME_CONCENTRATIONS.includes(n));
   const carried = [scent, conc].filter(Boolean).join(', ');
-  return { scent, conc, carried,
-    message: `You already have ${itemTitle(twin)}${carried ? ` (${carried})` : ''} on your rack.` };
+  const retired = twin.status === 'retired';
+  const reason = RETIRE_REASONS.find(r => r.id === twin.retiredReason)?.label;
+  const state = retired
+    ? ` You retired it as ${reason || 'retired'}${twin.retiredAt ? ` on ${new Date(twin.retiredAt).toLocaleDateString()}` : ''}.`
+    : '';
+  return { scent, conc, carried, retired,
+    message: `You already have ${itemTitle(twin)}${carried ? ` (${carried})` : ''} on your rack.${state}` };
 }
 
 function openAddItemModal() {
@@ -1587,14 +1608,17 @@ function openItemModal(existing, presetCategoryId) {
         if (!isEdit && item.categoryId === 'cat_perfumes') {
           const twin = findPerfumeTwin(item.brandId, item.subtext);
           if (twin) {
-            const { carried, message } = perfumeTwinDetails(twin);
+            const { carried, retired, message } = perfumeTwinDetails(twin);
+            const note = retired
+              ? 'Brand, name, scent family and concentration carry over from that bottle — adjust the cost and wear count for this one.'
+              : 'Brand, name, scent family and concentration will be carried over — you can change the cost and wear count after adding.';
             const body = el(`
               <div class="confirm">
-                <p>${esc(message)} Add another bottle of the same scent?</p>
-                <p class="muted">Brand, name, scent family and concentration will be carried over — you can change the cost and wear count after adding.</p>
+                <p>${esc(message)} ${retired ? 'Add it again?' : 'Add another bottle of the same scent?'}</p>
+                <p class="muted">${esc(note)}</p>
                 <div class="confirm__actions">
                   <button type="button" class="btn btn--ghost" id="twin-cancel">Cancel</button>
-                  <button type="button" class="btn btn--primary" id="twin-add">Add another bottle</button>
+                  <button type="button" class="btn btn--primary" id="twin-add">${retired ? 'Add it again' : 'Add another bottle'}</button>
                 </div>
               </div>`);
             Modal.open('Already on your rack', body, {

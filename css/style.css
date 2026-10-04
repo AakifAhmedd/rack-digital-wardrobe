@@ -339,10 +339,10 @@ input[type="date"] {
 }
 
 /* ---------------- view toggle (cards / list) ---------------- */
-.view-toggle { display: flex; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; flex-shrink: 0; }
+.view-toggle { display: flex; border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; flex-shrink: 0; }
 .view-toggle__btn {
-  background: var(--surface-raised); border: none; padding: .5rem .9rem;
-  font-family: var(--font-body); font-size: .82rem; color: var(--ink-soft); cursor: pointer;
+  background: var(--surface-raised); border: none; padding: .55rem 1rem;
+  font-family: var(--font-body); font-size: .9rem; color: var(--ink-soft); cursor: pointer;
 }
 .view-toggle__btn.is-active { background: var(--ink); color: var(--accent-ink); }
 .segment-toggle { align-self: flex-start; }
@@ -723,7 +723,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="neumorphic"] .btn--danger:hover, [data-style="neumorphic"] .btn--danger-ghost:hover { background: var(--canvas); }
 [data-style="neumorphic"] .btn[disabled] { box-shadow: none; }
 [data-style="neumorphic"] .view-toggle { border: none; background: var(--canvas); box-shadow: var(--nm-in); padding: 3px; }
-[data-style="neumorphic"] .view-toggle__btn { background: transparent; border-radius: 20px; }
+[data-style="neumorphic"] .view-toggle__btn { background: transparent; border-radius: calc(var(--radius-s) - 3px); padding-block: calc(.55rem - 2px); }
 [data-style="neumorphic"] .view-toggle__btn.is-active { background: var(--canvas); color: var(--accent); box-shadow: var(--nm-out-xs); }
 [data-style="neumorphic"] .subnav__link { background: var(--canvas); border-color: transparent; box-shadow: var(--nm-out-xs); }
 [data-style="neumorphic"] .subnav__link.is-active { background: var(--canvas); color: var(--accent); box-shadow: var(--nm-in); border-color: transparent; }

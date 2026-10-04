@@ -96,6 +96,20 @@ function retireReasonsFor(item) {
 function activeItems() { return Store.state.items.filter(i => i.status !== 'retired'); }
 function retiredItems() { return Store.state.items.filter(i => i.status === 'retired'); }
 
+/* Brand scoping. A brand with no scope predates the feature and is clothing. */
+function brandScope(brand) { return brand?.scope || 'clothing'; }
+function brandMatchesCategory(brand, categoryId) {
+  const scope = brandScope(brand);
+  return scope === 'both' || (categoryId === 'cat_perfumes' ? scope === 'perfumes' : scope === 'clothing');
+}
+/* When an item uses a brand outside its scope, the owner has just told us the
+   brand covers both — widen it rather than rejecting the save. */
+function upgradeBrandScopeForItem(brand, categoryId) {
+  if (!brand || brandMatchesCategory(brand, categoryId)) return false;
+  brand.scope = 'both';
+  return true;
+}
+
 /* ---------------- icon registry ----------------
    Small hand-drawn line icons (24x24, stroke=currentColor) — no
    external icon font/library. Used for category badges and, in
@@ -1532,6 +1546,7 @@ function openItemModal(existing, presetCategoryId) {
           <button type="button" class="btn btn--small btn--primary" id="new-brand-save" hidden>Add</button>
           <button type="button" class="btn btn--small btn--ghost" id="new-brand-cancel" hidden>Cancel</button>
         </div>
+        <button type="button" class="form-link" id="show-all-brands" hidden></button>
       </label>
       <label>Color <span class="muted" id="color-optional-hint" style="display:none;">(optional for perfumes)</span>
         <select name="colorId" id="color-select">
@@ -1569,10 +1584,24 @@ function openItemModal(existing, presetCategoryId) {
       const subSelect = form.subcategoryId;
       const brandSelect = form.brandId;
 
+      let showAllBrands = false;
       function refreshBrands() {
         const logoOrGap = (b) => BrandLogo.html(b, 16) || '<span class="brand-logo brand-logo--none"></span>';
+        const inScope = s.brands.filter(b => brandMatchesCategory(b, catSelect.value));
+        /* Editing an item whose brand predates scoping (or was changed in
+           Masters) must still show it, or the select would silently drop the
+           item's brand on save. */
+        const list = showAllBrands ? s.brands
+          : (item.brandId && !inScope.some(b => b.id === item.brandId)
+            ? [...inScope, s.brands.find(b => b.id === item.brandId)].filter(Boolean)
+            : inScope);
         brandSelect.innerHTML = `<option value="">${logoOrGap(null)}<span>No brand / unbranded</span></option>` +
-          s.brands.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
+          list.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
+        const allBtn = qs('#show-all-brands', root);
+        if (allBtn) {
+          allBtn.hidden = showAllBrands || s.brands.length === list.length;
+          allBtn.textContent = showAllBrands ? 'Show brands for this category' : `Show all brands (${s.brands.length})`;
+        }
       }
       refreshBrands();
 
@@ -1612,8 +1641,17 @@ function openItemModal(existing, presetCategoryId) {
       refreshSubs();
       refreshTags();
       updateColorRequirement();
-      catSelect.addEventListener('change', () => { refreshSubs(); refreshTags(); updateGiftedHint(); updateColorRequirement(); });
+      catSelect.addEventListener('change', () => {
+        /* Switching category changes which brands are in scope, so the list is
+           rebuilt from scratch rather than keeping the previous category's. */
+        showAllBrands = false;
+        refreshSubs(); refreshTags(); updateGiftedHint(); updateColorRequirement(); refreshBrands();
+      });
       subSelect.addEventListener('change', () => { refreshTags(); updateGiftedHint(); });
+      qs('#show-all-brands', root).addEventListener('click', () => {
+        showAllBrands = !showAllBrands;
+        refreshBrands();
+      });
 
       function updateGiftedHint() {
         const isGifted = qsa('#tag-checks input:checked', root).some(cb => cb.value === GIFTED_TAG_ID);
@@ -1635,12 +1673,22 @@ function openItemModal(existing, presetCategoryId) {
       function saveNewBrand() {
         const name = brandInput.value.trim();
         if (!name) { setBrandAdding(false); return; }
-        const b = { id: uid('brand'), name, custom: true };
-        s.brands.push(b);
+        /* A house already on file gets reused and widened instead of creating a
+           near-duplicate under a second name-cased entry. */
+        const existing = s.brands.find(b => String(b.name || '').trim().toLowerCase() === name.toLowerCase());
+        let b = existing;
+        if (b) {
+          b.scope = 'both';
+        } else {
+          b = { id: uid('brand'), name, scope: catSelect.value === 'cat_perfumes' ? 'perfumes' : 'clothing', custom: true };
+          s.brands.push(b);
+        }
         Store.save();
+        showAllBrands = true;
         refreshBrands();
         brandSelect.value = b.id;
         setBrandAdding(false);
+        if (existing) toast(`${name} is already on file — its scope is now Both`);
       }
       qs('#quick-add-brand', root).addEventListener('click', () => setBrandAdding(true));
       qs('#new-brand-save', root).addEventListener('click', saveNewBrand);
@@ -1671,6 +1719,11 @@ function openItemModal(existing, presetCategoryId) {
         item.cost = fd.get('cost') === '' ? null : Number(fd.get('cost'));
         item.wearCount = Math.max(0, parseInt(fd.get('wearCount'), 10) || 0);
         item.tags = qsa('#tag-checks input:checked', root).map(cb => cb.value);
+
+        /* Using a brand outside its scope (e.g. a clothing house on a perfume)
+           means the house covers both — widen it so it stays visible in both
+           lists afterwards. */
+        const widenedBrand = upgradeBrandScopeForItem(G.brand(item.brandId), item.categoryId);
 
         // Same brand + same scent name already on the rack? Almost always
         // "another bottle", not a new scent — confirm before creating.
@@ -1714,7 +1767,8 @@ function openItemModal(existing, presetCategoryId) {
           Store.save();
           Modal.close();
           render();
-          toast(isEdit ? 'Item updated' : 'Item added to rack');
+          if (widenedBrand) toast(`${G.brand(item.brandId)?.name} now covers clothing and perfumes`);
+          else toast(isEdit ? 'Item updated' : 'Item added to rack');
         }
       });
     },
@@ -2173,12 +2227,23 @@ function renderSimpleListPanel(stateKey, label) {
       <div class="chip-card">
         ${stateKey === 'brands' ? BrandLogo.html(x, 18) : ''}
         <span>${esc(x.name)}</span>
+        ${stateKey === 'brands' ? `<select class="chip-card__scope" data-act="scope" title="Where this brand applies" aria-label="Scope for ${esc(x.name)}">
+            ${[['clothing', 'Clothing'], ['perfumes', 'Perfumes'], ['both', 'Both']].map(([v, lbl]) =>
+              `<option value="${v}" ${brandScope(x) === v ? 'selected' : ''}>${lbl}</option>`).join('')}
+          </select>` : ''}
         <span class="muted">${count}</span>
         ${stateKey === 'brands' ? '<button data-act="logo" title="Logo">' + statIconSvg('image', 14) + '</button>' : ''}
         <button data-act="rename" title="Rename">✎</button>
         <button data-act="delete" title="Delete">&times;</button>
       </div>`);
-    if (stateKey === 'brands') qs('[data-act="logo"]', chip).addEventListener('click', () => openBrandLogoModal(x));
+    if (stateKey === 'brands') {
+      qs('[data-act="logo"]', chip).addEventListener('click', () => openBrandLogoModal(x));
+      qs('[data-act="scope"]', chip).addEventListener('change', (e) => {
+        x.scope = e.target.value;
+        Store.save();
+        render();
+      });
+    }
     qs('[data-act="rename"]', chip).addEventListener('click', () => {
       Modal.prompt(`Rename ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', value: x.name, required: true }], ({ name }) => {
         if (!name) return;

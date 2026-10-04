@@ -1344,6 +1344,28 @@ function openRetireModal(item) {
   });
 }
 
+/* A second bottle of the same scent is a real thing, not a data-entry slip.
+   Perfumes are the only category where the same brand+name legitimately
+   repeats (a spare bottle, a re-buy), so only they get this treatment. */
+const normPerfumeName = s => (s || '').trim().toLowerCase();
+function findPerfumeTwin(brandId, name) {
+  const brand = (brandId || '').trim();
+  const nm = normPerfumeName(name);
+  if (!nm) return null;
+  return Store.state.items.find(i =>
+    i.categoryId === 'cat_perfumes' && i.status !== 'retired' &&
+    (i.brandId || '') === brand && normPerfumeName(i.subtext) === nm) || null;
+}
+/* What the "Add another bottle" prompt shows, and what it carries over. */
+function perfumeTwinDetails(twin) {
+  const names = (twin.tags || []).map(t => G.tag(t)?.name).filter(Boolean);
+  const scent = names.find(n => PERFUME_SCENT_FAMILIES.includes(n));
+  const conc = names.find(n => PERFUME_CONCENTRATIONS.includes(n));
+  const carried = [scent, conc].filter(Boolean).join(', ');
+  return { scent, conc, carried,
+    message: `You already have ${itemTitle(twin)}${carried ? ` (${carried})` : ''} on your rack.` };
+}
+
 function openAddItemModal() { openItemModal(null); }
 
 function openItemModal(existing) {
@@ -1514,16 +1536,47 @@ function openItemModal(existing) {
         item.wearCount = Math.max(0, parseInt(fd.get('wearCount'), 10) || 0);
         item.tags = qsa('#tag-checks input:checked', root).map(cb => cb.value);
 
-        if (isEdit) {
-          const idx = s.items.findIndex(i => i.id === item.id);
-          s.items[idx] = item;
-        } else {
-          s.items.push(item);
+        // Same brand + same scent name already on the rack? Almost always
+        // "another bottle", not a new scent — confirm before creating.
+        if (!isEdit && item.categoryId === 'cat_perfumes') {
+          const twin = findPerfumeTwin(item.brandId, item.subtext);
+          if (twin) {
+            const { carried, message } = perfumeTwinDetails(twin);
+            const body = el(`
+              <div class="confirm">
+                <p>${esc(message)} Add another bottle of the same scent?</p>
+                <p class="muted">Brand, name, scent family and concentration will be carried over — you can change the cost and wear count after adding.</p>
+                <div class="confirm__actions">
+                  <button type="button" class="btn btn--ghost" id="twin-cancel">Cancel</button>
+                  <button type="button" class="btn btn--primary" id="twin-add">Add another bottle</button>
+                </div>
+              </div>`);
+            Modal.open('Already on your rack', body, {
+              onMount: (r) => {
+                qs('#twin-cancel', r).addEventListener('click', () => Modal.close());
+                qs('#twin-add', r).addEventListener('click', () => {
+                  if (carried) { item.subcategoryId = twin.subcategoryId; item.tags = [...(twin.tags || [])]; }
+                  commitItem();
+                });
+              },
+            });
+            return;
+          }
         }
-        Store.save();
-        Modal.close();
-        render();
-        toast(isEdit ? 'Item updated' : 'Item added to rack');
+        commitItem();
+
+        function commitItem() {
+          if (isEdit) {
+            const idx = s.items.findIndex(i => i.id === item.id);
+            s.items[idx] = item;
+          } else {
+            s.items.push(item);
+          }
+          Store.save();
+          Modal.close();
+          render();
+          toast(isEdit ? 'Item updated' : 'Item added to rack');
+        }
       });
     },
   });

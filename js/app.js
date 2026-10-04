@@ -486,6 +486,18 @@ function countActiveWardrobeFilters() {
   return n;
 }
 let wardrobeFilters = loadWardrobeFilters();
+
+/* Wardrobe is split into Clothing and Perfumes; the choice is remembered. */
+const WARDROBE_SEGMENT_KEY = 'rack.wardrobe.segment';
+let wardrobeSegment = (() => {
+  try { return localStorage.getItem(WARDROBE_SEGMENT_KEY) === 'perfumes' ? 'perfumes' : 'clothing'; }
+  catch (e) { return 'clothing'; }
+})();
+function setWardrobeSegment(seg) {
+  wardrobeSegment = seg === 'perfumes' ? 'perfumes' : 'clothing';
+  try { localStorage.setItem(WARDROBE_SEGMENT_KEY, wardrobeSegment); } catch (e) { /* ignore */ }
+}
+const inWardrobeSegment = i => (i.categoryId === 'cat_perfumes') === (wardrobeSegment === 'perfumes');
 let filtersSheetOpen = false;
 
 const WARDROBE_VIEW_MODE_KEY = 'rack.wardrobe.viewMode';
@@ -662,7 +674,8 @@ function renderDashboard() {
       </div>`));
     qs('#empty-add', wrap).addEventListener('click', openAddItemModal);
     qs('#empty-retired', wrap).addEventListener('click', () => {
-      wardrobeFilters = { ...wardrobeFilters, status: 'retired' };
+      wardrobeFilters = { ...wardrobeFilters, status: 'retired', category: '', subcategory: '', brand: '', color: '', tag: '' };
+      setWardrobeSegment(retiredItems().some(i => i.categoryId !== 'cat_perfumes') ? 'clothing' : 'perfumes');
       saveWardrobeFilters();
       switchTab('wardrobe');
     });
@@ -767,7 +780,8 @@ function renderDashboard() {
         <button class="btn btn--ghost btn--small" id="view-retired" style="margin-top:.6rem;">View ${retired.length} retired item${retired.length === 1 ? '' : 's'}</button>
       </div>`);
     qs('#view-retired', retiredPanel).addEventListener('click', () => {
-      wardrobeFilters = { ...wardrobeFilters, status: 'retired' };
+      wardrobeFilters = { ...wardrobeFilters, status: 'retired', category: '', subcategory: '', brand: '', color: '', tag: '' };
+      setWardrobeSegment(retiredItems().some(i => i.categoryId !== 'cat_perfumes') ? 'clothing' : 'perfumes');
       saveWardrobeFilters();
       switchTab('wardrobe');
     });
@@ -812,6 +826,7 @@ function renderDashboard() {
       </div>`);
     qs('#goto-unused', donate).addEventListener('click', () => {
       wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS, sort: 'least' };
+      setWardrobeSegment('clothing');
       saveWardrobeFilters();
       switchTab('wardrobe');
     });
@@ -827,8 +842,16 @@ function renderDashboard() {
 function renderWardrobe() {
   const wrap = el(`<section class="view-section"></section>`);
 
+  const segCounts = {
+    clothing: activeItems().filter(i => i.categoryId !== 'cat_perfumes').length,
+    perfumes: activeItems().filter(i => i.categoryId === 'cat_perfumes').length,
+  };
   const toolbar = el(`
     <div class="wardrobe-block">
+      <div class="view-toggle segment-toggle" id="segment-toggle">
+        <button type="button" class="view-toggle__btn ${wardrobeSegment === 'clothing' ? 'is-active' : ''}" data-seg="clothing">Clothing (${segCounts.clothing})</button>
+        <button type="button" class="view-toggle__btn ${wardrobeSegment === 'perfumes' ? 'is-active' : ''}" data-seg="perfumes">Perfumes (${segCounts.perfumes})</button>
+      </div>
       <div class="toolbar">
         <input type="search" class="search-input" id="wardrobe-search" placeholder="Search wardrobe…" autocomplete="off" value="${esc(wardrobeFilters.search || '')}">
         <button type="button" class="btn btn--ghost filters-toggle-btn" id="filters-toggle-btn">
@@ -868,12 +891,22 @@ function renderWardrobe() {
   `);
   wrap.appendChild(toolbar);
 
-  qsa('.view-toggle__btn', toolbar).forEach(btn => {
+  qsa('#segment-toggle .view-toggle__btn', toolbar).forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.seg === wardrobeSegment) return;
+      setWardrobeSegment(btn.dataset.seg);
+      wardrobeFilters = { ...wardrobeFilters, category: '', subcategory: '', brand: '', color: '', tag: '' };
+      saveWardrobeFilters();
+      render();
+    });
+  });
+
+  qsa('#view-toggle .view-toggle__btn', toolbar).forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.dataset.mode === wardrobeViewMode) return;
       wardrobeViewMode = btn.dataset.mode;
       saveViewMode(wardrobeViewMode);
-      qsa('.view-toggle__btn', toolbar).forEach(b => b.classList.toggle('is-active', b === btn));
+      qsa('#view-toggle .view-toggle__btn', toolbar).forEach(b => b.classList.toggle('is-active', b === btn));
       renderItemGrid();
     });
   });
@@ -882,29 +915,39 @@ function renderWardrobe() {
   qs('#f-status', toolbar).value = wardrobeFilters.status || 'active';
 
   const catSel = qs('#f-category', toolbar);
-  s.categories.forEach(c => catSel.appendChild(el(`<option value="${c.id}">${esc(c.name)}</option>`)));
+  s.categories.filter(c => c.id !== 'cat_perfumes').forEach(c => catSel.appendChild(el(`<option value="${c.id}">${esc(c.name)}</option>`)));
+  if (wardrobeFilters.category === 'cat_perfumes') wardrobeFilters.category = '';
   catSel.value = wardrobeFilters.category;
+  const perfSeg = wardrobeSegment === 'perfumes';
+  if (perfSeg) { catSel.style.display = 'none'; wardrobeFilters.category = ''; }
 
   const subSel = qs('#f-subcategory', toolbar);
   function refreshSubOptions() {
     subSel.innerHTML = '<option value="">All subcategories</option>';
-    const subs = wardrobeFilters.category ? G.subsFor(wardrobeFilters.category) : s.subcategories;
+    const subs = wardrobeFilters.category ? G.subsFor(wardrobeFilters.category)
+      : s.subcategories.filter(sc => (sc.categoryId === 'cat_perfumes') === perfSeg);
     subs.forEach(sc => subSel.appendChild(el(`<option value="${sc.id}">${esc(sc.name)}</option>`)));
     subSel.value = wardrobeFilters.subcategory;
   }
   refreshSubOptions();
 
   const brandSel = qs('#f-brand', toolbar);
-  s.brands.forEach(b => brandSel.appendChild(el(`<option value="${b.id}">${esc(b.name)}</option>`)));
+  const segBrandIds = new Set(s.items.filter(inWardrobeSegment).map(i => i.brandId));
+  s.brands.filter(b => segBrandIds.has(b.id)).forEach(b => brandSel.appendChild(el(`<option value="${b.id}">${esc(b.name)}</option>`)));
   brandSel.value = wardrobeFilters.brand;
 
   const colorSel = qs('#f-color', toolbar);
   s.colors.forEach(c => colorSel.appendChild(el(`<option value="${c.id}">${esc(c.name)}</option>`)));
+  if (perfSeg) { colorSel.style.display = 'none'; wardrobeFilters.color = ''; }
   colorSel.value = wardrobeFilters.color;
 
   const tagSel = qs('#f-tag', toolbar);
-  s.tags.forEach(t => tagSel.appendChild(el(`<option value="${t.id}">${esc(t.name)}</option>`)));
+  s.tags.filter(t => !t.categoryIds || !t.categoryIds.length
+    || t.categoryIds.some(id => (id === 'cat_perfumes') === perfSeg)).forEach(t => tagSel.appendChild(el(`<option value="${t.id}">${esc(t.name)}</option>`)));
   tagSel.value = wardrobeFilters.tag;
+  /* a stored filter whose option isn't in this segment would filter invisibly */
+  if (wardrobeFilters.brand && brandSel.value !== wardrobeFilters.brand) wardrobeFilters.brand = '';
+  if (wardrobeFilters.tag && tagSel.value !== wardrobeFilters.tag) wardrobeFilters.tag = '';
 
   const actSel = qs('#f-activity', toolbar);
   s.activities.forEach(a => actSel.appendChild(el(`<option value="${a.id}">${esc(a.name)}</option>`)));
@@ -986,6 +1029,7 @@ function renderItemGrid() {
   grid.classList.toggle('item-grid--list', wardrobeViewMode === 'list');
   const f = wardrobeFilters;
   let items = Store.state.items.filter(i => {
+    if (!inWardrobeSegment(i)) return false;
     const status = f.status || 'active';
     if (status === 'active' && i.status === 'retired') return false;
     if (status === 'retired' && i.status !== 'retired') return false;
@@ -1366,13 +1410,15 @@ function perfumeTwinDetails(twin) {
     message: `You already have ${itemTitle(twin)}${carried ? ` (${carried})` : ''} on your rack.` };
 }
 
-function openAddItemModal() { openItemModal(null); }
+function openAddItemModal() {
+  openItemModal(null, activeTab === 'wardrobe' && wardrobeSegment === 'perfumes' ? 'cat_perfumes' : '');
+}
 
-function openItemModal(existing) {
+function openItemModal(existing, presetCategoryId) {
   const s = Store.state;
   const isEdit = !!existing;
   const item = existing ? { ...existing } : {
-    id: uid('item'), categoryId: '', subcategoryId: '', brandId: '', colorId: '',
+    id: uid('item'), categoryId: presetCategoryId || '', subcategoryId: '', brandId: '', colorId: '',
     tags: [], subtext: '', cost: '', wearCount: 0, lastWornAt: null, createdAt: Date.now(),
     status: 'active', retiredReason: null, retiredAt: null,
   };

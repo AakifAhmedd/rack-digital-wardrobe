@@ -24,6 +24,9 @@ function uid(prefix) {
 const PERFUME_SUBCATEGORIES = ['Designer', 'Niche', 'Middle Eastern', 'Local'];
 const PERFUME_SCENT_FAMILIES = ['Floral', 'Oriental', 'Woody', 'Fresh', 'Citrus', 'Aquatic', 'Gourmand', 'Fougère', 'Chypre', 'Green'];
 const PERFUME_CONCENTRATIONS = ['EDT', 'EDP', 'Parfum', 'EDC', 'Oil'];
+/* Bottle size, as a tag like every other perfume attribute. A scent has no
+   colour, so this is what identifies the bottle on the card instead. */
+const PERFUME_VOLUMES = ['10ml', '30ml', '50ml', '100ml', '200ml'];
 /* Pre-1.0 perfumes were bucketed by scent family; migration reads these to
    convert an old subcategory into a tag instead of losing the information. */
 const LEGACY_PERFUME_SCENTS = PERFUME_SCENT_FAMILIES;
@@ -100,6 +103,7 @@ function defaultTags(categories, subcategories) {
     { name: 'Gifted', cats: ['Shirts', 'Pants', 'Shoes', 'Accessories', 'Outerwear'] },
     ...PERFUME_SCENT_FAMILIES.map(n => ({ name: n, cats: ['Perfumes'] })),
     ...PERFUME_CONCENTRATIONS.map(n => ({ name: n, cats: ['Perfumes'] })),
+    ...PERFUME_VOLUMES.map(n => ({ name: n, cats: ['Perfumes'] })),
   ];
 
   return defs.map(d => ({
@@ -355,7 +359,7 @@ const Store = {
   /* Perfume tags (scent families + concentrations) may be missing on wardrobes
      created before they existed. */
   _ensurePerfumeTags(s) {
-    [...PERFUME_SCENT_FAMILIES, ...PERFUME_CONCENTRATIONS].forEach(name => {
+    [...PERFUME_SCENT_FAMILIES, ...PERFUME_CONCENTRATIONS, ...PERFUME_VOLUMES].forEach(name => {
       const id = 'tag_' + slugify(name);
       if (s.tags.find(t => t.id === id)) return;
       s.tags.push({ id, name, categoryIds: ['cat_perfumes'], subcategoryIds: [], custom: false });

@@ -9,13 +9,13 @@ RACK catalogs your clothes, shoes, accessories, and perfumes, tracks how often y
 - **Categories & subcategories** — Pants, Shirts, Shoes, Outerwear, Accessories, and Perfumes ship with sensible subcategories out of the box. Add your own at any time; user-created categories work identically to the built-in ones.
 - **Brands & colors** as first-class masters — an item's identity is built from Brand + Color + Subcategory (e.g. "Nike Black Running Shoes"), with everything else (model name, etc.) treated as secondary description.
 - **Perfumes as a first-class category** — fragrance houses are brands, market tier (Designer / Niche / Middle Eastern / Local) is the subcategory, and scent family + concentration (EDT/EDP/Parfum/EDC/Oil) are tags scoped to Perfumes — so they match in activities exactly like clothing tags do. A perfume's card reads as *Brand + Perfume name* (e.g. "Tom Ford Black Orchid"), colour is optional, and the dashboard reports a separate **fragrance collection value** alongside your wardrobe value.
-- **Duplicate bottle detection** — adding a perfume whose brand + name is already on your rack asks "Add another bottle" and carries over brand, name, scent family and concentration, instead of quietly creating a near-identical item.
+- **Duplicate bottle detection** — adding a perfume whose brand + name is already on your rack asks "Add another bottle" and carries over brand, name, scent family and concentration, instead of quietly creating a near-identical item. Retired bottles count too, so finishing a scent you love and buying it again months later is recognised as a re-buy and the new bottle inherits the old one's details.
 - **Tags scoped to categories** — a tag like *Cargo* only shows up when tagging Pants; *Collared* only shows up for Shirts. You manage the tag list yourself in Masters.
 - **Activities with a real rule engine** — instead of manually assigning every item to every activity, an activity like "Office Smart Casual" is defined as a set of category/subcategory/tag rules (with always-exclude rules for things like Shorts). Items are matched automatically. Two worked examples from the spec — *Office Smart Casual* and *Badminton* — ship configured out of the box.
 - **Usage tracking** — log a wear with one tap; see most-worn and least-worn items, categories, and subcategories.
 - **Donation prompts** — items with zero wears are surfaced on the dashboard with a nudge toward donating rather than reselling.
 - **Cost per wear** — record what an item cost you; RACK divides by wear count and colour-codes it against your wardrobe average, so you can see which purchases earned their keep.
-- **Finished vs. donated** — perfumes retire as *Finished* or *Empty* rather than *Donated*, since a used-up bottle isn't a donation.
+- **Finished vs. donated** — perfumes retire as *Finished* rather than *Donated*, since a used-up bottle isn't a donation. Bottles are collected, so "used up" and "empty" are the same event and only one option is offered.
 
 ## Architecture & why
 

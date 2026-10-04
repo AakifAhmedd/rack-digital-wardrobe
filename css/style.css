@@ -287,6 +287,16 @@ input[type="date"] {
 .item-card__top { display: flex; gap: .65rem; align-items: flex-start; }
 .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface-raised); box-shadow: 0 0 0 1px var(--line); flex-shrink: 0; margin-top: .15rem; }
 .swatch--sm { width: 18px; height: 18px; }
+/* Perfumes have no colour; the bottle size sits where the swatch would be, so
+   it matches the same footprint and keeps the title aligned across cards. */
+.item-card__vol {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; padding: 0 .3rem;
+  border-radius: 13px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink-soft); font-size: .62rem; font-weight: 500; line-height: 1;
+  letter-spacing: -.01em; white-space: nowrap; flex-shrink: 0; margin-top: .15rem;
+}
+.item-row .item-card__vol { min-width: 18px; height: 18px; border-radius: 9px; font-size: .55rem; padding: 0 .2rem; margin-top: 0; }
 .item-card__titles { flex: 1; min-width: 0; }
 @media (min-width: 641px) { .item-card__titles { min-height: 3.6rem; } } /* reserve two title lines only when cards sit side by side */
 .item-card__titles h4 {

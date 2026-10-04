@@ -1254,6 +1254,27 @@ function wireItemActions(root, item, isRetired) {
   });
 }
 
+/* Perfumes have no colour, so the swatch falls back to a meaningless
+   multi-gradient. The bottle size takes that slot instead — it is what tells
+   two bottles of the same scent apart. Returns '' when there is no volume tag,
+   leaving the title to start at the edge. */
+function itemVolumeTag(item) {
+  if (item.categoryId !== 'cat_perfumes') return null;
+  return (item.tags || []).map(t => G.tag(t)?.name).find(n => PERFUME_VOLUMES.includes(n)) || null;
+}
+/* The leading visual token on an item: bottle size for perfumes, colour swatch
+   for everything else. */
+function itemLeadMarkup(item, color, { small = false } = {}) {
+  if (item.categoryId === 'cat_perfumes') {
+    const vol = itemVolumeTag(item);
+    return vol ? `<span class="item-card__vol mono" title="Bottle size">${esc(vol)}</span>` : '';
+  }
+  const swatchStyle = color?.hex && color.hex !== 'multi'
+    ? `background:${color.hex}`
+    : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
+  return `<span class="swatch${small ? ' swatch--sm' : ''}" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>`;
+}
+
 function itemCard(item) {
   const color = G.color(item.colorId);
   const cat = G.category(item.categoryId);
@@ -1264,9 +1285,7 @@ function itemCard(item) {
   let cpwClass = '';
   if (cpw !== null && avg !== null) cpwClass = cpw <= avg ? 'tag-chip--good' : 'tag-chip--warn';
 
-  const swatchStyle = color?.hex && color.hex !== 'multi'
-    ? `background:${color.hex}`
-    : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
+  const swatchMarkup = itemLeadMarkup(item, color);
 
   const reasonLabel = RETIRE_REASONS.find(r => r.id === item.retiredReason)?.label || 'Retired';
 
@@ -1276,7 +1295,7 @@ function itemCard(item) {
   const card = el(`
     <article class="item-card ${isRetired ? 'item-card--retired' : ''}">
       <div class="item-card__top">
-        <span class="swatch" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
+        ${swatchMarkup}
         <div class="item-card__titles">
           <h4 ${BrandLogo.has(G.brand(item.brandId)) ? `aria-label="${esc(itemTitle(item))}"` : ''}>${BrandLogo.has(G.brand(item.brandId)) ? BrandLogo.html(G.brand(item.brandId), 20, esc(G.brand(item.brandId).name)) : ''}${esc(itemTitle(item, { omitBrand: BrandLogo.has(G.brand(item.brandId)) }))}</h4>
           <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
@@ -1358,20 +1377,18 @@ function itemListRow(item) {
   const isRetired = item.status === 'retired';
   const reasonLabel = RETIRE_REASONS.find(r => r.id === item.retiredReason)?.label || 'Retired';
 
-  const swatchStyle = color?.hex && color.hex !== 'multi'
-    ? `background:${color.hex}`
-    : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
+  const leadMarkup = itemLeadMarkup(item, color, { small: true });
 
   const metaBits = [
-    `${esc(cat.name)} \u203a ${esc(sub?.name || '—')}`,
-    `${item.wearCount || 0}\u00d7`,
+    `${esc(cat.name)} › ${esc(sub?.name || '—')}`,
+    `${item.wearCount || 0}×`,
   ];
   if (cpw !== null) metaBits.push(`${fmtMoney(cpw)}/wear`);
   if (isRetired) metaBits.push(`${esc(reasonLabel)}`);
 
   const row = el(`
     <div class="item-row ${isRetired ? 'item-row--retired' : ''}">
-      <span class="swatch swatch--sm" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
+      ${leadMarkup}
       <div class="item-row__main">
         <span class="item-row__title">${esc(itemTitle(item))}</span>
         <span class="item-row__meta">${metaBits.join(' &middot; ')}</span>
@@ -1902,12 +1919,9 @@ function renderOutfitBuilder() {
 
 function outfitItemTile(item, selected) {
   const color = G.color(item.colorId);
-  const swatchStyle = color?.hex && color.hex !== 'multi'
-    ? `background:${color.hex}`
-    : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
   return el(`
     <button type="button" class="outfit-item-tile ${selected ? 'is-selected' : ''}">
-      <span class="swatch swatch--sm" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>
+      ${itemLeadMarkup(item, color, { small: true })}
       <span class="outfit-item-tile__text">
         <span class="outfit-item-tile__title">${esc(itemTitle(item))}</span>
         <span class="outfit-item-tile__meta muted">${item.wearCount || 0}&times; &middot; ${esc(fmtDateShort(item.lastWornAt))}</span>

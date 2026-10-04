@@ -17,6 +17,17 @@ function uid(prefix) {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/* ---------- perfume taxonomy ----------
+   Subcategory = where the scent sits in the market (tier), scent family and
+   concentration live as tags so the rule engine can match them like any other
+   wardrobe tag. */
+const PERFUME_SUBCATEGORIES = ['Designer', 'Niche', 'Middle Eastern', 'Local'];
+const PERFUME_SCENT_FAMILIES = ['Floral', 'Oriental', 'Woody', 'Fresh', 'Citrus', 'Aquatic', 'Gourmand', 'Fougère', 'Chypre', 'Green'];
+const PERFUME_CONCENTRATIONS = ['EDT', 'EDP', 'Parfum', 'EDC', 'Oil'];
+/* Pre-1.0 perfumes were bucketed by scent family; migration reads these to
+   convert an old subcategory into a tag instead of losing the information. */
+const LEGACY_PERFUME_SCENTS = PERFUME_SCENT_FAMILIES;
+
 /* ---------- default masters ---------- */
 
 function defaultCategories() {
@@ -26,7 +37,7 @@ function defaultCategories() {
     { name: 'Shoes', icon: 'shoe', subs: ['Running Shoes', 'Casual Shoes', 'Formal Shoes', 'Sandals', 'Sports Shoes'] },
     { name: 'Outerwear', icon: 'jacket', subs: ['Jackets', 'Hoodies', 'Sweaters'] },
     { name: 'Accessories', icon: 'bag', subs: ['Watches', 'Belts', 'Cufflinks', 'Ties', 'Bags', 'Sunglasses', 'Hats'] },
-    { name: 'Perfumes', icon: 'perfume', subs: ['Floral', 'Oriental', 'Woody', 'Fresh', 'Citrus', 'Aquatic', 'Gourmand', 'Fougère', 'Chypre', 'Green'] },
+    { name: 'Perfumes', icon: 'perfume', subs: PERFUME_SUBCATEGORIES },
   ];
   const categories = [];
   const subcategories = [];
@@ -73,11 +84,8 @@ function defaultTags(categories, subcategories) {
     { name: 'Stretch', cats: ['Pants', 'Shoes'] },
     { name: 'Leather', cats: ['Shoes', 'Accessories'] },
     { name: 'Gifted', cats: ['Shirts', 'Pants', 'Shoes', 'Accessories', 'Outerwear'] },
-    { name: 'EDT', cats: ['Perfumes'] },
-    { name: 'EDP', cats: ['Perfumes'] },
-    { name: 'Parfum', cats: ['Perfumes'] },
-    { name: 'EDC', cats: ['Perfumes'] },
-    { name: 'Oil', cats: ['Perfumes'] },
+    ...PERFUME_SCENT_FAMILIES.map(n => ({ name: n, cats: ['Perfumes'] })),
+    ...PERFUME_CONCENTRATIONS.map(n => ({ name: n, cats: ['Perfumes'] })),
   ];
 
   return defs.map(d => ({
@@ -263,21 +271,45 @@ const Store = {
       });
     }
 
-    // Perfumes category, subcategories, and concentration tags may be missing.
+    // Perfumes category, subcategories, and tags may be missing.
     if (!s.categories.find(c => c.id === 'cat_perfumes')) {
-      // Add category
       s.categories.push({ id: 'cat_perfumes', name: 'Perfumes', icon: 'perfume', custom: false });
-      // Add subcategories
-      const perfumeSubs = ['Floral', 'Oriental', 'Woody', 'Fresh', 'Citrus', 'Aquatic', 'Gourmand', 'Fougère', 'Chypre', 'Green'];
-      perfumeSubs.forEach(sub => {
+      PERFUME_SUBCATEGORIES.forEach(sub => {
         s.subcategories.push({ id: 'sub_perfumes_' + slugify(sub), name: sub, categoryId: 'cat_perfumes', custom: false });
       });
-      // Add concentration tags
-      const perfumeTags = ['EDT', 'EDP', 'Parfum', 'EDC', 'Oil'];
-      perfumeTags.forEach(tag => {
-        s.tags.push({ id: 'tag_' + slugify(tag), name: tag, categoryIds: ['cat_perfumes'], subcategoryIds: [], custom: false });
-      });
     }
+    this._ensurePerfumeTags(s);
+
+    // Perfume subcategories used to be scent families. Fold them into tags so
+    // the existing scent info survives, and re-bucket items by market tier.
+    const designerId = 'sub_perfumes_' + slugify(PERFUME_SUBCATEGORIES[0]);
+    s.items.forEach(i => {
+      if (i.categoryId !== 'cat_perfumes' || !i.subcategoryId) return;
+      const legacy = LEGACY_PERFUME_SCENTS.find(n => 'sub_perfumes_' + slugify(n) === i.subcategoryId);
+      if (!legacy) return;
+      const tagId = 'tag_' + slugify(legacy);
+      i.tags = i.tags || [];
+      if (!i.tags.includes(tagId)) i.tags.push(tagId);
+      i.subcategoryId = designerId;
+    });
+    s.subcategories = s.subcategories.filter(sc =>
+      sc.categoryId !== 'cat_perfumes' || !LEGACY_PERFUME_SCENTS.some(n => 'sub_perfumes_' + slugify(n) === sc.id));
+    PERFUME_SUBCATEGORIES.forEach(sub => {
+      const id = 'sub_perfumes_' + slugify(sub);
+      if (!s.subcategories.find(sc => sc.id === id)) {
+        s.subcategories.push({ id, name: sub, categoryId: 'cat_perfumes', custom: false });
+      }
+    });
+  },
+
+  /* Perfume tags (scent families + concentrations) may be missing on wardrobes
+     created before they existed. */
+  _ensurePerfumeTags(s) {
+    [...PERFUME_SCENT_FAMILIES, ...PERFUME_CONCENTRATIONS].forEach(name => {
+      const id = 'tag_' + slugify(name);
+      if (s.tags.find(t => t.id === id)) return;
+      s.tags.push({ id, name, categoryIds: ['cat_perfumes'], subcategoryIds: [], custom: false });
+    });
   },
 
   save() {

@@ -516,6 +516,24 @@ function saveViewMode(mode) {
 }
 let wardrobeViewMode = loadViewMode();
 
+/* Optional collapsible sections in Wardrobe. Device-local view preferences (like
+   Cards/List), kept out of the synced store on purpose. */
+const WARDROBE_GROUP_KEY = 'rack.wardrobe.groupSections';
+const WARDROBE_COLLAPSED_KEY = 'rack.wardrobe.collapsedGroups';
+let wardrobeGroupSections = (() => {
+  try { return localStorage.getItem(WARDROBE_GROUP_KEY) === '1'; } catch (e) { return false; }
+})();
+function setGroupSections(on) {
+  wardrobeGroupSections = !!on;
+  try { localStorage.setItem(WARDROBE_GROUP_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
+}
+let wardrobeCollapsed = (() => {
+  try { return JSON.parse(localStorage.getItem(WARDROBE_COLLAPSED_KEY) || '{}') || {}; } catch (e) { return {}; }
+})();
+function saveCollapsedGroups() {
+  try { localStorage.setItem(WARDROBE_COLLAPSED_KEY, JSON.stringify(wardrobeCollapsed)); } catch (e) { /* ignore */ }
+}
+
 function switchTab(name) {
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
@@ -1032,7 +1050,6 @@ function renderItemGrid() {
   const grid = qs('#item-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  grid.classList.toggle('item-grid--list', wardrobeViewMode === 'list');
   const f = wardrobeFilters;
   let items = Store.state.items.filter(i => {
     if (!inWardrobeSegment(i)) return false;
@@ -1064,14 +1081,66 @@ function renderItemGrid() {
   else if (f.sort === 'cpw-desc') items.sort((a, b) => cpwOrInf(b, 'desc') - cpwOrInf(a, 'desc'));
   else items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+  const grouped = wardrobeGroupSections && items.length > 0;
+  grid.classList.toggle('item-grid', !grouped);
+  grid.classList.toggle('item-grid--list', !grouped && wardrobeViewMode === 'list');
+  grid.classList.toggle('item-groups', grouped);
+
   if (!items.length) {
     const msg = (f.status === 'retired') ? "No retired items yet." : "No items match these filters.";
     grid.appendChild(el(`<p class="muted" style="padding: 2rem 0;">${esc(msg)}</p>`));
     return;
   }
-  items.forEach(item => grid.appendChild(wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item)));
-  fitCardTags(grid);
-  fitCardStats(grid);
+  const makeNode = item => (wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item));
+  if (!grouped) {
+    items.forEach(item => grid.appendChild(makeNode(item)));
+    fitCardTags(grid);
+    fitCardStats(grid);
+    return;
+  }
+
+  /* Sections: clothing by category, perfumes by market tier (subcategory). */
+  const perf = wardrobeSegment === 'perfumes';
+  const keyOf = i => (perf ? (i.subcategoryId || '') : (i.categoryId || ''));
+  const labelOf = k => (perf ? (G.subcategory(k)?.name || 'Other') : G.category(k).name);
+  const order = perf
+    ? Store.state.subcategories.filter(sc => sc.categoryId === 'cat_perfumes').map(sc => sc.id)
+    : Store.state.categories.map(c => c.id);
+  const buckets = new Map();
+  items.forEach(i => {
+    const k = keyOf(i);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(i);
+  });
+  const rank = k => { const n = order.indexOf(k); return n < 0 ? 999 : n; };
+  const searching = !!(f.search && f.search.trim()); // matches stay visible while searching
+  [...buckets.keys()].sort((a, b) => rank(a) - rank(b)).forEach(k => {
+    const list = buckets.get(k);
+    const collapseKey = `${wardrobeSegment}:${k}`;
+    const isCollapsed = !searching && !!wardrobeCollapsed[collapseKey];
+    const section = el(`
+      <section class="item-group ${isCollapsed ? 'is-collapsed' : ''}">
+        <button type="button" class="item-group__head" aria-expanded="${!isCollapsed}">
+          <span class="item-group__chev" aria-hidden="true"></span>
+          <span class="item-group__name">${esc(labelOf(k))}</span>
+          <span class="item-group__count mono">${list.length}</span>
+        </button>
+        <div class="item-grid ${wardrobeViewMode === 'list' ? 'item-grid--list' : ''}"></div>
+      </section>`);
+    const inner = qs('.item-grid', section);
+    list.forEach(i => inner.appendChild(makeNode(i)));
+    const head = qs('.item-group__head', section);
+    head.addEventListener('click', () => {
+      const nowCollapsed = !section.classList.contains('is-collapsed');
+      section.classList.toggle('is-collapsed', nowCollapsed);
+      head.setAttribute('aria-expanded', String(!nowCollapsed));
+      if (nowCollapsed) wardrobeCollapsed[collapseKey] = true; else delete wardrobeCollapsed[collapseKey];
+      saveCollapsedGroups();
+      if (!nowCollapsed) { fitCardTags(inner); fitCardStats(inner); }
+    });
+    grid.appendChild(section);
+    if (!isCollapsed) { fitCardTags(inner); fitCardStats(inner); }
+  });
 }
 
 /* Shrink a stat value's font just enough that it isn't cut off with an ellipsis. */
@@ -2720,6 +2789,21 @@ function renderAppearanceSettings() {
     blurToggle.appendChild(b);
   });
 
+  /* -- wardrobe sections -- */
+  const groupPanel = el(`
+    <div class="panel panel--wide">
+      <h3>Wardrobe sections</h3>
+      <p class="muted">Group the Wardrobe under collapsible headers: clothing by category, perfumes by market tier. Saved on this device only.</p>
+      <div class="theme-card__actions" id="group-toggle"></div>
+    </div>`);
+  const groupToggle = qs('#group-toggle', groupPanel);
+  [[false, 'Off'], [true, 'On']].forEach(([val, name]) => {
+    const on = wardrobeGroupSections === val;
+    const b = el(`<button class="btn btn--small ${on ? 'btn--primary' : 'btn--ghost'}">${name}</button>`);
+    b.addEventListener('click', () => { setGroupSections(val); render(); toast(`Wardrobe sections: ${name}`); });
+    groupToggle.appendChild(b);
+  });
+
   /* -- themes -- */
   const themePanel = el(`
     <div class="panel panel--wide">
@@ -2806,6 +2890,7 @@ function renderAppearanceSettings() {
 
   wrap.appendChild(stylePanel);
   wrap.appendChild(blurPanel);
+  wrap.appendChild(groupPanel);
   wrap.appendChild(themePanel);
   wrap.appendChild(fontPanel);
   return wrap;

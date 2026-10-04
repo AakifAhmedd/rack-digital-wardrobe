@@ -352,6 +352,23 @@ input[type="date"] {
 
 /* ---------------- compact list view ---------------- */
 .item-grid--list { display: flex; flex-direction: column; gap: .4rem; }
+
+/* optional collapsible sections (Settings > Appearance > Wardrobe sections) */
+.item-groups { display: flex; flex-direction: column; gap: 1.25rem; }
+.item-group__head {
+  display: flex; align-items: center; gap: .5rem; width: 100%; margin-bottom: .75rem; padding: .35rem .1rem;
+  background: none; border: none; border-bottom: 1px solid var(--line); cursor: pointer; text-align: left;
+  color: var(--text); font-family: var(--font-display); font-size: 1.05rem; font-weight: 600;
+}
+.item-group__count { font-family: var(--font-mono); font-size: .75rem; font-weight: 400; color: var(--ink-soft); }
+.item-group__chev {
+  width: .5rem; height: .5rem; margin: 0 .3rem .25rem .1rem; flex-shrink: 0;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); transition: transform .15s, margin .15s;
+}
+.item-group.is-collapsed .item-group__chev { transform: rotate(-45deg); margin: 0 .35rem 0 0; }
+.item-group.is-collapsed .item-group__head { margin-bottom: 0; }
+.item-group.is-collapsed .item-grid { display: none; }
 .item-row {
   display: flex; align-items: center; gap: .7rem;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
@@ -901,6 +918,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="brutalist"] .subnav__link.is-active, [data-style="brutalist"] .view-toggle__btn.is-active,
 [data-style="brutalist"] .icon-picker__btn.is-selected { background: var(--ink); color: var(--accent-ink); }
 [data-style="brutalist"] .view-toggle { border: 2px solid var(--text); }
+[data-style="brutalist"] .item-group__head { border-bottom: 2px solid var(--text); }
 [data-style="brutalist"] .icon-picker__btn { border: 2px solid var(--text); }
 
 /* buttons: hard shadow that "presses" */

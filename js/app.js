@@ -2033,6 +2033,7 @@ function renderOutfitSummary(matches, refresh) {
   LiquidGlass.apply(box, { bezel: 16 });
 
   if (!selected.length) {
+    box.classList.add('outfit-summary--empty');
     box.appendChild(el(`<p class="muted outfit-summary__empty">Select items above to build today's outfit.</p>`));
     return box;
   }

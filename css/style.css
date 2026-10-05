@@ -416,12 +416,6 @@ input[type="date"] {
   position: sticky; top: var(--app-header-h, 0px); z-index: 20; margin: 0 -1.25rem;
   pointer-events: none; /* free-floating chips: taps in the empty space reach the content below */
 }
-/* Strip blur lives on a sibling layer, not an ancestor of the chips: an ancestor with
-   backdrop-filter would hide the page from the chips' own (liquid glass) backdrop. */
-.outfit-chips-bar::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-}
 .outfit-activity-chips {
   border-bottom: none; padding: .6rem 1.25rem; margin: 0; position: relative;
   pointer-events: none;

@@ -426,6 +426,8 @@ input[type="date"] {
 }
 .outfit-activity-chips::-webkit-scrollbar { display: none; }
 .outfit-activity-chips .subnav__link { pointer-events: auto; flex: 0 0 auto; white-space: nowrap; }
+/* Outer shadows must stay inside the row's padding (~9px): the row scrolls sideways, so it clips
+   vertically and a bigger shadow shows up as a hard-edged band under the chips. */
 /* Liquid glass chips. Chromium gets real refraction via an inline backdrop-filter from
    LiquidGlass (app.js); everywhere else this frosted version applies. */
 .outfit-chips-bar .outfit-activity-chips .subnav__link {
@@ -435,14 +437,14 @@ input[type="date"] {
   box-shadow:
     inset 0 1.5px 1px rgba(255,255,255,.85), inset 0 -1px 1px rgba(255,255,255,.35),
     inset 1px 0 1px rgba(255,255,255,.35), inset -1px 0 1px rgba(255,255,255,.35),
-    inset 0 0 14px rgba(255,255,255,.22), 0 6px 16px rgba(20,30,50,.14), 0 1px 3px rgba(20,30,50,.10);
+    inset 0 0 14px rgba(255,255,255,.22), 0 2px 6px rgba(20,30,50,.12);
 }
 .outfit-chips-bar .outfit-activity-chips .subnav__link.is-active {
   background: linear-gradient(145deg, color-mix(in srgb, var(--ink) 74%, transparent), color-mix(in srgb, var(--ink) 62%, transparent));
   color: var(--accent-ink); border-color: rgba(255,255,255,.28);
   box-shadow:
     inset 0 1.5px 1px rgba(255,255,255,.45), inset 0 -1px 1px rgba(255,255,255,.12),
-    0 6px 16px rgba(20,30,50,.20), 0 1px 3px rgba(20,30,50,.12);
+    0 2px 6px rgba(20,30,50,.16);
 }
 .outfit-hint { padding: .5rem 0; }
 .outfit-category h3 {

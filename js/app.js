@@ -43,6 +43,7 @@ function toast(msg, kind = 'ok') {
   const host = qs('#toast-host');
   const t = el(`<div class="toast toast--${kind}">${esc(msg)}</div>`);
   host.appendChild(t);
+  LiquidGlass.apply(t, { bezel: 12 });
   requestAnimationFrame(() => t.classList.add('is-visible'));
   setTimeout(() => { t.classList.remove('is-visible'); setTimeout(() => t.remove(), 250); }, 2600);
 }
@@ -1838,23 +1839,31 @@ const LiquidGlass = (() => {
     return defs;
   }
 
-  /* Displacement map for a capsule w x h: neutral grey in the middle, and inside
-     the rim a vector that makes the backdrop sample from further in (a lens bulge). */
-  function mapFor(w, h, bezel) {
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const ctx = c.getContext('2d'); const img = ctx.createImageData(w, h);
-    const r = Math.min(w, h) / 2, half = Math.max(w / 2 - r, 0);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const px = x + .5 - w / 2, py = y + .5 - h / 2;
-      const qx = Math.max(Math.abs(px) - half, 0), d = Math.hypot(qx, py);
-      const edge = r - d;                                  // distance to rim, inside > 0
+  /* Displacement map for a rounded rect w x h (corner radius r): neutral grey in the
+     middle, and inside the rim a vector that makes the backdrop sample from further in
+     (a lens bulge). Large surfaces get a smaller map; feImage stretches it to fit. */
+  function mapFor(w, h, r, bezel) {
+    const k = Math.min(1, Math.sqrt(90000 / (w * h)));
+    const mw = Math.max(2, Math.round(w * k)), mh = Math.max(2, Math.round(h * k));
+    const sx = mw / w, sy = mh / h;
+    const c = document.createElement('canvas'); c.width = mw; c.height = mh;
+    const ctx = c.getContext('2d'); const img = ctx.createImageData(mw, mh);
+    const hx = w / 2 - r, hy = h / 2 - r;
+    for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
+      const px = (x + .5) / sx - w / 2, py = (y + .5) / sy - h / 2;
+      const qx = Math.abs(px) - hx, qy = Math.abs(py) - hy;
+      const ox = Math.max(qx, 0), oy = Math.max(qy, 0), out = Math.hypot(ox, oy);
+      const edge = -(out + Math.min(Math.max(qx, qy), 0) - r);   // distance to rim, inside > 0
       let dx = 0, dy = 0;
-      if (d > 0 && edge < bezel) {
-        const t = 1 - Math.max(edge, 0) / bezel;           // 0 inside bezel start -> 1 at rim
+      if (edge < bezel) {
+        const t = 1 - Math.max(edge, 0) / bezel;                  // 0 at bezel start -> 1 at rim
         const m = Math.pow(t, 1.8);
-        dx = -(Math.sign(px) * qx / d) * m; dy = -(py / d) * m;
+        let nx, ny;                                              // outward normal
+        if (out > 0) { nx = Math.sign(px) * ox / out; ny = Math.sign(py) * oy / out; }
+        else if (qx > qy) { nx = Math.sign(px); ny = 0; } else { nx = 0; ny = Math.sign(py); }
+        dx = -nx * m; dy = -ny * m;
       }
-      const i = (y * w + x) * 4;
+      const i = (y * mw + x) * 4;
       img.data[i] = Math.round(127.5 + dx * 127.5); img.data[i + 1] = Math.round(127.5 + dy * 127.5);
       img.data[i + 2] = 128; img.data[i + 3] = 255;
     }
@@ -1862,7 +1871,10 @@ const LiquidGlass = (() => {
     return c.toDataURL();
   }
 
-  function apply(chip) {
+  /* inline: set backdrop-filter on the element itself (the chips). Otherwise only the
+     --lg variable and .lg-on class are set, and the stylesheet decides where to use them
+     (so non-glass styles are untouched). */
+  function apply(chip, { inline = false, bezel: maxBezel = 14 } = {}) {
     if (!supported) return;
     ensureDefs();
     /* Drop filters of chips from earlier renders (after this render has attached its own). */
@@ -1878,17 +1890,20 @@ const LiquidGlass = (() => {
     disp.setAttribute('in', 'SourceGraphic'); disp.setAttribute('in2', 'map');
     disp.setAttribute('xChannelSelector', 'R'); disp.setAttribute('yChannelSelector', 'G');
     filter.append(feImg, disp); defs.appendChild(filter);
-    chip.style.backdropFilter = chip.style.webkitBackdropFilter = `blur(1.5px) url(#${id}) saturate(1.7) brightness(1.06)`;
+    chip.style.setProperty('--lg', `url(#${id})`);
+    chip.classList.add('lg-on');
+    if (inline) chip.style.backdropFilter = chip.style.webkitBackdropFilter = `blur(1.5px) url(#${id}) saturate(1.7) brightness(1.06)`;
 
     let lastW = 0, lastH = 0;
     const update = () => {
       const w = Math.round(chip.offsetWidth), h = Math.round(chip.offsetHeight);
       if (!w || !h || (w === lastW && h === lastH)) return;
       lastW = w; lastH = h;
-      const bezel = Math.min(h / 2, 14);
+      const r = Math.min(parseFloat(getComputedStyle(chip).borderTopLeftRadius) || 0, w / 2, h / 2);
+      const bezel = Math.max(2, Math.min(maxBezel, Math.min(w, h) / 2));
       for (const [el_, v] of [[filter, { x: 0, y: 0, width: w, height: h }], [feImg, { x: 0, y: 0, width: w, height: h }]])
         for (const k in v) el_.setAttribute(k, v[k]);
-      feImg.setAttribute('href', mapFor(w, h, bezel));
+      feImg.setAttribute('href', mapFor(w, h, r, bezel));
       disp.setAttribute('scale', String(Math.round(bezel * 3.4)));
     };
     new ResizeObserver(update).observe(chip);
@@ -1936,7 +1951,7 @@ function renderOutfitBuilder() {
   });
   chipBar.appendChild(chipRow);
   wrap.appendChild(chipBar);
-  qsa('.subnav__link', chipRow).forEach(c => LiquidGlass.apply(c));
+  qsa('.subnav__link', chipRow).forEach(c => LiquidGlass.apply(c, { inline: true }));
   requestAnimationFrame(() => { const act = qs('.is-active', chipRow); if (act) chipRow.scrollLeft = Math.max(0, act.offsetLeft - 20); });
 
   const body = el(`<div id="outfit-body"></div>`);
@@ -2015,6 +2030,7 @@ function outfitItemTile(item, selected) {
 function renderOutfitSummary(matches, refresh) {
   const selected = matches.filter(i => outfitSelectedIds.has(i.id));
   const box = el(`<div class="outfit-summary"></div>`);
+  LiquidGlass.apply(box, { bezel: 16 });
 
   if (!selected.length) {
     box.appendChild(el(`<p class="muted outfit-summary__empty">Select items above to build today's outfit.</p>`));
@@ -3165,6 +3181,7 @@ function init() {
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__icon[data-icon]').forEach(span => { span.innerHTML = navIconSvg(span.dataset.icon); });
+  LiquidGlass.apply(qs('#bottom-nav'), { bezel: 16 });
   initSyncIndicator();
   switchTab('dashboard');
 

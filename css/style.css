@@ -834,6 +834,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   --glass-shadow: 0 8px 28px color-mix(in srgb, var(--ink) 16%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 45%, transparent);
   --radius-s: 12px; --radius-m: 20px;
   --shadow-card: var(--glass-shadow);
+  /* liquid glass: bright specular edge + faint inner glow */
+  --lg-rim: inset 0 1.5px 1px rgba(255,255,255,.7), inset 0 -1px 1px rgba(255,255,255,.22),
+            inset 1px 0 1px rgba(255,255,255,.25), inset -1px 0 1px rgba(255,255,255,.25), inset 0 0 16px rgba(255,255,255,.12);
 }
 [data-style="glass"] body {
   min-height: 100vh;
@@ -909,6 +912,46 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="glass"] .item-row__menu button:hover { background: var(--glass-bg); }
 [data-style="glass"] .activity-preview { background: var(--glass-strong); }
 [data-style="glass"] .toast { background: color-mix(in srgb, var(--ink) 85%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+/* ---- liquid glass surfaces (glass style) ----
+   Order matters: var(--lg) (the refraction) must come before blur(), otherwise the blur's edge
+   padding shifts the filter region and leaves a visible inset rectangle.
+   Real refraction (.lg-on + --lg, set by LiquidGlass in app.js) only where a surface floats
+   over page content: bottom nav, outfit summary, toasts. Text-heavy panels (modals, menus,
+   sync popover) keep their strong tint and just get the specular rim. */
+[data-style="glass"] .modal-box, [data-style="glass"] .sync-popover, [data-style="glass"] .item-row__menu {
+  box-shadow: var(--lg-rim), var(--glass-shadow);
+}
+[data-style="glass"] .outfit-summary.lg-on {
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  backdrop-filter: var(--lg) blur(12px) saturate(1.7) brightness(1.05); -webkit-backdrop-filter: var(--lg) blur(12px) saturate(1.7) brightness(1.05);
+  border-color: rgba(255,255,255,.5);
+  box-shadow: var(--lg-rim), 0 8px 22px rgba(20,30,50,.14);
+}
+[data-style="glass"] .toast { border: 1px solid rgba(255,255,255,.22); box-shadow: var(--lg-rim), 0 4px 12px rgba(10,15,30,.22); }
+[data-style="glass"] .toast.lg-on {
+  background: color-mix(in srgb, var(--ink) 70%, transparent);
+  backdrop-filter: var(--lg) blur(3px) saturate(1.5); -webkit-backdrop-filter: var(--lg) blur(3px) saturate(1.5);
+}
+@media (max-width: 640px) {
+  /* bottom nav floats as a glass pill instead of a full-width bar */
+  [data-style="glass"] .bottom-nav {
+    left: .7rem; right: .7rem; bottom: calc(.6rem + env(safe-area-inset-bottom)); padding-bottom: 0;
+    border: 1px solid rgba(255,255,255,.28); border-radius: 30px;
+    background: color-mix(in srgb, var(--ink) 58%, transparent);
+    box-shadow: var(--lg-rim), 0 6px 18px rgba(10,15,30,.28);
+  }
+  [data-style="glass"] .bottom-nav.lg-on {
+    backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04); -webkit-backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04);
+  }
+  [data-style="glass"] .toast-host { bottom: calc(5.2rem + env(safe-area-inset-bottom)); }  /* clear of the floating nav */
+  [data-style="glass"] .bottom-nav__link { isolation: isolate; border-radius: 24px; }
+  [data-style="glass"] .bottom-nav__link.is-active::before {
+    left: .2rem; right: .2rem; top: .3rem; bottom: .3rem; height: auto; z-index: -1; border-radius: 22px;
+    background: linear-gradient(145deg, rgba(255,255,255,.26), rgba(255,255,255,.08));
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.5), inset 0 -1px 1px rgba(255,255,255,.12);
+  }
+}
 @media (max-width: 640px) {
   [data-style="glass"] .toolbar__filters.is-open {
     background: var(--glass-strong); border-top: 1px solid var(--glass-border);
@@ -1046,7 +1089,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   select:not([multiple]) option::checkmark { color: var(--accent); }
 
   [data-style="glass"] select:not([multiple])::picker(select) {
-    background: var(--glass-strong); border-color: var(--glass-border); box-shadow: var(--glass-shadow);
+    background: var(--glass-strong); border-color: var(--glass-border); box-shadow: var(--lg-rim), var(--glass-shadow);
     -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
   }
   [data-style="neumorphic"] select:not([multiple])::picker(select) {

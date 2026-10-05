@@ -1568,7 +1568,7 @@ function openItemModal(existing, presetCategoryId) {
       <label>Color <span class="muted" id="color-optional-hint" style="display:none;">(optional for perfumes)</span>
         <select name="colorId" id="color-select">
           <option value="">Select color…</option>
-          ${s.colors.map(c => `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+          ${s.colors.map(c => `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}><span class="swatch swatch--sm" style="${c.hex && c.hex !== 'multi' ? `background:${c.hex}` : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)'}"></span><span>${esc(c.name)}</span></option>`).join('')}
         </select>
       </label>
       <label><span id="subtext-label-text">Additional description</span> <span class="muted" id="subtext-hint-text">(model, product name — optional)</span>
@@ -1612,8 +1612,9 @@ function openItemModal(existing, presetCategoryId) {
           : (item.brandId && !inScope.some(b => b.id === item.brandId)
             ? [...inScope, s.brands.find(b => b.id === item.brandId)].filter(Boolean)
             : inScope);
+        const sortedList = [...list].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
         brandSelect.innerHTML = `<option value="">${logoOrGap(null)}<span>No brand / unbranded</span></option>` +
-          list.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
+          sortedList.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
         const allBtn = qs('#show-all-brands', root);
         if (allBtn) {
           allBtn.hidden = showAllBrands || s.brands.length === list.length;
@@ -1924,7 +1925,6 @@ function outfitItemTile(item, selected) {
       ${itemLeadMarkup(item, color, { small: true })}
       <span class="outfit-item-tile__text">
         <span class="outfit-item-tile__title">${esc(itemTitle(item))}</span>
-        <span class="outfit-item-tile__meta muted">${item.wearCount || 0}&times; &middot; ${esc(fmtDateShort(item.lastWornAt))}</span>
       </span>
     </button>`);
 }

@@ -423,16 +423,14 @@ input[type="date"] {
 }
 .outfit-activity-chips::-webkit-scrollbar { display: none; }
 .outfit-activity-chips .subnav__link { pointer-events: auto; flex: 0 0 auto; white-space: nowrap; }
-@media (max-width: 640px) {
-  .outfit-activity-chips { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-}
+.outfit-activity-chips { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .outfit-hint { padding: .5rem 0; }
 .outfit-category h3 {
   display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;
 }
 .outfit-item-row { display: flex; flex-wrap: wrap; gap: .6rem; }
 .outfit-item-tile {
-  display: flex; align-items: flex-start; gap: .55rem; text-align: left;
+  display: flex; align-items: center; gap: .55rem; text-align: left;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
   padding: .55rem .8rem; cursor: pointer; font-family: var(--font-body); color: var(--text);
   max-width: 260px;
@@ -446,7 +444,7 @@ input[type="date"] {
   overflow: hidden; text-overflow: ellipsis; white-space: normal;
 }
 .outfit-item-tile__meta { display: block; font-size: .72rem; }
-.outfit-item-tile .swatch--sm { margin-top: .15rem; }
+.outfit-item-tile .swatch--sm { margin-top: 0; }
 
 .outfit-summary {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
@@ -1044,8 +1042,10 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 /* brand dropdown: logo + name; brands without a logo get an equal-width gap so names stay aligned */
 .brand-logo--none { width: 16px; height: 16px; opacity: 0; }
 @supports (appearance: base-select) {
-  select[name="brandId"] option, select[name="brandId"] selectedcontent { display: flex; align-items: center; gap: .5rem; }
+  select[name="brandId"] option, select[name="brandId"] selectedcontent,
+  select[name="colorId"] option, select[name="colorId"] selectedcontent { display: flex; align-items: center; gap: .5rem; }
   select[name="brandId"] .brand-logo { margin-right: 0; vertical-align: middle; }
+  select[name="colorId"] .swatch { margin-top: 0; }
 }
 
 /* ---------------- styled checkboxes ---------------- */

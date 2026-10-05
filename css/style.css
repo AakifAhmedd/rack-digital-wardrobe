@@ -412,10 +412,19 @@ input[type="date"] {
 /* ---------------- outfit builder ---------------- */
 .outfit-question { font-family: var(--font-display); font-size: 1.3rem; margin: 0; }
 .outfit-view { max-width: 760px; width: 100%; margin: 0 auto; }
-.outfit-activity-chips {
-  border-bottom: none; padding: .6rem 1.25rem; margin: 0 -1.25rem;
-  position: sticky; top: var(--app-header-h, 0px); z-index: 20;
+.outfit-chips-bar {
+  position: sticky; top: var(--app-header-h, 0px); z-index: 20; margin: 0 -1.25rem;
   pointer-events: none; /* free-floating chips: taps in the empty space reach the content below */
+}
+/* Strip blur lives on a sibling layer, not an ancestor of the chips: an ancestor with
+   backdrop-filter would hide the page from the chips' own (liquid glass) backdrop. */
+.outfit-chips-bar::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.outfit-activity-chips {
+  border-bottom: none; padding: .6rem 1.25rem; margin: 0; position: relative;
+  pointer-events: none;
 }
 .subnav.outfit-activity-chips {
   border-bottom: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
@@ -423,7 +432,24 @@ input[type="date"] {
 }
 .outfit-activity-chips::-webkit-scrollbar { display: none; }
 .outfit-activity-chips .subnav__link { pointer-events: auto; flex: 0 0 auto; white-space: nowrap; }
-.outfit-activity-chips { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+/* Liquid glass chips. Chromium gets real refraction via an inline backdrop-filter from
+   LiquidGlass (app.js); everywhere else this frosted version applies. */
+.outfit-chips-bar .outfit-activity-chips .subnav__link {
+  background: linear-gradient(145deg, rgba(255,255,255,.42), rgba(255,255,255,.10) 55%, rgba(255,255,255,.22));
+  border: 1px solid rgba(255,255,255,.55); color: var(--text);
+  backdrop-filter: blur(6px) saturate(1.7) brightness(1.06); -webkit-backdrop-filter: blur(6px) saturate(1.7) brightness(1.06);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255,255,255,.85), inset 0 -1px 1px rgba(255,255,255,.35),
+    inset 1px 0 1px rgba(255,255,255,.35), inset -1px 0 1px rgba(255,255,255,.35),
+    inset 0 0 14px rgba(255,255,255,.22), 0 6px 16px rgba(20,30,50,.14), 0 1px 3px rgba(20,30,50,.10);
+}
+.outfit-chips-bar .outfit-activity-chips .subnav__link.is-active {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--ink) 74%, transparent), color-mix(in srgb, var(--ink) 62%, transparent));
+  color: var(--accent-ink); border-color: rgba(255,255,255,.28);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255,255,255,.45), inset 0 -1px 1px rgba(255,255,255,.12),
+    0 6px 16px rgba(20,30,50,.20), 0 1px 3px rgba(20,30,50,.12);
+}
 .outfit-hint { padding: .5rem 0; }
 .outfit-category h3 {
   display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;

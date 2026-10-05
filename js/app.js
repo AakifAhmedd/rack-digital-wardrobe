@@ -1817,6 +1817,86 @@ function openOutfitBuilderFor(activityId) {
   switchTab('outfit');
 }
 
+/* Liquid glass for the outfit activity chips (experimental, Chromium only).
+   Real refraction = an SVG displacement filter used as a backdrop-filter, with a
+   per-chip displacement map (pill-shaped bezel). Other browsers keep the CSS-only
+   frosted look from the stylesheet. Roll back by reverting this commit. */
+const LiquidGlass = (() => {
+  const supported = /Chrome\/|Chromium\//.test(navigator.userAgent) && !!(window.CSS && CSS.supports('backdrop-filter', 'blur(1px)'));
+  const NS = 'http://www.w3.org/2000/svg';
+  const owners = new Map(); // filter id -> chip
+  let defs = null, seq = 0;
+
+  function ensureDefs() {
+    if (defs) return defs;
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
+    svg.style.cssText = 'position:absolute;pointer-events:none';
+    defs = document.createElementNS(NS, 'defs');
+    svg.appendChild(defs);
+    document.body.appendChild(svg);
+    return defs;
+  }
+
+  /* Displacement map for a capsule w x h: neutral grey in the middle, and inside
+     the rim a vector that makes the backdrop sample from further in (a lens bulge). */
+  function mapFor(w, h, bezel) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d'); const img = ctx.createImageData(w, h);
+    const r = Math.min(w, h) / 2, half = Math.max(w / 2 - r, 0);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const px = x + .5 - w / 2, py = y + .5 - h / 2;
+      const qx = Math.max(Math.abs(px) - half, 0), d = Math.hypot(qx, py);
+      const edge = r - d;                                  // distance to rim, inside > 0
+      let dx = 0, dy = 0;
+      if (d > 0 && edge < bezel) {
+        const t = 1 - Math.max(edge, 0) / bezel;           // 0 inside bezel start -> 1 at rim
+        const m = Math.pow(t, 1.8);
+        dx = -(Math.sign(px) * qx / d) * m; dy = -(py / d) * m;
+      }
+      const i = (y * w + x) * 4;
+      img.data[i] = Math.round(127.5 + dx * 127.5); img.data[i + 1] = Math.round(127.5 + dy * 127.5);
+      img.data[i + 2] = 128; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c.toDataURL();
+  }
+
+  function apply(chip) {
+    if (!supported) return;
+    ensureDefs();
+    /* Drop filters of chips from earlier renders (after this render has attached its own). */
+    setTimeout(() => owners.forEach((node, id) => { if (!node.isConnected) { owners.delete(id); defs.querySelector('#' + id)?.remove(); } }), 1000);
+    const id = 'lg-' + (++seq);
+    owners.set(id, chip);
+    const filter = document.createElementNS(NS, 'filter');
+    filter.setAttribute('id', id); filter.setAttribute('filterUnits', 'userSpaceOnUse');
+    filter.setAttribute('color-interpolation-filters', 'sRGB');
+    const feImg = document.createElementNS(NS, 'feImage');
+    feImg.setAttribute('preserveAspectRatio', 'none'); feImg.setAttribute('result', 'map');
+    const disp = document.createElementNS(NS, 'feDisplacementMap');
+    disp.setAttribute('in', 'SourceGraphic'); disp.setAttribute('in2', 'map');
+    disp.setAttribute('xChannelSelector', 'R'); disp.setAttribute('yChannelSelector', 'G');
+    filter.append(feImg, disp); defs.appendChild(filter);
+    chip.style.backdropFilter = chip.style.webkitBackdropFilter = `blur(1.5px) url(#${id}) saturate(1.7) brightness(1.06)`;
+
+    let lastW = 0, lastH = 0;
+    const update = () => {
+      const w = Math.round(chip.offsetWidth), h = Math.round(chip.offsetHeight);
+      if (!w || !h || (w === lastW && h === lastH)) return;
+      lastW = w; lastH = h;
+      const bezel = Math.min(h / 2, 14);
+      for (const [el_, v] of [[filter, { x: 0, y: 0, width: w, height: h }], [feImg, { x: 0, y: 0, width: w, height: h }]])
+        for (const k in v) el_.setAttribute(k, v[k]);
+      feImg.setAttribute('href', mapFor(w, h, bezel));
+      disp.setAttribute('scale', String(Math.round(bezel * 3.4)));
+    };
+    new ResizeObserver(update).observe(chip);
+    update();
+  }
+  return { apply, supported };
+})();
+
 function renderOutfitBuilder() {
   const wrap = el(`<section class="view-section outfit-view"></section>`);
   const activities = Store.state.activities;
@@ -1839,6 +1919,7 @@ function renderOutfitBuilder() {
 
   wrap.appendChild(el(`<h2 class="outfit-question">What are you doing?</h2>`));
 
+  const chipBar = el(`<div class="outfit-chips-bar"></div>`);
   const chipRow = el(`<div class="subnav outfit-activity-chips"></div>`);
   activities.forEach(act => {
     const chip = el(`<button type="button" class="subnav__link ${act.id === outfitActivityId ? 'is-active' : ''}">${esc(act.name)}</button>`);
@@ -1853,7 +1934,9 @@ function renderOutfitBuilder() {
     });
     chipRow.appendChild(chip);
   });
-  wrap.appendChild(chipRow);
+  chipBar.appendChild(chipRow);
+  wrap.appendChild(chipBar);
+  qsa('.subnav__link', chipRow).forEach(c => LiquidGlass.apply(c));
   requestAnimationFrame(() => { const act = qs('.is-active', chipRow); if (act) chipRow.scrollLeft = Math.max(0, act.offsetLeft - 20); });
 
   const body = el(`<div id="outfit-body"></div>`);

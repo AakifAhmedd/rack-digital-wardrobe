@@ -554,14 +554,11 @@ function switchTab(name) {
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
-  qs('#bottom-nav')?.classList.remove('is-compact');
   animateNavLens();
-  qs('#sync-indicator')?.classList.remove('is-compact');
   render();
 }
 
-/* Glass bottom nav: a highlight capsule slides under the active tab, and the bar shrinks to
-   icons only while scrolling down (back to full on scroll up), like the iOS tab bar. */
+/* Glass bottom nav: a highlight capsule slides under the active tab. */
 function syncNavLens() {
   const nav = qs('#bottom-nav'), lens = qs('.bottom-nav__lens'), active = qs('.bottom-nav__link.is-active');
   if (!nav || !lens || !active || !active.offsetWidth) return;
@@ -584,18 +581,6 @@ function initNavBehaviour() {
   const nav = qs('#bottom-nav'); if (!nav) return;
   new ResizeObserver(syncNavLens).observe(nav);
   window.addEventListener('resize', syncNavLens);
-  let lastY = window.scrollY, ticking = false;
-  window.addEventListener('scroll', () => {
-    if (ticking) return; ticking = true;
-    requestAnimationFrame(() => {
-      const y = window.scrollY, dy = y - lastY; ticking = false;
-      if (Math.abs(dy) < 6) return;
-      const compact = dy > 0 && y > 80;
-      if (nav.classList.contains('is-compact') !== compact) { nav.classList.toggle('is-compact', compact); animateNavLens(); }
-      qs('#sync-indicator')?.classList.toggle('is-compact', compact);
-      lastY = y;
-    });
-  }, { passive: true });
 }
 
 function render() {

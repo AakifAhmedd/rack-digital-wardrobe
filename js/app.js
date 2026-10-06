@@ -2050,9 +2050,12 @@ function renderOutfitBuilder() {
         tile.addEventListener('click', () => {
           if (collapsed) return reopen();
           if (!multi) {
-            // one-at-a-time category: picking (or re-tapping the pick) closes the row again
-            byCategory[catId].forEach(other => { if (other.id !== item.id) outfitSelectedIds.delete(other.id); });
-            outfitSelectedIds.add(item.id);
+            // one-at-a-time category: pick swaps and closes the row; re-tapping the pick deselects it
+            if (outfitSelectedIds.has(item.id)) outfitSelectedIds.delete(item.id);
+            else {
+              byCategory[catId].forEach(other => outfitSelectedIds.delete(other.id));
+              outfitSelectedIds.add(item.id);
+            }
             outfitExpandedCats.delete(catId);
           } else if (outfitSelectedIds.has(item.id)) outfitSelectedIds.delete(item.id);
           else outfitSelectedIds.add(item.id);
@@ -2063,7 +2066,10 @@ function renderOutfitBuilder() {
       if (collapsed) {
         const change = el(`<button type="button" class="btn btn--tiny btn--ghost">Change</button>`);
         change.addEventListener('click', reopen);
+        const remove = el(`<button type="button" class="btn btn--tiny btn--ghost">Remove</button>`);
+        remove.addEventListener('click', () => { outfitSelectedIds.delete(picked.id); outfitExpandedCats.delete(catId); renderOutfitBody(); });
         row.appendChild(change);
+        row.appendChild(remove);
       }
       body.appendChild(section);
     });

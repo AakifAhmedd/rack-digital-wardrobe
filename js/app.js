@@ -553,7 +553,33 @@ function switchTab(name) {
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
+  syncNavLens();
+  qs('#bottom-nav')?.classList.remove('is-compact');
   render();
+}
+
+/* Glass bottom nav: a highlight capsule slides under the active tab, and the bar shrinks to
+   icons only while scrolling down (back to full on scroll up), like the iOS tab bar. */
+function syncNavLens() {
+  const nav = qs('#bottom-nav'), lens = qs('.bottom-nav__lens'), active = qs('.bottom-nav__link.is-active');
+  if (!nav || !lens || !active || !active.offsetWidth) return;
+  lens.style.setProperty('--lens-x', active.offsetLeft + 'px');
+  lens.style.setProperty('--lens-w', active.offsetWidth + 'px');
+}
+function initNavBehaviour() {
+  const nav = qs('#bottom-nav'); if (!nav) return;
+  new ResizeObserver(syncNavLens).observe(nav);
+  window.addEventListener('resize', syncNavLens);
+  let lastY = window.scrollY, ticking = false;
+  window.addEventListener('scroll', () => {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(() => {
+      const y = window.scrollY, dy = y - lastY; ticking = false;
+      if (Math.abs(dy) < 6) return;
+      nav.classList.toggle('is-compact', dy > 0 && y > 80);
+      lastY = y;
+    });
+  }, { passive: true });
 }
 
 function render() {
@@ -757,15 +783,20 @@ function renderDashboard() {
         <span class="stat-card__label">Avg. cost per wear</span>
         <span class="stat-card__num">${avgCPW !== null ? fmtMoney(avgCPW) : '—'}</span>
         <div class="stat-hero__meta">
-          <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items in rack</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${totalWears}</span><span class="stat-card__label">Total wears logged</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(wardrobeValue)}</span><span class="stat-card__label">Wardrobe value</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(perfumeValue)}</span><span class="stat-card__label">Fragrance value</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span><span class="stat-card__label">Most-worn subcategory</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${totalWears.toLocaleString()}</span><span class="stat-card__label">Wears</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(wardrobeValue)}</span><span class="stat-card__label">Wardrobe</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(perfumeValue)}</span><span class="stat-card__label">Fragrance</span></div>
+          <div class="stat-hero__item stat-hero__item--wide"><span class="stat-card__label">Most worn type</span><span class="stat-hero__val">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span></div>
         </div>
       </div>
-      <div class="stat-card"><span class="stat-card__num">${dormant}</span><span class="stat-card__label">Dormant (${DORMANT_DAYS}+ days)</span></div>
-      <div class="stat-card"><span class="stat-card__num">${longestIdle ? idleDays(longestIdle) + ' days' : '—'}</span><span class="stat-card__label">Longest idle${longestIdle ? ': ' + esc(itemTitle(longestIdle)) : ''}</span></div>
+      <div class="stat-card stat-idle">
+        <div class="stat-idle__main">
+          <span class="stat-card__num">${longestIdle ? idleDays(longestIdle) + ' days' : '—'}</span>
+          <span class="stat-card__label stat-idle__name">${longestIdle ? 'Longest idle · ' + esc(itemTitle(longestIdle)) : 'Longest idle'}</span>
+        </div>
+        <span class="tag-chip ${dormant ? 'tag-chip--warn' : 'tag-chip--muted'}" title="Not worn in ${DORMANT_DAYS}+ days">${dormant} dormant</span>
+      </div>
     </div>
   `));
 
@@ -786,7 +817,7 @@ function renderDashboard() {
     .sort((a, b) => b.value - a.value).slice(0, 8);
   chartCols.appendChild(el(`
     <div class="panel">
-      <h3>Avg. cost per wear by category</h3>
+      <h3>Cost per wear by category</h3>
       ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', useIcons: true, format: v => fmtMoney(v), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
     </div>`));
 
@@ -841,16 +872,16 @@ function renderDashboard() {
     return box;
   };
 
-  cols.appendChild(mkList('Rarely worn — consider donating', leastWorn, i => el(`
+  cols.appendChild(mkList('Rarely worn', leastWorn, i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--muted">${i.wearCount || 0}×</span></div>`)));
 
-  cols.appendChild(mkList('Worst value per wear', worstValue, i => el(`
+  cols.appendChild(mkList('Worst value', worstValue, i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--warn">${fmtMoney(costPerWear(i))}</span></div>`)));
 
   quietCols.appendChild(mkList('Most worn', mostWorn.slice(0, 3), i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip">${i.wearCount || 0}×</span></div>`), true));
 
-  quietCols.appendChild(mkList('Best value per wear', bestValue, i => el(`
+  quietCols.appendChild(mkList('Best value', bestValue, i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--good">${fmtMoney(costPerWear(i))}</span></div>`), true));
 
   wrap.appendChild(cols);
@@ -859,8 +890,8 @@ function renderDashboard() {
   if (neverWorn > 0) {
     const donate = el(`
       <div class="panel panel--accent">
-        <h3>Ready to donate?</h3>
-        <p class="muted">${neverWorn} item${neverWorn === 1 ? '' : 's'} ${neverWorn === 1 ? 'has' : 'have'} never been worn. Donating gets more value out of them than a shelf ever will.</p>
+        <h3>Never worn</h3>
+        <p class="muted">${neverWorn} item${neverWorn === 1 ? '' : 's'} not worn yet.</p>
         <button class="btn btn--ghost" id="goto-unused">Review unused items</button>
       </div>`);
     qs('#goto-unused', donate).addEventListener('click', () => {
@@ -3183,6 +3214,7 @@ function init() {
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__icon[data-icon]').forEach(span => { span.innerHTML = navIconSvg(span.dataset.icon); });
   LiquidGlass.apply(qs('#bottom-nav'), { bezel: 16 });
+  initNavBehaviour();
   initSyncIndicator();
   switchTab('dashboard');
 

@@ -462,7 +462,7 @@ input[type="date"] {
 .outfit-category h3 {
   display: flex; align-items: center; font-size: .95rem; margin: 0 0 .6rem;
 }
-.outfit-item-row { display: flex; flex-wrap: wrap; gap: .6rem; }
+.outfit-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 .outfit-item-tile {
   display: flex; align-items: center; gap: .55rem; text-align: left;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);

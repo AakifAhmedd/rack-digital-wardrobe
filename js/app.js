@@ -554,8 +554,8 @@ function switchTab(name) {
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
-  syncNavLens();
   qs('#bottom-nav')?.classList.remove('is-compact');
+  animateNavLens();
   qs('#sync-indicator')?.classList.remove('is-compact');
   render();
 }
@@ -568,6 +568,18 @@ function syncNavLens() {
   lens.style.setProperty('--lens-x', active.offsetLeft + 'px');
   lens.style.setProperty('--lens-w', active.offsetWidth + 'px');
 }
+/* The active tab grows/shrinks over ~.4s, so keep the capsule locked to it frame by frame. */
+let navLensRun = 0;
+function animateNavLens() {
+  const nav = qs('#bottom-nav'); if (!nav) return;
+  const t0 = performance.now(); navLensRun = t0;
+  nav.classList.add('is-moving');
+  (function step() {
+    syncNavLens();
+    if (navLensRun !== t0) return;
+    if (performance.now() - t0 < 480) requestAnimationFrame(step); else nav.classList.remove('is-moving');
+  })();
+}
 function initNavBehaviour() {
   const nav = qs('#bottom-nav'); if (!nav) return;
   new ResizeObserver(syncNavLens).observe(nav);
@@ -579,7 +591,7 @@ function initNavBehaviour() {
       const y = window.scrollY, dy = y - lastY; ticking = false;
       if (Math.abs(dy) < 6) return;
       const compact = dy > 0 && y > 80;
-      nav.classList.toggle('is-compact', compact);
+      if (nav.classList.contains('is-compact') !== compact) { nav.classList.toggle('is-compact', compact); animateNavLens(); }
       qs('#sync-indicator')?.classList.toggle('is-compact', compact);
       lastY = y;
     });

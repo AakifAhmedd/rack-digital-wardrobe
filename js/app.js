@@ -3238,7 +3238,10 @@ function init() {
   LiquidGlass.apply(qs('#bottom-nav'), { bezel: 16 });
   initNavBehaviour();
   initSyncIndicator();
-  switchTab('dashboard');
+  // Home-screen shortcuts open the app with ?tab=outfit etc.
+  const startTab = new URLSearchParams(location.search).get('tab');
+  switchTab(['dashboard', 'wardrobe', 'outfit', 'masters', 'settings'].includes(startTab) ? startTab : 'dashboard');
+  if (startTab) history.replaceState(null, '', location.pathname);
 
   SyncEngine.checkAndAutoSync().catch(() => { /* status already reflects the failure */ });
   document.addEventListener('visibilitychange', () => {

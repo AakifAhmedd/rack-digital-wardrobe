@@ -160,6 +160,7 @@ function statIconSvg(key, size = 16) {
 /* Bottom-nav icons (mobile). 'hanger' is reused from ICONS itself. */
 const NAV_ICONS = {
   home: '<path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/>',
+  cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   sparkles: '<path d="M12 3L14 10L21 12L14 14L12 21L10 14L3 12L10 10Z"/><path d="M19 2L19.5 3.5L21 4L19.5 4.5L19 6L18.5 4.5L17 4L18.5 3.5Z"/>',
   grid: '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
   sliders: '<line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/>',
@@ -555,6 +556,7 @@ function switchTab(name) {
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   syncNavLens();
   qs('#bottom-nav')?.classList.remove('is-compact');
+  qs('#sync-indicator')?.classList.remove('is-compact');
   render();
 }
 
@@ -576,7 +578,9 @@ function initNavBehaviour() {
     requestAnimationFrame(() => {
       const y = window.scrollY, dy = y - lastY; ticking = false;
       if (Math.abs(dy) < 6) return;
-      nav.classList.toggle('is-compact', dy > 0 && y > 80);
+      const compact = dy > 0 && y > 80;
+      nav.classList.toggle('is-compact', compact);
+      qs('#sync-indicator')?.classList.toggle('is-compact', compact);
       lastY = y;
     });
   }, { passive: true });
@@ -2830,6 +2834,9 @@ function renderSettings() {
   if (activeSettingsPanel === 'appearance') panel.appendChild(renderAppearanceSettings());
   else panel.appendChild(renderGeneralSettings());
 
+  /* the glass mobile layout has no header, so the version lives here */
+  wrap.appendChild(el(`<p class="settings-version mono">RACK ${esc(qs('#app-version')?.textContent || '')}</p>`));
+
   return wrap;
 }
 
@@ -3213,6 +3220,8 @@ function init() {
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__icon[data-icon]').forEach(span => { span.innerHTML = navIconSvg(span.dataset.icon); });
+  qsa('.sync-indicator__icon').forEach(span => { span.innerHTML = navIconSvg('cloud', 24); });
+  LiquidGlass.apply(qs('#sync-indicator-btn'), { bezel: 14 });
   LiquidGlass.apply(qs('#bottom-nav'), { bezel: 16 });
   initNavBehaviour();
   initSyncIndicator();

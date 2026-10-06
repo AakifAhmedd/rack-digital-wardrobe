@@ -237,6 +237,7 @@ input[type="date"] {
 .stat-hero__item { display: flex; flex-direction: column; gap: .05rem; min-width: 0; }
 .stat-hero__val { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
 .stat-hero__item--wide { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: .5rem; }
+@media (min-width: 641px) { .stat-hero__meta { grid-template-columns: repeat(4, 1fr); } }  /* full-width item stops auto-fit collapsing empty columns */
 /* longest idle + dormant count in one compact row */
 .stat-idle { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; gap: .75rem; }
 .stat-idle__main { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }

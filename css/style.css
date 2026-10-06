@@ -72,6 +72,8 @@ a { color: var(--accent); }
   white-space: nowrap;
 }
 .brand small { font-family: var(--font-mono); font-size: .55em; color: #C9BFA6; font-weight: 400; letter-spacing: .02em; }
+.settings-version { display: none; text-align: center; font-size: .7rem; opacity: .6; margin: .5rem 0 0; }
+.sync-indicator__icon { display: none; }
 .brand__version { font-size: .62rem; color: #C9BFA6; opacity: .75; font-weight: 400; letter-spacing: .04em; }
 
 .nav { display: flex; gap: 0; overflow-x: auto; flex: 1; }
@@ -959,6 +961,31 @@ html.modal-open, html.modal-open body { overflow: hidden; }
     backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04); -webkit-backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04);
   }
   [data-style="glass"] .toast-host { bottom: calc(5.4rem + env(safe-area-inset-bottom)); }  /* clear of the floating nav */
+  /* no header on mobile: sync becomes a round glass button beside the nav capsule */
+  [data-style="glass"] .app-header { height: 0; background: none; border: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  [data-style="glass"] .app-header__inner { padding: 0; }
+  [data-style="glass"] .brand { display: none; }
+  [data-style="glass"] .app-main { padding-top: calc(1.1rem + env(safe-area-inset-top)); }
+  [data-style="glass"] .settings-version { display: block; }
+  [data-style="glass"] .bottom-nav { right: calc(.9rem + 3.7rem + .5rem); }
+  [data-style="glass"] .sync-indicator { position: fixed; right: .9rem; bottom: calc(.7rem + env(safe-area-inset-bottom)); margin: 0; }
+  [data-style="glass"] .sync-indicator__btn {
+    position: relative; justify-content: center; width: 3.7rem; height: 3.7rem; padding: 0; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.3); color: var(--accent-ink);
+    background: color-mix(in srgb, var(--ink) 50%, transparent);
+    box-shadow: var(--lg-rim), 0 6px 18px rgba(10,15,30,.26);
+    transition: width .3s ease, height .3s ease, transform .15s ease;
+  }
+  [data-style="glass"] .sync-indicator__btn:active { transform: scale(.94); }
+  [data-style="glass"] .sync-indicator__btn:hover { background: color-mix(in srgb, var(--ink) 50%, transparent); }
+  [data-style="glass"] .sync-indicator__btn.lg-on {
+    backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04); -webkit-backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04);
+  }
+  [data-style="glass"] .sync-indicator__icon { display: flex; line-height: 0; }
+  [data-style="glass"] .sync-indicator__btn .sync-dot { position: absolute; top: .8rem; right: .8rem; width: 10px; height: 10px; box-shadow: 0 0 0 2px rgba(25,28,40,.55); }
+  [data-style="glass"] .sync-indicator.is-compact .sync-indicator__btn { width: 3rem; height: 3rem; }
+  [data-style="glass"] .sync-indicator.is-compact .sync-dot { top: .55rem; right: .55rem; }
+  [data-style="glass"] .sync-popover { top: auto; bottom: calc(100% + 10px); right: 0; }
   /* the selection capsule slides between tabs */
   [data-style="glass"] .bottom-nav__lens {
     display: block; position: absolute; top: 4px; bottom: 4px; left: 0; width: var(--lens-w, 0); border-radius: 999px;

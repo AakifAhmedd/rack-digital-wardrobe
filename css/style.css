@@ -109,6 +109,7 @@ a { color: var(--accent); }
 .sync-dot--pending { background: var(--accent); }
 .sync-dot--syncing { background: var(--accent); animation: sync-pulse 1s ease-in-out infinite; }
 .sync-dot--failed, .sync-dot--conflict { background: var(--thread); }
+@keyframes sync-spin { to { transform: rotate(360deg); } }
 @keyframes sync-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
 .sync-popover {
@@ -971,7 +972,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   [data-style="glass"] .sync-indicator { position: fixed; right: .9rem; bottom: calc(.7rem + env(safe-area-inset-bottom)); margin: 0; }
   [data-style="glass"] .sync-indicator__btn {
     position: relative; justify-content: center; width: 3.7rem; height: 3.7rem; padding: 0; border-radius: 999px;
-    border: 1px solid rgba(255,255,255,.3); color: var(--accent-ink);
+    border: 1px solid rgba(255,255,255,.3); color: #fff;
     background: color-mix(in srgb, var(--ink) 50%, transparent);
     box-shadow: var(--lg-rim), 0 6px 18px rgba(10,15,30,.26);
     transition: width .3s ease, height .3s ease, transform .15s ease;
@@ -982,7 +983,10 @@ html.modal-open, html.modal-open body { overflow: hidden; }
     backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04); -webkit-backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04);
   }
   [data-style="glass"] .sync-indicator__icon { display: flex; line-height: 0; }
-  [data-style="glass"] .sync-indicator__btn .sync-dot { position: absolute; top: .8rem; right: .8rem; width: 10px; height: 10px; box-shadow: 0 0 0 2px rgba(25,28,40,.55); }
+  [data-style="glass"] .sync-indicator__btn .sync-dot { display: none; }  /* status is drawn inside the cloud icon instead */
+  [data-style="glass"] .sync-glyph--alert { color: color-mix(in srgb, var(--thread) 45%, #fff); }
+  [data-style="glass"] .sync-glyph--spin { transform-origin: 11.5px 13px; animation: sync-spin .9s linear infinite; }
+  [data-style="glass"] .bottom-nav__link, [data-style="glass"] .bottom-nav__link.is-active { color: #fff; }
   [data-style="glass"] .sync-popover { top: auto; bottom: calc(100% + 10px); right: 0; }
   /* the selection capsule slides between tabs */
   [data-style="glass"] .bottom-nav__lens {

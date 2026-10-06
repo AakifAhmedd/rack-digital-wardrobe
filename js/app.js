@@ -165,6 +165,18 @@ const NAV_ICONS = {
   grid: '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
   sliders: '<line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/>',
 };
+/* Sync button icon (mobile glass): cloud with the status drawn inside it, no coloured dot. */
+const SYNC_GLYPHS = {
+  synced: '<path d="M9 13.2l2 2 3.6-4"/>',
+  pending: '<path d="M11.5 16v-6M9 12.4l2.5-2.4 2.5 2.4"/>',
+  syncing: '<path class="sync-glyph--spin" d="M14.4 13a2.9 2.9 0 1 1-1-2.2"/>',
+  failed: '<g class="sync-glyph--alert"><path d="M11.5 10v3.6M11.5 16v.1"/></g>',
+  conflict: '<g class="sync-glyph--alert"><path d="M11.5 10v3.6M11.5 16v.1"/></g>',
+  'not-connected': '<path d="M9.4 13h4.2"/>',
+};
+function syncIconSvg(status) {
+  return `<svg viewBox="0 0 24 24" width="24" height="24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${NAV_ICONS.cloud}${SYNC_GLYPHS[status] || ''}</g></svg>`;
+}
 function navIconSvg(key, size = 20) {
   if (key === 'hanger') return iconSvg('hanger', size);
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${NAV_ICONS[key] || ''}</g></svg>`;
@@ -693,6 +705,7 @@ function initSyncIndicator() {
 
   function updateUI(status) {
     dot.className = 'sync-dot sync-dot--' + status;
+    qsa('.sync-indicator__icon').forEach(span => { span.innerHTML = syncIconSvg(status); });
     label.textContent = syncStatusLabel(status);
     statusEl.textContent = syncStatusDetail(status);
     const busy = status === 'syncing' || status === 'not-connected';
@@ -3217,7 +3230,7 @@ function init() {
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
   qsa('.bottom-nav__icon[data-icon]').forEach(span => { span.innerHTML = navIconSvg(span.dataset.icon); });
-  qsa('.sync-indicator__icon').forEach(span => { span.innerHTML = navIconSvg('cloud', 24); });
+  qsa('.sync-indicator__icon').forEach(span => { span.innerHTML = syncIconSvg('not-connected'); });
   LiquidGlass.apply(qs('#sync-indicator-btn'), { bezel: 14 });
   LiquidGlass.apply(qs('#bottom-nav'), { bezel: 16 });
   initNavBehaviour();

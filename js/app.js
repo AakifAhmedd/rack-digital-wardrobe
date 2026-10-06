@@ -1852,7 +1852,6 @@ function saveOutfitActivityId(id) {
 }
 let outfitActivityId = loadOutfitActivityId();
 let outfitSelectedIds = new Set();
-let outfitExpandedCats = new Set();  // single-select categories re-opened via "Change"
 /* Accessories are typically layered (watch + belt + sunglasses...), so that
    category allows multiple picks; every other category is one-at-a-time. */
 function outfitCategoryIsMulti(catId) { return catId === 'cat_accessories'; }
@@ -1860,7 +1859,6 @@ function outfitCategoryIsMulti(catId) { return catId === 'cat_accessories'; }
 function openOutfitBuilderFor(activityId) {
   outfitActivityId = activityId;
   outfitSelectedIds = new Set();
-  outfitExpandedCats = new Set();
   saveOutfitActivityId(activityId);
   switchTab('outfit');
 }
@@ -1989,8 +1987,7 @@ function renderOutfitBuilder() {
       if (outfitActivityId === act.id) return;
       outfitActivityId = act.id;
       outfitSelectedIds = new Set();
-      outfitExpandedCats = new Set();
-      saveOutfitActivityId(outfitActivityId);
+          saveOutfitActivityId(outfitActivityId);
       qsa('.subnav__link', chipRow).forEach(c => c.classList.remove('is-active'));
       chip.classList.add('is-active');
       renderOutfitBody();
@@ -2042,35 +2039,21 @@ function renderOutfitBuilder() {
           <div class="outfit-item-row"></div>
         </div>`);
       const row = qs('.outfit-item-row', section);
+      // One-at-a-time category: once something is picked, only that item stays visible.
+      // Tapping it again deselects it and the whole category expands again.
       const picked = multi ? null : items.find(i => outfitSelectedIds.has(i.id));
-      const collapsed = !!picked && !outfitExpandedCats.has(catId);
-      const reopen = () => { outfitExpandedCats.add(catId); renderOutfitBody(); };
-      (collapsed ? [picked] : items).forEach(item => {
+      (picked ? [picked] : items).forEach(item => {
         const tile = outfitItemTile(item, outfitSelectedIds.has(item.id));
         tile.addEventListener('click', () => {
-          if (collapsed) return reopen();
-          if (!multi) {
-            // one-at-a-time category: pick swaps and closes the row; re-tapping the pick deselects it
-            if (outfitSelectedIds.has(item.id)) outfitSelectedIds.delete(item.id);
-            else {
-              byCategory[catId].forEach(other => outfitSelectedIds.delete(other.id));
-              outfitSelectedIds.add(item.id);
-            }
-            outfitExpandedCats.delete(catId);
-          } else if (outfitSelectedIds.has(item.id)) outfitSelectedIds.delete(item.id);
-          else outfitSelectedIds.add(item.id);
+          if (outfitSelectedIds.has(item.id)) outfitSelectedIds.delete(item.id);
+          else {
+            if (!multi) byCategory[catId].forEach(other => outfitSelectedIds.delete(other.id));
+            outfitSelectedIds.add(item.id);
+          }
           renderOutfitBody();
         });
         row.appendChild(tile);
       });
-      if (collapsed) {
-        const change = el(`<button type="button" class="btn btn--tiny btn--ghost">Change</button>`);
-        change.addEventListener('click', reopen);
-        const remove = el(`<button type="button" class="btn btn--tiny btn--ghost">Remove</button>`);
-        remove.addEventListener('click', () => { outfitSelectedIds.delete(picked.id); outfitExpandedCats.delete(catId); renderOutfitBody(); });
-        row.appendChild(change);
-        row.appendChild(remove);
-      }
       body.appendChild(section);
     });
 

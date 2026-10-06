@@ -934,16 +934,12 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="glass"] .modal-box, [data-style="glass"] .sync-popover, [data-style="glass"] .item-row__menu {
   box-shadow: var(--lg-rim), var(--glass-shadow);
 }
+/* one glass recipe for both states (empty / items selected) so the card doesn't change look as you pick */
 [data-style="glass"] .outfit-summary.lg-on {
-  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
-  backdrop-filter: var(--lg) blur(12px) saturate(1.7) brightness(1.05); -webkit-backdrop-filter: var(--lg) blur(12px) saturate(1.7) brightness(1.05);
+  background: linear-gradient(145deg, rgba(255,255,255,.52), rgba(255,255,255,.28) 60%, rgba(255,255,255,.4));
+  backdrop-filter: var(--lg) blur(8px); -webkit-backdrop-filter: var(--lg) blur(8px);  /* no saturate/brightness: they leave a visible inset rectangle on this wide shape */
   border-color: rgba(255,255,255,.5);
   box-shadow: var(--lg-rim), 0 8px 22px rgba(20,30,50,.14);
-}
-/* empty state is just one line of text: much clearer glass; the tint returns once items are selected */
-[data-style="glass"] .outfit-summary--empty.lg-on {
-  background: linear-gradient(145deg, rgba(255,255,255,.34), rgba(255,255,255,.12) 60%, rgba(255,255,255,.22));
-  backdrop-filter: var(--lg) blur(2px); -webkit-backdrop-filter: var(--lg) blur(2px);  /* no saturate/brightness: they leave a visible inset rectangle on this wide shape */
 }
 [data-style="glass"] .toast { border: 1px solid rgba(255,255,255,.22); box-shadow: var(--lg-rim), 0 4px 12px rgba(10,15,30,.22); }
 [data-style="glass"] .toast.lg-on {

@@ -1349,7 +1349,7 @@ function itemCard(item) {
           <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
         </div>
         <div class="item-card__overflow item-row__overflow">
-          <button type="button" class="item-card__hole-btn" data-act="overflow-toggle" aria-label="More actions">&#8942;</button>
+          <button type="button" class="item-card__hole-btn" data-act="overflow-toggle" aria-label="More actions"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
           <div class="item-row__menu">
             ${isRetired ? '' : `
               <button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>

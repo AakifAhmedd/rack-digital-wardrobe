@@ -323,13 +323,17 @@ input[type="date"] {
 /* overflow menu trigger: doubles as the card's decorative "hole" */
 .item-card__overflow { flex-shrink: 0; margin-top: .15rem; }
 .item-card__hole-btn {
-  position: relative; width: 16px; height: 16px; padding: 0; border-radius: 50%;
-  border: 2px solid var(--line); background: var(--canvas); color: var(--ink-soft);
+  position: relative; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line); color: var(--ink-soft); cursor: pointer;
+  background: color-mix(in srgb, var(--surface-raised) 65%, transparent);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
   display: flex; align-items: center; justify-content: center;
-  font-size: .6rem; line-height: 1; cursor: pointer;
+  transition: background .15s ease, color .15s ease, transform .15s ease;
 }
-.item-card__hole-btn::before { content: ''; position: absolute; inset: -9px; } /* larger tap target */
-.item-card__hole-btn:hover { background: var(--surface-raised); border-color: var(--ink-soft); }
+.item-card__hole-btn svg { display: block; }
+.item-card__hole-btn::before { content: ''; position: absolute; inset: -6px; } /* larger tap target */
+.item-card__hole-btn:hover { background: var(--surface-raised); color: var(--text); }
+.item-card__hole-btn:active { transform: scale(.92); }
 
 .item-card__stats {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: .55rem .8rem;

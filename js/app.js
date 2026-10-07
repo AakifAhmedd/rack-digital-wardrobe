@@ -1308,7 +1308,7 @@ function wireItemActions(root, item, isRetired) {
    leaving the title to start at the edge. */
 function itemVolumeTag(item) {
   if (item.categoryId !== 'cat_perfumes') return null;
-  return (item.tags || []).map(t => G.tag(t)?.name).find(n => PERFUME_VOLUMES.includes(n)) || null;
+  return (item.tags || []).map(t => G.tag(t)?.name).find(n => PERFUME_VOLUMES.includes(n) || /^\d+(\.\d+)?\s*ml$/i.test(n || '')) || null;  // any size tag, not just the built-in ones
 }
 /* The leading visual token on an item: bottle size for perfumes, colour swatch
    for everything else. */

@@ -1656,6 +1656,11 @@ function openItemModal(existing, presetCategoryId) {
       <div class="photo-field" id="photo-field" hidden>
         <span class="photo-field__label">Photo <span class="muted">(per-device — never synced)</span></span>
         <div class="photo-field__preview" id="photo-preview" hidden><img id="photo-preview-img" alt=""></div>
+        <div class="photo-field__zoom" id="photo-zoom-row" hidden>
+          <span>Zoom</span>
+          <input type="range" id="photo-zoom" min="60" max="200" step="5" value="100">
+          <output id="photo-zoom-val">100%</output>
+        </div>
         <div class="photo-field__actions">
           <input type="file" id="photo-input" accept="image/*" hidden>
           <button type="button" class="btn btn--small btn--ghost" id="photo-add-btn">Add photo</button>
@@ -1754,10 +1759,21 @@ function openItemModal(existing, presetCategoryId) {
       const photoAddBtn = qs('#photo-add-btn', root);
       const photoReplaceBtn = qs('#photo-replace-btn', root);
       const photoRemoveBtn = qs('#photo-remove-btn', root);
+      const zoomRow = qs('#photo-zoom-row', root);
+      const zoomInput = qs('#photo-zoom', root);
+      const zoomVal = qs('#photo-zoom-val', root);
       let storedPhoto = undefined; // blob loaded from IndexedDB; undefined until loaded
       let pendingPhoto = null;     // the user's new pick — written on save
       let removePhoto = false;
       let previewUrl = null;
+      let zoomBase = null;      // un-zoomed blob the slider scales; null until first slide
+      let zoomBaseStored = false; // true when zoomBase is the saved photo (100% = no change)
+      let zoomRun = 0;          // latest-wins guard for async re-encodes
+
+      function resetZoom() {
+        zoomBase = null; zoomRun++;
+        zoomInput.value = 100; zoomVal.textContent = '100%';
+      }
 
       function renderPhotoPreview(blob) {
         if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
@@ -1786,12 +1802,35 @@ function openItemModal(existing, presetCategoryId) {
         photoAddBtn.hidden = has;
         photoReplaceBtn.hidden = !has;
         photoRemoveBtn.hidden = !has;
+        zoomRow.hidden = !has;
       }
+
+      zoomInput.addEventListener('input', async () => {
+        const z = Number(zoomInput.value) / 100;
+        zoomVal.textContent = Math.round(z * 100) + '%';
+        if (!zoomBase) {
+          zoomBase = pendingPhoto || storedPhoto;
+          zoomBaseStored = !pendingPhoto;
+        }
+        if (!zoomBase) return;
+        const run = ++zoomRun;
+        try {
+          const blob = z === 1 ? zoomBase : await RackPhotos.zoomBlob(zoomBase, z);
+          if (run !== zoomRun || !root.isConnected) return;
+          pendingPhoto = (z === 1 && zoomBaseStored) ? null : blob;
+          removePhoto = false;
+          renderPhotoPreview(blob);
+        } catch (e) {
+          if (root.isConnected) toast('Couldn\u2019t zoom that photo', 'warn');
+        }
+      });
 
       photoAddBtn.addEventListener('click', () => photoInput.click());
       photoReplaceBtn.addEventListener('click', () => photoInput.click());
       photoRemoveBtn.addEventListener('click', () => {
         removePhoto = true;
+        pendingPhoto = null;
+        resetZoom();
         refreshPhotoField();
       });
       photoInput.addEventListener('change', async () => {
@@ -1804,6 +1843,7 @@ function openItemModal(existing, presetCategoryId) {
           if (!root.isConnected) return;
           pendingPhoto = blob;
           removePhoto = false;
+          resetZoom();
           await refreshPhotoField();
           toast('Photo ready — save to keep it');
         } catch (e) {

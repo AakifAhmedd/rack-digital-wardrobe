@@ -1111,6 +1111,7 @@ function renderWardrobe() {
 function renderItemGrid() {
   const grid = qs('#item-grid');
   if (!grid) return;
+  releaseItemCardPhotoUrls();
   grid.innerHTML = '';
   const f = wardrobeFilters;
   let items = Store.state.items.filter(i => {
@@ -1296,6 +1297,7 @@ function wireItemActions(root, item, isRetired) {
     Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear history. This can't be undone.`, () => {
       Store.state.items = Store.state.items.filter(i => i.id !== item.id);
       Store.save();
+      RackPhotos.delete(item.id).catch(() => {}); // the photo is per-device — drop it with the item
       render();
       toast('Item deleted');
     }, { danger: true, yesLabel: 'Delete permanently' });
@@ -1323,6 +1325,33 @@ function itemLeadMarkup(item, color, { small = false } = {}) {
   return `<span class="swatch${small ? ' swatch--sm' : ''}" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>`;
 }
 
+/* ---------------- per-device photos (perfume cards only) ----------------
+   The Blob lives in IndexedDB (photos.js) — nothing here touches the synced
+   store. Each grid build creates an object URL per photo and registers it
+   below; the next build revokes the whole round. The photo box stays hidden
+   until an image actually decodes, so a missing or broken photo leaves the
+   card exactly as it looked before this feature existed. */
+const itemCardPhotoUrls = new Map(); // itemId -> object URL on a live card
+function releaseItemCardPhotoUrls() {
+  itemCardPhotoUrls.forEach(url => URL.revokeObjectURL(url));
+  itemCardPhotoUrls.clear();
+}
+function attachItemCardPhoto(card, itemId) {
+  RackPhotos.get(itemId)
+    .then(blob => {
+      if (!blob || !card.isConnected) return;
+      const wrap = qs('.item-card__photo', card);
+      const img = wrap && qs('img', wrap);
+      if (!wrap || !img) return;
+      const url = URL.createObjectURL(blob);
+      itemCardPhotoUrls.set(itemId, url);
+      img.onload = () => { wrap.hidden = false; };
+      img.onerror = () => { URL.revokeObjectURL(url); };
+      img.src = url;
+    })
+    .catch(() => { /* no photo — the card renders exactly as before */ });
+}
+
 function itemCard(item) {
   const color = G.color(item.colorId);
   const cat = G.category(item.categoryId);
@@ -1342,6 +1371,7 @@ function itemCard(item) {
   ensureOverflowOutsideClickHandler();
   const card = el(`
     <article class="item-card ${isRetired ? 'item-card--retired' : ''}">
+      ${item.categoryId === 'cat_perfumes' ? '<div class="item-card__photo" hidden><img alt="" aria-hidden="true"></div>' : ''}
       <div class="item-card__top">
         ${swatchMarkup}
         <div class="item-card__titles">
@@ -1401,6 +1431,7 @@ function itemCard(item) {
   });
 
   wireItemActions(card, item, isRetired);
+  if (item.categoryId === 'cat_perfumes') attachItemCardPhoto(card, item.id);
   return card;
 }
 
@@ -1622,6 +1653,17 @@ function openItemModal(existing, presetCategoryId) {
       <label><span id="subtext-label-text">Additional description</span> <span class="muted" id="subtext-hint-text">(model, product name — optional)</span>
         <input type="text" name="subtext" id="subtext-input" value="${esc(item.subtext || '')}" placeholder="e.g. Air Zoom Pegasus 40">
       </label>
+      <div class="photo-field" id="photo-field" hidden>
+        <span class="photo-field__label">Photo <span class="muted">(per-device — never synced)</span></span>
+        <div class="photo-field__preview" id="photo-preview" hidden><img id="photo-preview-img" alt=""></div>
+        <div class="photo-field__actions">
+          <input type="file" id="photo-input" accept="image/*" hidden>
+          <button type="button" class="btn btn--small btn--ghost" id="photo-add-btn">Add photo</button>
+          <button type="button" class="btn btn--small btn--ghost" id="photo-replace-btn" hidden>Replace photo</button>
+          <button type="button" class="btn btn--small btn--ghost" id="photo-remove-btn" hidden>Remove</button>
+        </div>
+        <p class="muted photo-field__hint">A photo of the bottle so you can spot it at a glance. It is stored in this browser only and never leaves the device.</p>
+      </div>
       <fieldset>
         <legend>Tags <span class="muted">(only tags relevant to this category show up)</span></legend>
         <div class="tag-check-grid" id="tag-checks"></div>
@@ -1704,14 +1746,82 @@ function openItemModal(existing, presetCategoryId) {
         if (subtextInput) subtextInput.placeholder = isPerfume ? 'e.g. Black Orchid' : 'e.g. Air Zoom Pegasus 40';
       }
 
+      /* ---- perfume photo (per-device, IndexedDB — see photos.js) ---- */
+      const photoField = qs('#photo-field', root);
+      const photoPreview = qs('#photo-preview', root);
+      const photoPreviewImg = qs('#photo-preview-img', root);
+      const photoInput = qs('#photo-input', root);
+      const photoAddBtn = qs('#photo-add-btn', root);
+      const photoReplaceBtn = qs('#photo-replace-btn', root);
+      const photoRemoveBtn = qs('#photo-remove-btn', root);
+      let storedPhoto = undefined; // blob loaded from IndexedDB; undefined until loaded
+      let pendingPhoto = null;     // the user's new pick — written on save
+      let removePhoto = false;
+      let previewUrl = null;
+
+      function renderPhotoPreview(blob) {
+        if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+        if (!blob) { photoPreview.hidden = true; photoPreviewImg.removeAttribute('src'); return; }
+        const url = URL.createObjectURL(blob);
+        previewUrl = url;
+        photoPreviewImg.onload = () => { if (previewUrl === url) photoPreview.hidden = false; };
+        photoPreviewImg.onerror = () => {
+          if (previewUrl === url) { URL.revokeObjectURL(url); previewUrl = null; }
+        };
+        photoPreviewImg.src = url;
+      }
+
+      async function refreshPhotoField() {
+        if (!root.isConnected) return;
+        const show = catSelect.value === 'cat_perfumes';
+        photoField.hidden = !show;
+        if (!show) return;
+        if (storedPhoto === undefined) {
+          storedPhoto = await RackPhotos.get(item.id); // null when there is none
+          if (!root.isConnected || catSelect.value !== 'cat_perfumes') return;
+        }
+        const effective = pendingPhoto || (removePhoto ? null : storedPhoto);
+        renderPhotoPreview(effective);
+        const has = !!effective;
+        photoAddBtn.hidden = has;
+        photoReplaceBtn.hidden = !has;
+        photoRemoveBtn.hidden = !has;
+      }
+
+      photoAddBtn.addEventListener('click', () => photoInput.click());
+      photoReplaceBtn.addEventListener('click', () => photoInput.click());
+      photoRemoveBtn.addEventListener('click', () => {
+        removePhoto = true;
+        refreshPhotoField();
+      });
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files && photoInput.files[0];
+        photoInput.value = ''; // allow picking the same file again
+        if (!file) return;
+        photoAddBtn.disabled = photoReplaceBtn.disabled = true;
+        try {
+          const blob = await RackPhotos.processImageFile(file);
+          if (!root.isConnected) return;
+          pendingPhoto = blob;
+          removePhoto = false;
+          await refreshPhotoField();
+          toast('Photo ready — save to keep it');
+        } catch (e) {
+          if (root.isConnected) toast('Couldn\u2019t read that photo — try another', 'warn');
+        } finally {
+          photoAddBtn.disabled = photoReplaceBtn.disabled = false;
+        }
+      });
+
       refreshSubs();
       refreshTags();
       updateColorRequirement();
+      refreshPhotoField();
       catSelect.addEventListener('change', () => {
         /* Switching category changes which brands are in scope, so the list is
            rebuilt from scratch rather than keeping the previous category's. */
         showAllBrands = false;
-        refreshSubs(); refreshTags(); updateGiftedHint(); updateColorRequirement(); refreshBrands();
+        refreshSubs(); refreshTags(); updateGiftedHint(); updateColorRequirement(); refreshBrands(); refreshPhotoField();
       });
       subSelect.addEventListener('change', () => { refreshTags(); updateGiftedHint(); });
       qs('#show-all-brands', root).addEventListener('click', () => {
@@ -1823,7 +1933,7 @@ function openItemModal(existing, presetCategoryId) {
         }
         commitItem();
 
-        function commitItem() {
+        async function commitItem() {
           if (isEdit) {
             const idx = s.items.findIndex(i => i.id === item.id);
             s.items[idx] = item;
@@ -1831,10 +1941,30 @@ function openItemModal(existing, presetCategoryId) {
             s.items.push(item);
           }
           Store.save();
+          await commitPhoto(); // the photo is durable before the grid re-renders
           Modal.close();
           render();
           if (widenedBrand) toast(`${G.brand(item.brandId)?.name} now covers clothing and perfumes`);
           else toast(isEdit ? 'Item updated' : 'Item added to rack');
+        }
+
+        function commitPhoto() {
+          if (item.categoryId !== 'cat_perfumes') {
+            // Re-categorised away from perfumes — never leave an orphan photo.
+            RackPhotos.delete(item.id).catch(() => {});
+            return Promise.resolve();
+          }
+          if (pendingPhoto) {
+            return RackPhotos.put(item.id, pendingPhoto)
+              .then(() => toast('Photo saved'))
+              .catch(() => toast('Couldn\u2019t save the photo', 'warn'));
+          }
+          if (removePhoto) {
+            return RackPhotos.delete(item.id)
+              .then(() => toast('Photo removed'))
+              .catch(() => toast('Couldn\u2019t remove the photo', 'warn'));
+          }
+          return Promise.resolve();
         }
       });
     },
@@ -3230,6 +3360,7 @@ async function initVersion() {
 
 function init() {
   if (!Store.state.meta.currency) { Store.state.meta.currency = 'LKR'; Store.save(); }
+  RackPhotos.init().catch(() => {});
   applyStoredAppearance();
   initVersion();
   qsa('.nav__link').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));

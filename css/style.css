@@ -333,6 +333,17 @@ input[type="date"] {
 .item-card__hole-btn svg { display: block; }
 .item-card__hole-btn::before { content: ''; position: absolute; inset: -6px; } /* larger tap target */
 .item-card__hole-btn:hover { background: var(--surface-raised); color: var(--text); }
+
+/* Per-device photo on perfume cards (photos.js). Hidden until a real image
+   has decoded, so a missing or broken photo leaves the card exactly as it
+   looked before — no empty box, no layout shift for photo-less items. */
+.item-card__photo {
+  margin: -1.1rem -1.1rem .85rem;
+  border-radius: calc(var(--radius-m) - 2px) calc(var(--radius-m) - 2px) 0 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+.item-card__photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .item-card__hole-btn:active { transform: scale(.92); }
 
 .item-card__stats {
@@ -578,6 +589,15 @@ input[type="date"] {
 }
 .form-link:hover { color: var(--thread); }
 .form-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
+
+/* Perfume photo picker inside the item modal (photos.js — per-device). */
+.photo-field { display: flex; flex-direction: column; gap: .45rem; }
+.photo-field[hidden] { display: none !important; }
+.photo-field__label { font-size: .85rem; font-weight: 500; }
+.photo-field__preview { border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; background: var(--surface); }
+.photo-field__preview img { display: block; width: 100%; max-height: 220px; object-fit: cover; }
+.photo-field__actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.photo-field__hint { font-size: .74rem; color: var(--ink-soft); margin: 0; line-height: 1.45; }
 
 .rule-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1.3fr auto; gap: .5rem; align-items: end; margin-bottom: .8rem; }
 .rule-field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }

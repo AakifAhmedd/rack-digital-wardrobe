@@ -323,8 +323,9 @@ function costPerWear(item) {
   if (!item.wearCount) return null;
   return item.cost / item.wearCount;
 }
+/* Fragrances are used up by the ml, not worn, so they stay out of every cost-per-wear figure. */
 function avgCostPerWear() {
-  const vals = activeItems().map(costPerWear).filter(v => v !== null && isFinite(v));
+  const vals = activeItems().filter(i => i.categoryId !== 'cat_perfumes').map(costPerWear).filter(v => v !== null && isFinite(v));
   if (!vals.length) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
@@ -780,7 +781,7 @@ function renderDashboard() {
     bySubcategoryWears[i.subcategoryId] = (bySubcategoryWears[i.subcategoryId] || 0) + (i.wearCount || 0);
     byCategoryCount[i.categoryId] = (byCategoryCount[i.categoryId] || 0) + 1;
     const cpw = costPerWear(i);
-    if (cpw !== null) {
+    if (cpw !== null && i.categoryId !== 'cat_perfumes') {
       (byCategoryCPW[i.categoryId] ||= []).push(cpw);
     }
   });
@@ -788,8 +789,8 @@ function renderDashboard() {
 
   const mostWorn = [...items].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0)).slice(0, 5);
   const leastWorn = [...items].sort((a, b) => (a.wearCount || 0) - (b.wearCount || 0)).slice(0, 5);
-  const bestValue = items.filter(i => costPerWear(i) !== null).sort((a, b) => costPerWear(a) - costPerWear(b)).slice(0, 3);
-  const worstValue = items.filter(i => costPerWear(i) !== null).sort((a, b) => costPerWear(b) - costPerWear(a)).slice(0, 3);
+  const bestValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(a) - costPerWear(b)).slice(0, 3);
+  const worstValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(b) - costPerWear(a)).slice(0, 5);
 
   wrap.appendChild(el(`
     <div class="stat-grid">
@@ -842,6 +843,7 @@ function renderDashboard() {
     { label: '15+ wears', color: 'var(--good)', test: w => w >= 15 }
   ];
   const flowRows = Object.entries(byCategoryCount)
+    .filter(([id]) => id !== 'cat_perfumes')
     .map(([id, n]) => {
       const flows = TIERS.map(t => items.filter(i => i.categoryId === id && t.test(i.wearCount || 0)).length);
       return { label: G.category(id).name, iconKey: G.category(id).icon, count: n, flows };
@@ -1329,7 +1331,7 @@ function itemCard(item) {
   const avg = avgCostPerWear();
   const isRetired = item.status === 'retired';
   let cpwClass = '';
-  if (cpw !== null && avg !== null) cpwClass = cpw <= avg ? 'tag-chip--good' : 'tag-chip--warn';
+  if (cpw !== null && avg !== null && item.categoryId !== 'cat_perfumes') cpwClass = cpw <= avg ? 'tag-chip--good' : 'tag-chip--warn';
 
   const swatchMarkup = itemLeadMarkup(item, color);
 

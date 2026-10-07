@@ -595,7 +595,11 @@ input[type="date"] {
 .photo-field[hidden] { display: none !important; }
 .photo-field__label { font-size: .85rem; font-weight: 500; }
 .photo-field__preview { border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; background: var(--surface); }
-.photo-field__preview img { display: block; width: 100%; max-height: 220px; object-fit: cover; }
+.photo-field__preview img { display: block; width: 100%; max-height: 220px; object-fit: contain; }
+.photo-field__zoom { display: flex; align-items: center; gap: .6rem; font-size: .85rem; }
+.photo-field__zoom[hidden] { display: none !important; }
+.photo-field__zoom input { flex: 1; min-width: 0; accent-color: var(--accent, currentColor); }
+.photo-field__zoom output { min-width: 3ch; text-align: right; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .photo-field__actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .photo-field__hint { font-size: .74rem; color: var(--ink-soft); margin: 0; line-height: 1.45; }
 

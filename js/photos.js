@@ -16,6 +16,10 @@ const STORE_NAME = 'photos';
 const MAX_EDGE = 800;              // long edge of the uploaded image, px
 const WEBP_QUALITY = 0.82;
 const JPEG_QUALITY = 0.85;
+const TRIM_ALPHA = 10;           // pixels with alpha above this count as content
+const TRIM_PAD_PCT = 0.04;       // padding kept around the trimmed content
+const TRIM_PAD_MIN = 8;          // ...but never less than this many px
+const TRIM_SCAN_EDGE = 1024;     // bounding box is found on a copy this size
 
 const RackPhotos = {
   _db: null,
@@ -114,22 +118,98 @@ const RackPhotos = {
     return this._webp;
   },
 
-  /* Resize to ~800px on the long edge and re-encode (WebP where possible,
-     otherwise JPEG). Rejects with an Error when the file cannot be decoded. */
-  async processImageFile(file) {
-    const img = await this._loadImage(file);
-    const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth * scale));
-    const h = Math.max(1, Math.round(img.naturalHeight * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    const type = this._supportsWebP() ? 'image/webp' : 'image/jpeg';
-    const quality = type === 'image/webp' ? WEBP_QUALITY : JPEG_QUALITY;
-    const blob = await new Promise((resolve, reject) => {
+  /* Bounding box of the visible (alpha > TRIM_ALPHA) pixels, in source px.
+     Scanned on a downscaled copy so huge photos stay cheap. Opaque images
+     and fully transparent ones come back as the whole image. */
+  _contentBox(img) {
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const full = { x: 0, y: 0, w: iw, h: ih, hasAlpha: false };
+    try {
+      const k = Math.min(1, TRIM_SCAN_EDGE / Math.max(iw, ih));
+      const sw = Math.max(1, Math.round(iw * k));
+      const sh = Math.max(1, Math.round(ih * k));
+      const c = document.createElement('canvas');
+      c.width = sw; c.height = sh;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, sw, sh);
+      const data = ctx.getImageData(0, 0, sw, sh).data;
+      let minX = sw, minY = sh, maxX = -1, maxY = -1, hasAlpha = false;
+      for (let y = 0; y < sh; y++) {
+        const row = y * sw * 4 + 3;
+        for (let x = 0; x < sw; x++) {
+          const a = data[row + x * 4];
+          if (a < 255) hasAlpha = true;
+          if (a > TRIM_ALPHA) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (!hasAlpha || maxX < 0) return { ...full, hasAlpha };
+      const x0 = Math.max(0, Math.floor(minX / k));
+      const y0 = Math.max(0, Math.floor(minY / k));
+      const x1 = Math.min(iw, Math.ceil((maxX + 1) / k));
+      const y1 = Math.min(ih, Math.ceil((maxY + 1) / k));
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, hasAlpha };
+    } catch (e) { return full; } // tainted/unreadable canvas — keep the whole image
+  },
+
+  _encode(canvas, needsAlpha) {
+    let type, quality;
+    if (this._supportsWebP()) { type = 'image/webp'; quality = WEBP_QUALITY; }
+    else if (needsAlpha) { type = 'image/png'; }  // JPEG would turn transparency black
+    else { type = 'image/jpeg'; quality = JPEG_QUALITY; }
+    return new Promise((resolve, reject) => {
       canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Could not encode image'))), type, quality);
     });
-    return blob;
+  },
+
+  /* Trim transparent borders, pad the result to the card's 4:3 frame with a
+     transparent background (so object-fit: cover shows the whole bottle),
+     resize to ~800px on the long edge and re-encode (WebP where possible).
+     Rejects with an Error when the file cannot be decoded. */
+  async processImageFile(file) {
+    const img = await this._loadImage(file);
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const box = this._contentBox(img);
+
+    // Content rect = trimmed box + padding. With transparency the padding may
+    // extend past the source (it is transparent anyway); opaque photos stay inside it.
+    const padX = Math.max(TRIM_PAD_MIN, Math.round(box.w * TRIM_PAD_PCT));
+    const padY = Math.max(TRIM_PAD_MIN, Math.round(box.h * TRIM_PAD_PCT));
+    let cx = box.x - padX, cy = box.y - padY, cw = box.w + 2 * padX, ch = box.h + 2 * padY;
+    if (!box.hasAlpha) { cx = 0; cy = 0; cw = iw; ch = ih; }
+
+    // 4:3 frame around the content, content centred.
+    const fw = cw * 3 >= ch * 4 ? cw : ch * 4 / 3;
+    const fh = cw * 3 >= ch * 4 ? cw * 3 / 4 : ch;
+    const scale = Math.min(1, MAX_EDGE / Math.max(fw, fh));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(fw * scale));
+    canvas.height = Math.max(1, Math.round(fh * scale));
+
+    // Draw only the part of the content rect that lies inside the source image.
+    const sx0 = Math.max(0, cx), sy0 = Math.max(0, cy);
+    const sx1 = Math.min(iw, cx + cw), sy1 = Math.min(ih, cy + ch);
+    const ox = (fw - cw) / 2, oy = (fh - ch) / 2;
+    canvas.getContext('2d').drawImage(
+      img, sx0, sy0, sx1 - sx0, sy1 - sy0,
+      (ox + sx0 - cx) * scale, (oy + sy0 - cy) * scale, (sx1 - sx0) * scale, (sy1 - sy0) * scale);
+
+    const needsAlpha = box.hasAlpha || fw - cw > 1 || fh - ch > 1;
+    return this._encode(canvas, needsAlpha);
+  },
+
+  /* Re-render a stored blob scaled by `zoom` about its centre, same frame size.
+     Always applied to the un-zoomed base, never to a previous zoom result. */
+  async zoomBlob(blob, zoom) {
+    const img = await this._loadImage(blob);
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, w * (1 - zoom) / 2, h * (1 - zoom) / 2, w * zoom, h * zoom);
+    return this._encode(canvas, true);
   },
 };

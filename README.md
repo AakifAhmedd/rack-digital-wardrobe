@@ -15,6 +15,8 @@ RACK catalogs your clothes, shoes, accessories, and perfumes, tracks how often y
 - **Usage tracking** — log a wear with one tap; see most-worn and least-worn items, categories, and subcategories.
 - **Donation prompts** — items with zero wears are surfaced on the dashboard with a nudge toward donating rather than reselling.
 - **Cost per wear** — record what an item cost you; RACK divides by wear count and colour-codes it against your wardrobe average, so you can see which purchases earned their keep.
+- **Per-device photos** — attach a photo to a perfume. On upload, transparent borders are trimmed and the image is centred on a 4:3 transparent frame so the whole bottle shows on the card; a zoom slider in the item form fine-tunes it. Photos live in the browser's IndexedDB (`js/photos.js`), never in the synced data or the JSON backup — use Settings → Backup → *Download photos* / *Restore photos* to move or keep them.
+- **Installable (PWA)** — a web manifest and a network-first service worker (`sw.js`) let you add RACK to your home screen; the cache is only an offline fallback, so updates always win when online. Home-screen shortcuts open Outfit and Wardrobe directly.
 - **Finished vs. donated** — perfumes retire as *Finished* rather than *Donated*, since a used-up bottle isn't a donation. Bottles are collected, so "used up" and "empty" are the same event and only one option is offered.
 
 ## Architecture & why
@@ -36,7 +38,7 @@ This is a plain HTML/CSS/JS app — no build step, no framework — which keeps 
 2. **Wardrobe** → *Add item*, pick category → subcategory → brand → color → tags, optionally record cost.
 3. Tap **+1 Worn** each time you wear something. That's the whole loop.
 4. **Dashboard** shows what's earning its keep and what's been sitting unused.
-5. **Settings** → optional cloud sync, JSON backup/restore, currency symbol.
+5. **Settings** → optional cloud sync, JSON backup/restore (plus a separate photo backup), currency symbol.
 
 ## Setting up cloud sync (optional)
 
@@ -72,5 +74,10 @@ VERSIONING.md      rules for bumping the version
 css/style.css      design system
 js/data.js         default master data + localStorage persistence
 js/sync.js         optional GitHub Gist cloud sync
+js/photos.js       per-device item photos (IndexedDB), trim/pad/zoom, photo backup
+js/brand-logos.js  brand logo registry
+sw.js              service worker (offline fallback)
+manifest.webmanifest  PWA manifest
+icons/             app icons
 js/app.js          rule engine, rendering, all app logic
 ```

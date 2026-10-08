@@ -3048,6 +3048,11 @@ function renderGeneralSettings() {
         <button class="btn btn--ghost" id="export-btn">Download backup</button>
         <label class="btn btn--ghost" style="cursor:pointer;">Restore from file<input type="file" id="import-file" accept="application/json" hidden></label>
       </div>
+      <p class="muted" style="margin-top:.9rem;">Photos stay on this device and aren't in the backup above. Download them separately to move or keep them.</p>
+      <div class="form-actions" style="justify-content:flex-start; gap:.6rem;">
+        <button class="btn btn--ghost" id="photos-export-btn">Download photos</button>
+        <label class="btn btn--ghost" style="cursor:pointer;">Restore photos<input type="file" id="photos-import-file" accept="application/json" hidden></label>
+      </div>
     </div>`);
   qs('#export-btn', backupPanel).addEventListener('click', () => {
     const blob = new Blob([Store.exportJSON()], { type: 'application/json' });
@@ -3055,6 +3060,31 @@ function renderGeneralSettings() {
     a.href = URL.createObjectURL(blob);
     a.download = `rack-wardrobe-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
+  });
+  qs('#photos-export-btn', backupPanel).addEventListener('click', async () => {
+    try {
+      const data = await RackPhotos.exportAll();
+      const n = Object.keys(data.photos).length;
+      if (!n) { toast('No photos to download'); return; }
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `rack-photos-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      toast(`${n} photo${n === 1 ? '' : 's'} downloaded`);
+    } catch (err) { toast('Couldn\u2019t read the photos on this device', 'warn'); }
+  });
+  qs('#photos-import-file', backupPanel).addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const ids = new Set(Store.state.items.map(i => i.id));
+      const { restored, skipped } = await RackPhotos.importAll(data, ids);
+      render();
+      toast(`${restored} photo${restored === 1 ? '' : 's'} restored` + (skipped ? ` (${skipped} skipped — no matching item)` : ''));
+    } catch (err) { toast('That file could not be read as a photo backup', 'warn'); }
   });
   qs('#import-file', backupPanel).addEventListener('change', (e) => {
     const file = e.target.files[0];

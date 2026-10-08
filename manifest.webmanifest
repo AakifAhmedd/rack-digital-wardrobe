@@ -8,8 +8,8 @@
   "background_color": "#E7E1D3",
   "theme_color": "#23201B",
   "shortcuts": [
-    { "name": "Build outfit", "short_name": "Outfit", "url": "./?tab=outfit" },
-    { "name": "Wardrobe", "short_name": "Wardrobe", "url": "./?tab=wardrobe" }
+    { "name": "Build outfit", "short_name": "Outfit", "url": "./?tab=outfit", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Wardrobe", "short_name": "Wardrobe", "url": "./?tab=wardrobe", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },

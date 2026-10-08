@@ -85,6 +85,46 @@ const RackPhotos = {
     }));
   },
 
+  /* ---------- manual backup (photos are not part of the JSON backup or sync) ---------- */
+
+  _blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  },
+
+  /* Every stored photo as { format, version, photos: { itemId: dataUrl } }. */
+  async exportAll() {
+    const store = await this._store('readonly');
+    const [keys, blobs] = await Promise.all(['getAllKeys', 'getAll'].map(m =>
+      new Promise((resolve, reject) => {
+        const r = store[m]();
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      })));
+    const photos = {};
+    for (let i = 0; i < keys.length; i++) photos[keys[i]] = await this._blobToDataUrl(blobs[i]);
+    return { format: 'rack-photos', version: 1, photos };
+  },
+
+  /* Restore photos from an exportAll() object. Only ids in `validIds` (items
+     that exist on this device) are written; returns { restored, skipped }. */
+  async importAll(data, validIds) {
+    if (!data || data.format !== 'rack-photos' || !data.photos || typeof data.photos !== 'object') {
+      throw new Error('Not a RACK photo backup');
+    }
+    let restored = 0, skipped = 0;
+    for (const [id, url] of Object.entries(data.photos)) {
+      if (!validIds.has(id) || typeof url !== 'string' || !url.startsWith('data:image/')) { skipped++; continue; }
+      await this.put(id, await (await fetch(url)).blob());
+      restored++;
+    }
+    return { restored, skipped };
+  },
+
   /* ---------- file -> compressed Blob ---------- */
 
   /* Read the file through an <img> element: every modern browser applies

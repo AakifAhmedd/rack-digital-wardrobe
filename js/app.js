@@ -2334,7 +2334,7 @@ function renderCategoriesPanel() {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted">Categories organize your rack. Add subcategories under each — they carry the same weight as the built-in ones.</p>
+      <p class="muted" data-hint>Categories organize your rack. Add subcategories under each — they carry the same weight as the built-in ones.</p>
       <button class="btn btn--primary btn--small" id="add-cat">+ Add category</button>
     </div>`));
   qs('#add-cat', box).addEventListener('click', () => openCategoryModal());
@@ -2446,7 +2446,7 @@ function renderTagsPanel() {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted">Tags are scoped to categories, so only relevant tags show up when tagging an item.</p>
+      <p class="muted" data-hint>Tags are scoped to categories, so only relevant tags show up when tagging an item.</p>
       <button class="btn btn--primary btn--small" id="add-tag">+ Add tag</button>
     </div>`));
   qs('#add-tag', box).addEventListener('click', () => openTagModal(null));
@@ -2545,7 +2545,7 @@ function renderSimpleListPanel(stateKey, label) {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted">Manage your ${label.toLowerCase()}s. They're used to build each item's identity.</p>
+      <p class="muted" data-hint>Manage your ${label.toLowerCase()}s. They're used to build each item's identity.</p>
       <button class="btn btn--primary btn--small" id="add-simple">+ Add ${label.toLowerCase()}</button>
     </div>`));
   qs('#add-simple', box).addEventListener('click', () => {
@@ -2603,7 +2603,7 @@ function renderColorsPanel() {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted">Colors are a distinct attribute — not part of an item's name.</p>
+      <p class="muted" data-hint>Colors are a distinct attribute — not part of an item's name.</p>
       <button class="btn btn--primary btn--small" id="add-color">+ Add color</button>
     </div>`));
   qs('#add-color', box).addEventListener('click', () => {
@@ -2645,7 +2645,7 @@ function renderActivitiesPanel() {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted">Activities use category, subcategory, and tag rules to decide which items qualify — you don't assign items one by one.</p>
+      <p class="muted" data-hint>Activities use category, subcategory, and tag rules to decide which items qualify — you don't assign items one by one.</p>
       <button class="btn btn--primary btn--small" id="add-activity">+ Add activity</button>
     </div>`));
   qs('#add-activity', box).addEventListener('click', () => openActivityModal(null));
@@ -3002,6 +3002,19 @@ function openActivityModal(existing) {
    ================================================================ */
 /* A collapsible Settings section (same look as the Wardrobe groups). The body is
    only built when the section is open, and open/closed is remembered per device. */
+/* Long explanatory text on Settings stays hidden behind a small "?" button. */
+function collapseHints(root) {
+  qsa('[data-hint]', root).forEach(p => {
+    p.hidden = true;
+    const row = el(`<div class="hint-row"><button type="button" class="hint-btn" aria-expanded="false" aria-label="More info">?</button></div>`);
+    row.style.marginTop = p.style.marginTop; p.style.marginTop = '';
+    p.before(row);
+    qs('.hint-btn', row).addEventListener('click', (e) => {
+      p.hidden = !p.hidden;
+      e.currentTarget.setAttribute('aria-expanded', String(!p.hidden));
+    });
+  });
+}
 function settingsSection(key, title, buildBody) {
   const open = !!settingsOpen[key];
   const section = el(`
@@ -3014,7 +3027,7 @@ function settingsSection(key, title, buildBody) {
     </section>`);
   const body = qs('.settings-section__body', section);
   let built = false;
-  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); } };
+  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); collapseHints(body); } };
   if (open) ensureBody();
   qs('.item-group__head', section).addEventListener('click', () => {
     const nowCollapsed = !section.classList.contains('is-collapsed');
@@ -3070,12 +3083,12 @@ function renderGeneralSettings() {
   const backupPanel = el(`
     <div class="panel">
       <h3>Backup</h3>
-      <p class="muted">Download everything as a JSON file, or restore from one.</p>
+      <p class="muted" data-hint>Download everything as a JSON file, or restore from one.</p>
       <div class="form-actions" style="justify-content:flex-start; gap:.6rem;">
         <button class="btn btn--ghost" id="export-btn">Download backup</button>
         <label class="btn btn--ghost" style="cursor:pointer;">Restore from file<input type="file" id="import-file" accept="application/json" hidden></label>
       </div>
-      <p class="muted" style="margin-top:.9rem;">Photos stay on this device and aren't in the backup above. Download them separately to move or keep them.</p>
+      <p class="muted" data-hint style="margin-top:.9rem;">Photos stay on this device and aren't in the backup above. Download them separately to move or keep them.</p>
       <div class="form-actions" style="justify-content:flex-start; gap:.6rem;">
         <button class="btn btn--ghost" id="photos-export-btn">Download photos</button>
         <label class="btn btn--ghost" style="cursor:pointer;">Restore photos<input type="file" id="photos-import-file" accept="application/json" hidden></label>
@@ -3136,8 +3149,7 @@ function renderGeneralSettings() {
   const syncPanel = el(`
     <div class="panel">
       <h3>Cloud sync (optional)</h3>
-      <div class="hint-row"><button type="button" class="hint-btn" id="sync-hint-btn" aria-expanded="false" aria-label="About cloud sync">?</button></div>
-      <p class="muted" id="sync-hint" hidden>Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
+      <p class="muted" data-hint>Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
       <label>GitHub personal access token (needs "gist" scope)
         <input type="password" id="sync-token" value="${esc(Sync.getToken())}" placeholder="ghp_…">
       </label>
@@ -3151,11 +3163,6 @@ function renderGeneralSettings() {
       </div>
       <p class="muted" id="sync-status">${esc(syncStatusLabel(SyncEngine.status))} — ${esc(syncStatusDetail(SyncEngine.status))}</p>
     </div>`);
-  qs('#sync-hint-btn', syncPanel).addEventListener('click', (e) => {
-    const hint = qs('#sync-hint', syncPanel);
-    hint.hidden = !hint.hidden;
-    e.currentTarget.setAttribute('aria-expanded', String(!hint.hidden));
-  });
   const statusLine = qs('#sync-status', syncPanel);
   const refreshStatusLine = () => { statusLine.textContent = `${syncStatusLabel(SyncEngine.status)} — ${syncStatusDetail(SyncEngine.status)}`; };
   qs('#sync-token', syncPanel).addEventListener('change', (e) => Sync.setToken(e.target.value.trim()));
@@ -3190,7 +3197,7 @@ function renderGeneralSettings() {
   const dangerPanel = el(`
     <div class="panel panel--danger">
       <h3>Reset</h3>
-      <p class="muted">Erase everything on this device and start over with default masters.</p>
+      <p class="muted" data-hint>Erase everything on this device and start over with default masters.</p>
       <button class="btn btn--danger" id="reset-btn">Reset app</button>
     </div>`);
   qs('#reset-btn', dangerPanel).addEventListener('click', () => {
@@ -3231,7 +3238,7 @@ function renderAppearanceSettings() {
   const stylePanel = el(`
     <div class="panel panel--wide">
       <h3>Style</h3>
-      <p class="muted">Surface look, applied on top of the colour theme.</p>
+      <p class="muted" data-hint>Surface look, applied on top of the colour theme.</p>
       <div class="font-grid" id="style-grid"></div>
     </div>`);
   const styleGrid = qs('#style-grid', stylePanel);
@@ -3257,7 +3264,7 @@ function renderAppearanceSettings() {
   const blurPanel = el(`
     <div class="panel panel--wide">
       <h3>Popover backdrop</h3>
-      <p class="muted">Blur behind the sync popover.</p>
+      <p class="muted" data-hint>Blur behind the sync popover.</p>
       <div class="theme-card__actions" id="blur-toggle"></div>
     </div>`);
   const blurToggle = qs('#blur-toggle', blurPanel);
@@ -3272,7 +3279,7 @@ function renderAppearanceSettings() {
   const groupPanel = el(`
     <div class="panel panel--wide">
       <h3>Wardrobe sections</h3>
-      <p class="muted">Group the Wardrobe under collapsible headers: clothing by category, perfumes by market tier. Saved on this device only.</p>
+      <p class="muted" data-hint>Group the Wardrobe under collapsible headers: clothing by category, perfumes by market tier. Saved on this device only.</p>
       <div class="theme-card__actions" id="group-toggle"></div>
     </div>`);
   const groupToggle = qs('#group-toggle', groupPanel);
@@ -3287,7 +3294,7 @@ function renderAppearanceSettings() {
   const themePanel = el(`
     <div class="panel panel--wide">
       <h3>Theme</h3>
-      <p class="muted">Pick a palette, or build your own.</p>
+      <p class="muted" data-hint>Pick a palette, or build your own.</p>
       <div class="theme-grid" id="theme-grid"></div>
       <button class="btn btn--ghost btn--small" id="add-theme" style="margin-top:.8rem;">+ New theme</button>
     </div>`);
@@ -3331,7 +3338,7 @@ function renderAppearanceSettings() {
   const fontPanel = el(`
     <div class="panel panel--wide">
       <h3>Font</h3>
-      <p class="muted">Applies to headings and body text throughout the app.</p>
+      <p class="muted" data-hint>Applies to headings and body text throughout the app.</p>
       <div class="font-grid" id="font-grid"></div>
       <button class="btn btn--ghost btn--small" id="add-font" style="margin-top:.8rem;">+ New font</button>
     </div>`);

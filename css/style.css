@@ -254,6 +254,8 @@ input[type="date"] {
   padding: 1.2rem;
 }
 .hint-row { display: flex; justify-content: flex-end; margin-bottom: .3rem; }
+.panel-list__header .hint-row { margin: 0; }
+.panel-list__header > p[data-hint] { flex: 1 0 100%; order: 3; }
 .hint-btn {
   width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; cursor: pointer;
   border: 1px solid var(--line); background: transparent; color: var(--ink-soft);

@@ -686,6 +686,22 @@ input[type="date"] {
 .font-card__sample { font-size: 2rem; margin: 0; line-height: 1; }
 .font-card__name { margin: 0; font-size: .85rem; color: var(--ink-soft); }
 
+.appearance-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: stretch; }
+.appearance-pair .panel { padding: 1rem; }
+.appearance-pair .theme-card__actions { margin-top: auto; flex-wrap: wrap; }
+
+/* "New theme" / "New font" tiles: skeleton placeholder, same size as a real card */
+.theme-card.theme-card--new, .font-card.font-card--new,
+[data-style] .theme-card.theme-card--new, [data-style] .font-card.font-card--new {
+  background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 2px dashed var(--line); color: var(--ink-soft); cursor: pointer; text-align: left; font: inherit;
+}
+.theme-card--new .theme-card__dots span { background: var(--line); opacity: .6; box-shadow: none; }
+.font-card--new .font-card__sample { height: 2rem; width: 3.2rem; border-radius: .4rem; background: var(--line); opacity: .6; }
+.skeleton-pill { height: 2rem; width: 4.4rem; border-radius: 999px; background: var(--line); opacity: .5; }
+.theme-card--new p, .font-card--new .font-card__name { color: var(--ink-soft); font-weight: 600; }
+.theme-card--new:hover, .font-card--new:hover { border-color: var(--ink-soft); }
+
 .color-field { flex-direction: row !important; align-items: center; justify-content: space-between; gap: .6rem; }
 .color-field input[type="color"] { width: 48px; height: 32px; padding: 2px; cursor: pointer; }
 

@@ -3300,7 +3300,6 @@ function renderAppearanceSettings() {
     <div class="panel panel--wide">
       <h3>Theme</h3>
       <div class="theme-grid" id="theme-grid"></div>
-      <button class="btn btn--ghost btn--small" id="add-theme" style="margin-top:.8rem;">+ New theme</button>
     </div>`);
   const themeGrid = qs('#theme-grid', themePanel);
   const allThemes = [...defaultThemes(), ...s.appearance.customThemes];
@@ -3336,14 +3335,20 @@ function renderAppearanceSettings() {
     }
     themeGrid.appendChild(card);
   });
-  qs('#add-theme', themePanel).addEventListener('click', () => openThemeModal());
+  const addTheme = el(`
+    <button type="button" class="theme-card theme-card--new" id="add-theme">
+      <div class="theme-card__dots"><span></span><span></span><span></span><span></span></div>
+      <p>+ New theme</p>
+      <div class="skeleton-pill"></div>
+    </button>`);
+  addTheme.addEventListener('click', () => openThemeModal());
+  themeGrid.appendChild(addTheme);
 
   /* -- fonts -- */
   const fontPanel = el(`
     <div class="panel panel--wide">
       <h3>Font</h3>
       <div class="font-grid" id="font-grid"></div>
-      <button class="btn btn--ghost btn--small" id="add-font" style="margin-top:.8rem;">+ New font</button>
     </div>`);
   const fontGrid = qs('#font-grid', fontPanel);
   const allFonts = [...defaultFonts(), ...s.appearance.customFonts];
@@ -3375,11 +3380,20 @@ function renderAppearanceSettings() {
     }
     fontGrid.appendChild(card);
   });
-  qs('#add-font', fontPanel).addEventListener('click', () => openFontModal());
+  const addFont = el(`
+    <button type="button" class="font-card font-card--new" id="add-font">
+      <p class="font-card__sample"></p>
+      <p class="font-card__name">+ New font</p>
+      <div class="skeleton-pill"></div>
+    </button>`);
+  addFont.addEventListener('click', () => openFontModal());
+  fontGrid.appendChild(addFont);
 
   wrap.appendChild(stylePanel);
-  wrap.appendChild(blurPanel);
-  wrap.appendChild(groupPanel);
+  const pairRow = el(`<div class="appearance-pair"></div>`);
+  pairRow.appendChild(blurPanel);
+  pairRow.appendChild(groupPanel);
+  wrap.appendChild(pairRow);
   wrap.appendChild(themePanel);
   wrap.appendChild(fontPanel);
   return wrap;

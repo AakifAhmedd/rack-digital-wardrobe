@@ -3005,7 +3005,7 @@ function openActivityModal(existing) {
 function settingsSection(key, title, buildBody) {
   const open = !!settingsOpen[key];
   const section = el(`
-    <section class="item-group settings-section ${open ? '' : 'is-collapsed'}">
+    <section class="item-group settings-section ${open ? '' : 'is-collapsed'}" data-key="${esc(key)}">
       <button type="button" class="item-group__head" aria-expanded="${open}">
         <span class="item-group__chev" aria-hidden="true"></span>
         <span class="item-group__name">${esc(title)}</span>
@@ -3022,6 +3022,15 @@ function settingsSection(key, title, buildBody) {
     qs('.item-group__head', section).setAttribute('aria-expanded', String(!nowCollapsed));
     if (!nowCollapsed) ensureBody();
     setSettingsSectionOpen(key, !nowCollapsed);
+    /* General is an accordion: opening one section closes the others */
+    if (!nowCollapsed && key.startsWith('g:')) {
+      qsa('.settings-section', section.parentNode).forEach(other => {
+        if (other === section || other.classList.contains('is-collapsed')) return;
+        other.classList.add('is-collapsed');
+        qs('.item-group__head', other).setAttribute('aria-expanded', 'false');
+        setSettingsSectionOpen(other.dataset.key, false);
+      });
+    }
   });
   return section;
 }
@@ -3054,18 +3063,9 @@ function renderSettings() {
 
 function renderGeneralSettings() {
   const s = Store.state;
+  const openG = Object.keys(settingsOpen).filter(k => k.startsWith('g:'));
+  openG.slice(1).forEach(k => setSettingsSectionOpen(k, false));
   const wrap = el(`<div class="item-groups settings-sections"></div>`);
-
-  const dataPanel = el(`
-    <div class="panel">
-      <h3>Currency</h3>
-      <p class="muted">Used to display cost and value per wear.</p>
-      <input type="text" id="currency-input" value="${esc(s.meta.currency || 'LKR')}" maxlength="6" style="max-width:120px">
-    </div>`);
-  qs('#currency-input', dataPanel).addEventListener('change', (e) => {
-    s.meta.currency = e.target.value.trim() || 'LKR';
-    Store.save(); toast('Currency updated');
-  });
 
   const backupPanel = el(`
     <div class="panel">
@@ -3136,7 +3136,8 @@ function renderGeneralSettings() {
   const syncPanel = el(`
     <div class="panel">
       <h3>Cloud sync (optional)</h3>
-      <p class="muted">Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
+      <div class="hint-row"><button type="button" class="hint-btn" id="sync-hint-btn" aria-expanded="false" aria-label="About cloud sync">?</button></div>
+      <p class="muted" id="sync-hint" hidden>Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
       <label>GitHub personal access token (needs "gist" scope)
         <input type="password" id="sync-token" value="${esc(Sync.getToken())}" placeholder="ghp_…">
       </label>
@@ -3150,6 +3151,11 @@ function renderGeneralSettings() {
       </div>
       <p class="muted" id="sync-status">${esc(syncStatusLabel(SyncEngine.status))} — ${esc(syncStatusDetail(SyncEngine.status))}</p>
     </div>`);
+  qs('#sync-hint-btn', syncPanel).addEventListener('click', (e) => {
+    const hint = qs('#sync-hint', syncPanel);
+    hint.hidden = !hint.hidden;
+    e.currentTarget.setAttribute('aria-expanded', String(!hint.hidden));
+  });
   const statusLine = qs('#sync-status', syncPanel);
   const refreshStatusLine = () => { statusLine.textContent = `${syncStatusLabel(SyncEngine.status)} — ${syncStatusDetail(SyncEngine.status)}`; };
   qs('#sync-token', syncPanel).addEventListener('change', (e) => Sync.setToken(e.target.value.trim()));
@@ -3212,7 +3218,6 @@ function renderGeneralSettings() {
   wrap.appendChild(settingsSection('g:appearance', 'Appearance', () => renderAppearanceSettings()));
   wrap.appendChild(asSection('sync', syncPanel));
   wrap.appendChild(asSection('backup', backupPanel));
-  wrap.appendChild(asSection('currency', dataPanel));
   wrap.appendChild(asSection('reset', dangerPanel));
   return wrap;
 }

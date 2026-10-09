@@ -253,6 +253,13 @@ input[type="date"] {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
   padding: 1.2rem;
 }
+.hint-row { display: flex; justify-content: flex-end; margin-bottom: .3rem; }
+.hint-btn {
+  width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--ink-soft);
+  font: inherit; font-size: .8rem; line-height: 1;
+}
+.hint-btn:hover, .hint-btn[aria-expanded="true"] { color: var(--text); border-color: var(--ink-soft); }
 .panel--accent { border-color: var(--accent); background: #FBF6EA; }
 .panel--danger { border-color: var(--warn-bg); }
 .panel--quiet { padding: .75rem 1.2rem; }

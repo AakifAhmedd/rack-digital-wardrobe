@@ -733,6 +733,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   .rule-field--wide { grid-column: span 2; }
   .form-row { grid-template-columns: 1fr; }
   .item-grid { grid-template-columns: 1fr; }
+  .font-grid, .theme-grid { grid-template-columns: repeat(2, 1fr); }
 
   /* filters: collapse behind a toggle + bottom sheet */
   .search-input { max-width: none; flex-basis: 100%; order: -1; }

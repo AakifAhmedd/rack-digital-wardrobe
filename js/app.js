@@ -3075,8 +3075,10 @@ function renderSettings() {
 
 function renderGeneralSettings() {
   const s = Store.state;
-  const openG = Object.keys(settingsOpen).filter(k => k.startsWith('g:'));
-  openG.slice(1).forEach(k => setSettingsSectionOpen(k, false));
+  /* accordion: keep at most one real section open; drop saved state of sections that no longer exist */
+  const knownG = ['g:appearance', 'g:sync', 'g:backup', 'g:reset'];
+  Object.keys(settingsOpen).filter(k => k.startsWith('g:') && !knownG.includes(k)).forEach(k => setSettingsSectionOpen(k, false));
+  knownG.filter(k => settingsOpen[k]).slice(1).forEach(k => setSettingsSectionOpen(k, false));
   const wrap = el(`<div class="item-groups settings-sections"></div>`);
 
   const backupPanel = el(`

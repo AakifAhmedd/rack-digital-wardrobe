@@ -3401,24 +3401,53 @@ function renderAppearanceSettings() {
   return wrap;
 }
 
+/* Pick readable text for a coloured background (header / buttons). */
+function readableOn(hex) {
+  const lum = (h) => {
+    const n = parseInt(h.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+      .map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); })
+      .reduce((acc, v, i) => acc + v * [0.2126, 0.7152, 0.0722][i], 0);
+  };
+  const L = lum(hex), contrast = (o) => { const Lo = lum(o); return (Math.max(L, Lo) + 0.05) / (Math.min(L, Lo) + 0.05); };
+  return contrast('#FBF9F4') >= contrast('#1A1814') ? '#FBF9F4' : '#1A1814';
+}
+/* '#abc', 'abc', '#AABBCC' -> '#aabbcc'; anything else -> null */
+function normalizeHex(v) {
+  const m = String(v || '').trim().replace(/^#/, '');
+  if (!/^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(m)) return null;
+  return '#' + (m.length === 3 ? m.split('').map(c => c + c).join('') : m).toLowerCase();
+}
+
 function openThemeModal() {
-  const fields = [
-    ['name', 'Theme name', 'text', 'My theme'],
-    ['canvas', 'Background', 'color', '#E7E1D3'],
-    ['surfaceRaised', 'Card surface', 'color', '#FFFFFF'],
-    ['text', 'Body text', 'color', '#23201B'],
-    ['ink', 'Header / buttons', 'color', '#23201B'],
-    ['accentInk', 'Text on header/buttons', 'color', '#FBF9F4'],
-    ['accent', 'Accent', 'color', '#8A6F3B'],
-    ['thread', 'Secondary accent', 'color', '#A23B33'],
-    ['good', 'Success color', 'color', '#4C6B4F'],
+  const main = [
+    ['canvas', 'Background', '#E7E1D3'],
+    ['surfaceRaised', 'Card surface', '#FFFFFF'],
+    ['text', 'Body text', '#23201B'],
+    ['ink', 'Header / buttons', '#23201B'],
+    ['accent', 'Accent', '#8A6F3B'],
   ];
+  const advanced = [
+    ['thread', 'Secondary accent', '#A23B33'],
+    ['good', 'Success color', '#4C6B4F'],
+  ];
+  const colorRow = ([key, label, def]) => `
+    <label class="color-field">${label}
+      <span class="hex-input">
+        <input type="color" class="hex-input__swatch" value="${def.toLowerCase()}" tabindex="-1" aria-label="${label} picker">
+        <input type="text" name="${key}" value="${def.toUpperCase()}" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="${label} hex code">
+      </span>
+    </label>`;
   const body = el(`
-    <form class="form" id="theme-form">
-      ${fields.map(([key, label, type, def]) => `
-        <label${type === 'color' ? ' class="color-field"' : ''}>${label}
-          <input type="${type}" name="${key}" value="${def}" ${type === 'text' ? 'required' : ''}>
-        </label>`).join('')}
+    <form class="form" id="theme-form" novalidate>
+      <label>Theme name
+        <input type="text" name="name" value="My theme" required>
+      </label>
+      ${main.map(colorRow).join('')}
+      <details class="theme-advanced">
+        <summary>Advanced</summary>
+        ${advanced.map(colorRow).join('')}
+      </details>
       <div class="form-actions">
         <button type="button" class="btn btn--ghost" id="theme-cancel">Cancel</button>
         <button type="submit" class="btn btn--primary">Create theme</button>
@@ -3427,13 +3456,36 @@ function openThemeModal() {
   Modal.open('New theme', body, {
     onMount: (root) => {
       qs('#theme-cancel', root).addEventListener('click', () => Modal.close());
+      /* keep each swatch and hex field in step */
+      qsa('.hex-input', root).forEach(box => {
+        const swatch = qs('.hex-input__swatch', box), txt = qs('input[type="text"]', box);
+        txt.addEventListener('input', () => {
+          const hex = normalizeHex(txt.value);
+          txt.classList.toggle('is-invalid', !hex && txt.value.trim() !== '');
+          if (hex) swatch.value = hex;
+        });
+        txt.addEventListener('blur', () => { const hex = normalizeHex(txt.value); if (hex) { txt.value = hex.toUpperCase(); txt.classList.remove('is-invalid'); } });
+        swatch.addEventListener('input', () => { txt.value = swatch.value.toUpperCase(); txt.classList.remove('is-invalid'); });
+      });
       qs('#theme-form', root).addEventListener('submit', (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const name = fd.get('name').trim();
+        const name = String(fd.get('name') || '').trim();
         if (!name) return;
         const theme = { id: uid('theme'), name, custom: true };
-        fields.forEach(([key]) => { if (key !== 'name') theme[key] = fd.get(key); });
+        const bad = [];
+        [...main, ...advanced].forEach(([key, label]) => {
+          const hex = normalizeHex(fd.get(key));
+          if (hex) theme[key] = hex; else bad.push(label);
+        });
+        if (bad.length) {
+          qsa('.hex-input input[type="text"]', root).forEach(t => t.classList.toggle('is-invalid', !normalizeHex(t.value)));
+          const adv = qs('.theme-advanced', root);
+          if (qsa('.theme-advanced .is-invalid', root).length) adv.open = true;
+          toast(`Check the hex code: ${bad.join(', ')}`);
+          return;
+        }
+        theme.accentInk = readableOn(theme.ink);
         Store.state.appearance.customThemes.push(theme);
         applyTheme(theme.id);
         Modal.close(); render();

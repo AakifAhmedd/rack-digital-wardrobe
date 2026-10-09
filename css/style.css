@@ -705,6 +705,12 @@ input[type="date"] {
 
 .color-field { flex-direction: row !important; align-items: center; justify-content: space-between; gap: .6rem; }
 .color-field input[type="color"] { width: 48px; height: 32px; padding: 2px; cursor: pointer; }
+.hex-input { display: flex; align-items: center; gap: .5rem; }
+.hex-input .hex-input__swatch { width: 40px; height: 36px; flex: none; }
+.hex-input input[type="text"] { width: 7.2rem; font-family: var(--font-mono); text-transform: uppercase; }
+.hex-input input[type="text"].is-invalid { border-color: var(--thread); }
+.theme-advanced .color-field + .color-field { margin-top: .7rem; }
+.theme-advanced > summary { cursor: pointer; font-size: .85rem; font-weight: 500; color: var(--ink-soft); margin-bottom: .5rem; }
 
 /* ---------------- modal ---------------- */
 .modal-overlay {

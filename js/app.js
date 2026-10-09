@@ -2334,7 +2334,7 @@ function renderCategoriesPanel() {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted" data-hint>Categories organize your rack. Add subcategories under each — they carry the same weight as the built-in ones.</p>
+      <p class="muted" data-hint>Subcategories carry the same weight as the built-in ones.</p>
       <button class="btn btn--primary btn--small" id="add-cat">+ Add category</button>
     </div>`));
   qs('#add-cat', box).addEventListener('click', () => openCategoryModal());
@@ -2545,7 +2545,6 @@ function renderSimpleListPanel(stateKey, label) {
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
-      <p class="muted" data-hint>Manage your ${label.toLowerCase()}s. They're used to build each item's identity.</p>
       <button class="btn btn--primary btn--small" id="add-simple">+ Add ${label.toLowerCase()}</button>
     </div>`));
   qs('#add-simple', box).addEventListener('click', () => {
@@ -3085,7 +3084,6 @@ function renderGeneralSettings() {
       <h3>Backup</h3>
       <div class="panel">
         <h3>Data</h3>
-        <p class="muted" data-hint>Download everything as a JSON file, or restore from one.</p>
         <div class="backup-actions">
           <button class="btn btn--ghost" id="export-btn">Download</button>
           <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="import-file" accept="application/json" hidden></label>
@@ -3193,11 +3191,13 @@ function renderGeneralSettings() {
     refreshStatusLine();
   });
   qs('#disconnect-btn', syncPanel).addEventListener('click', () => {
-    Sync.setToken(''); Sync.setGistId('');
-    SyncEngine.disconnect();
-    qs('#sync-token', syncPanel).value = ''; qs('#sync-gist', syncPanel).value = '';
-    toast('Disconnected');
-    refreshStatusLine();
+    Modal.confirm('Are you sure you want to disconnect from cloud sync?', () => {
+      Sync.setToken(''); Sync.setGistId('');
+      SyncEngine.disconnect();
+      qs('#sync-token', syncPanel).value = ''; qs('#sync-gist', syncPanel).value = '';
+      toast('Disconnected');
+      refreshStatusLine();
+    }, { danger: true, yesLabel: 'Disconnect' });
   });
 
   const dangerPanel = el(`
@@ -3270,7 +3270,6 @@ function renderAppearanceSettings() {
   const blurPanel = el(`
     <div class="panel panel--wide">
       <h3>Popover backdrop</h3>
-      <p class="muted" data-hint>Blur behind the sync popover.</p>
       <div class="theme-card__actions" id="blur-toggle"></div>
     </div>`);
   const blurToggle = qs('#blur-toggle', blurPanel);
@@ -3300,7 +3299,6 @@ function renderAppearanceSettings() {
   const themePanel = el(`
     <div class="panel panel--wide">
       <h3>Theme</h3>
-      <p class="muted" data-hint>Pick a palette, or build your own.</p>
       <div class="theme-grid" id="theme-grid"></div>
       <button class="btn btn--ghost btn--small" id="add-theme" style="margin-top:.8rem;">+ New theme</button>
     </div>`);
@@ -3344,7 +3342,6 @@ function renderAppearanceSettings() {
   const fontPanel = el(`
     <div class="panel panel--wide">
       <h3>Font</h3>
-      <p class="muted" data-hint>Applies to headings and body text throughout the app.</p>
       <div class="font-grid" id="font-grid"></div>
       <button class="btn btn--ghost btn--small" id="add-font" style="margin-top:.8rem;">+ New font</button>
     </div>`);

@@ -268,6 +268,8 @@ input[type="date"] {
 .panel-list__header .btn { margin-left: auto; }
 .panel-list__header > p[data-hint] { flex: 1 0 100%; order: -1; }
 .panel--accent { border-color: var(--accent); background: #FBF6EA; }
+.panel--sync label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; font-weight: 500; }
+.panel--sync input { width: 100%; box-sizing: border-box; }
 .panel--danger { border-color: var(--warn-bg); }
 .panel--quiet { padding: .75rem 1.2rem; }
 .panel--quiet h3 { font-size: .85rem; color: var(--ink-soft); margin: 0 0 .3rem; }

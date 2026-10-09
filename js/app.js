@@ -3153,13 +3153,13 @@ function renderGeneralSettings() {
   });
 
   const syncPanel = el(`
-    <div class="panel">
+    <div class="panel panel--sync">
       <h3>Cloud sync (optional)</h3>
       <p class="muted" data-hint>Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
-      <label>GitHub personal access token (needs "gist" scope)
+      <label><span>GitHub personal access token (needs "gist" scope)</span>
         <input type="password" id="sync-token" value="${esc(Sync.getToken())}" placeholder="ghp_…">
       </label>
-      <label>Gist ID <span class="muted">(leave blank to create one)</span>
+      <label><span>Gist ID <span class="muted">(leave blank to create one)</span></span>
         <input type="text" id="sync-gist" value="${esc(Sync.getGistId())}" placeholder="auto-filled after first sync">
       </label>
       <div class="form-actions" style="justify-content:flex-start; gap:.6rem;">

@@ -254,6 +254,9 @@ input[type="date"] {
   padding: 1.2rem;
 }
 .settings-section { position: relative; }
+.backup-cards { display: contents; }
+.backup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.backup-actions .btn { display: flex; align-items: center; justify-content: center; margin: 0; text-align: center; }
 .settings-hint-btn {
   position: absolute; top: .28rem; right: .1rem;
   width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; cursor: pointer;

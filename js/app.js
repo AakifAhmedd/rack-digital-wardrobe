@@ -3081,17 +3081,23 @@ function renderGeneralSettings() {
   const wrap = el(`<div class="item-groups settings-sections"></div>`);
 
   const backupPanel = el(`
-    <div class="panel">
+    <div class="backup-cards">
       <h3>Backup</h3>
-      <p class="muted" data-hint>Download everything as a JSON file, or restore from one.</p>
-      <div class="form-actions" style="justify-content:flex-start; gap:.6rem;">
-        <button class="btn btn--ghost" id="export-btn">Download backup</button>
-        <label class="btn btn--ghost" style="cursor:pointer;">Restore from file<input type="file" id="import-file" accept="application/json" hidden></label>
+      <div class="panel">
+        <h3>Data</h3>
+        <p class="muted" data-hint>Download everything as a JSON file, or restore from one.</p>
+        <div class="backup-actions">
+          <button class="btn btn--ghost" id="export-btn">Download</button>
+          <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="import-file" accept="application/json" hidden></label>
+        </div>
       </div>
-      <p class="muted" data-hint style="margin-top:.9rem;">Photos stay on this device and aren't in the backup above. Download them separately to move or keep them.</p>
-      <div class="form-actions" style="justify-content:flex-start; gap:.6rem;">
-        <button class="btn btn--ghost" id="photos-export-btn">Download photos</button>
-        <label class="btn btn--ghost" style="cursor:pointer;">Restore photos<input type="file" id="photos-import-file" accept="application/json" hidden></label>
+      <div class="panel">
+        <h3>Photos</h3>
+        <p class="muted" data-hint>Photos stay on this device and aren't in the data backup. Download them separately to move or keep them.</p>
+        <div class="backup-actions">
+          <button class="btn btn--ghost" id="photos-export-btn">Download</button>
+          <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="photos-import-file" accept="application/json" hidden></label>
+        </div>
       </div>
     </div>`);
   qs('#export-btn', backupPanel).addEventListener('click', () => {

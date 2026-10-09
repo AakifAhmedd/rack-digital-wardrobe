@@ -406,6 +406,7 @@ input[type="date"] {
 .item-group.is-collapsed .item-group__chev { transform: rotate(-45deg); margin: 0 .35rem 0 0; }
 .item-group.is-collapsed .item-group__head { margin-bottom: 0; }
 .item-group.is-collapsed .item-grid { display: none; }
+.item-group.is-collapsed .settings-section__body { display: none; }
 .item-row {
   display: flex; align-items: center; gap: .7rem;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);

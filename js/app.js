@@ -491,10 +491,25 @@ qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'mod
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Modal.close(); });
 
 /* ---------------- tab navigation ---------------- */
-const TABS = ['dashboard', 'wardrobe', 'outfit', 'masters', 'settings'];
+const TABS = ['dashboard', 'wardrobe', 'outfit', 'settings'];
 let activeTab = 'dashboard';
-let activeMasterPanel = 'categories';
-let activeSettingsPanel = 'general';
+const SETTINGS_PANEL_KEY = 'rack.settings.panel';
+const SETTINGS_OPEN_KEY = 'rack.settings.openSections';
+let activeSettingsPanel = (() => {
+  try { return localStorage.getItem(SETTINGS_PANEL_KEY) === 'masters' ? 'masters' : 'general'; } catch (e) { return 'general'; }
+})();
+function setSettingsPanel(name) {
+  activeSettingsPanel = name === 'masters' ? 'masters' : 'general';
+  try { localStorage.setItem(SETTINGS_PANEL_KEY, activeSettingsPanel); } catch (e) { /* ignore */ }
+}
+/* Which Settings sections are open: device-local view state, all collapsed by default. */
+let settingsOpen = (() => {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_OPEN_KEY) || '{}') || {}; } catch (e) { return {}; }
+})();
+function setSettingsSectionOpen(key, open) {
+  if (open) settingsOpen[key] = true; else delete settingsOpen[key];
+  try { localStorage.setItem(SETTINGS_OPEN_KEY, JSON.stringify(settingsOpen)); } catch (e) { /* ignore */ }
+}
 const WARDROBE_FILTERS_KEY = 'rack.wardrobe.filters';
 const DEFAULT_WARDROBE_FILTERS = { category: '', subcategory: '', brand: '', color: '', tag: '', activity: '', status: 'active', sort: 'recent', search: '' };
 function loadWardrobeFilters() {
@@ -602,7 +617,6 @@ function render() {
   if (activeTab === 'dashboard') main.appendChild(renderDashboard());
   else if (activeTab === 'wardrobe') { main.appendChild(renderWardrobe()); renderItemGrid(); }
   else if (activeTab === 'outfit') main.appendChild(renderOutfitBuilder());
-  else if (activeTab === 'masters') main.appendChild(renderMasters());
   else if (activeTab === 'settings') main.appendChild(renderSettings());
 }
 
@@ -1730,7 +1744,7 @@ function openItemModal(existing, presetCategoryId) {
           box.innerHTML = '<p class="muted">Choose a category first.</p>';
           return;
         }
-        if (!relevant.length) { box.innerHTML = '<p class="muted">No tags for this category yet — add some in Masters.</p>'; return; }
+        if (!relevant.length) { box.innerHTML = '<p class="muted">No tags for this category yet — add some in Settings \u203a Masters.</p>'; return; }
         box.innerHTML = relevant.map(t => `
           <label class="tag-check">
             <input type="checkbox" value="${t.id}" ${item.tags?.includes(t.id) ? 'checked' : ''}> ${esc(t.name)}
@@ -2137,12 +2151,13 @@ function renderOutfitBuilder() {
     wrap.appendChild(el(`
       <div class="empty-state">
         <h2>No activities yet</h2>
-        <p>Set up an activity with rules in Masters, then come back here to build an outfit for it.</p>
-        <button class="btn btn--primary" id="outfit-goto-masters">Go to Masters</button>
+        <p>Set up an activity with rules in Settings \u203a Masters, then come back here to build an outfit for it.</p>
+        <button class="btn btn--primary" id="outfit-goto-masters">Go to Activities</button>
       </div>`));
     qs('#outfit-goto-masters', wrap).addEventListener('click', () => {
-      activeMasterPanel = 'activities';
-      switchTab('masters');
+      setSettingsPanel('masters');
+      setSettingsSectionOpen('m:activities', true);
+      switchTab('settings');
     });
     return wrap;
   }
@@ -2187,7 +2202,7 @@ function renderOutfitBuilder() {
       body.appendChild(el(`
         <div class="empty-state">
           <h2>Nothing matches yet</h2>
-          <p>No active items match "${esc(act.name)}"'s rules. Add items to your rack or adjust the activity's rules in Masters.</p>
+          <p>No active items match "${esc(act.name)}"'s rules. Add items to your rack or adjust the activity's rules in Settings \u203a Masters.</p>
         </div>`));
       return;
     }
@@ -2302,28 +2317,14 @@ function renderOutfitSummary(matches, refresh) {
    MASTERS
    ================================================================ */
 function renderMasters() {
-  const wrap = el(`
-    <section class="view-section">
-      <div class="subnav" id="master-subnav">
-        ${['categories', 'tags', 'brands', 'colors', 'activities'].map(p =>
-          `<button class="subnav__link ${p === activeMasterPanel ? 'is-active' : ''}" data-panel="${p}">${p[0].toUpperCase() + p.slice(1)}</button>`
-        ).join('')}
-      </div>
-      <div id="master-panel"></div>
-    </section>`);
-
-  qsa('.subnav__link', wrap).forEach(btn => btn.addEventListener('click', () => {
-    activeMasterPanel = btn.dataset.panel;
-    render();
-  }));
-
-  const panel = qs('#master-panel', wrap);
-  if (activeMasterPanel === 'categories') panel.appendChild(renderCategoriesPanel());
-  else if (activeMasterPanel === 'tags') panel.appendChild(renderTagsPanel());
-  else if (activeMasterPanel === 'brands') panel.appendChild(renderSimpleListPanel('brands', 'Brand'));
-  else if (activeMasterPanel === 'colors') panel.appendChild(renderColorsPanel());
-  else if (activeMasterPanel === 'activities') panel.appendChild(renderActivitiesPanel());
-
+  const wrap = el(`<div class="item-groups settings-sections"></div>`);
+  [
+    ['categories', 'Categories', () => renderCategoriesPanel()],
+    ['tags', 'Tags', () => renderTagsPanel()],
+    ['brands', 'Brands', () => renderSimpleListPanel('brands', 'Brand')],
+    ['colors', 'Colors', () => renderColorsPanel()],
+    ['activities', 'Activities', () => renderActivitiesPanel()],
+  ].forEach(([key, title, build]) => wrap.appendChild(settingsSection('m:' + key, title, build)));
   return wrap;
 }
 
@@ -2999,11 +3000,37 @@ function openActivityModal(existing) {
 /* ================================================================
    SETTINGS
    ================================================================ */
+/* A collapsible Settings section (same look as the Wardrobe groups). The body is
+   only built when the section is open, and open/closed is remembered per device. */
+function settingsSection(key, title, buildBody) {
+  const open = !!settingsOpen[key];
+  const section = el(`
+    <section class="item-group settings-section ${open ? '' : 'is-collapsed'}">
+      <button type="button" class="item-group__head" aria-expanded="${open}">
+        <span class="item-group__chev" aria-hidden="true"></span>
+        <span class="item-group__name">${esc(title)}</span>
+      </button>
+      <div class="settings-section__body"></div>
+    </section>`);
+  const body = qs('.settings-section__body', section);
+  let built = false;
+  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); } };
+  if (open) ensureBody();
+  qs('.item-group__head', section).addEventListener('click', () => {
+    const nowCollapsed = !section.classList.contains('is-collapsed');
+    section.classList.toggle('is-collapsed', nowCollapsed);
+    qs('.item-group__head', section).setAttribute('aria-expanded', String(!nowCollapsed));
+    if (!nowCollapsed) ensureBody();
+    setSettingsSectionOpen(key, !nowCollapsed);
+  });
+  return section;
+}
+
 function renderSettings() {
   const wrap = el(`
     <section class="view-section">
       <div class="subnav" id="settings-subnav">
-        ${['general', 'appearance'].map(p =>
+        ${['general', 'masters'].map(p =>
           `<button class="subnav__link ${p === activeSettingsPanel ? 'is-active' : ''}" data-panel="${p}">${p[0].toUpperCase() + p.slice(1)}</button>`
         ).join('')}
       </div>
@@ -3011,12 +3038,12 @@ function renderSettings() {
     </section>`);
 
   qsa('.subnav__link', wrap).forEach(btn => btn.addEventListener('click', () => {
-    activeSettingsPanel = btn.dataset.panel;
+    setSettingsPanel(btn.dataset.panel);
     render();
   }));
 
   const panel = qs('#settings-panel', wrap);
-  if (activeSettingsPanel === 'appearance') panel.appendChild(renderAppearanceSettings());
+  if (activeSettingsPanel === 'masters') panel.appendChild(renderMasters());
   else panel.appendChild(renderGeneralSettings());
 
   /* the glass mobile layout has no header, so the version lives here */
@@ -3027,7 +3054,7 @@ function renderSettings() {
 
 function renderGeneralSettings() {
   const s = Store.state;
-  const wrap = el(`<div class="settings-grid"></div>`);
+  const wrap = el(`<div class="item-groups settings-sections"></div>`);
 
   const dataPanel = el(`
     <div class="panel">
@@ -3171,7 +3198,22 @@ function renderGeneralSettings() {
     }, { danger: true, yesLabel: 'Erase everything' });
   });
 
-  [dataPanel, backupPanel, syncPanel, dangerPanel].forEach(p => wrap.appendChild(p));
+  /* each panel's own heading becomes its collapsible header */
+  const asSection = (key, panel) => {
+    const h = qs('h3', panel);
+    const title = h.textContent;
+    h.remove();
+    return settingsSection('g:' + key, title, () => {
+      const grid = el(`<div class="settings-grid"></div>`);
+      grid.appendChild(panel);
+      return grid;
+    });
+  };
+  wrap.appendChild(settingsSection('g:appearance', 'Appearance', () => renderAppearanceSettings()));
+  wrap.appendChild(asSection('sync', syncPanel));
+  wrap.appendChild(asSection('backup', backupPanel));
+  wrap.appendChild(asSection('currency', dataPanel));
+  wrap.appendChild(asSection('reset', dangerPanel));
   return wrap;
 }
 
@@ -3443,7 +3485,8 @@ function init() {
   initSyncIndicator();
   // Home-screen shortcuts open the app with ?tab=outfit etc.
   const startTab = new URLSearchParams(location.search).get('tab');
-  switchTab(['dashboard', 'wardrobe', 'outfit', 'masters', 'settings'].includes(startTab) ? startTab : 'dashboard');
+  if (startTab === 'masters') setSettingsPanel('masters');   // old links: Masters now lives in Settings
+  switchTab(TABS.includes(startTab) ? startTab : (startTab === 'masters' ? 'settings' : 'dashboard'));
   if (startTab) history.replaceState(null, '', location.pathname);
 
   SyncEngine.checkAndAutoSync().catch(() => { /* status already reflects the failure */ });

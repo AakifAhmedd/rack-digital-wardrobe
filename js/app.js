@@ -3492,13 +3492,23 @@ function openFontModal() {
 async function initVersion() {
   const badge = qs('#app-version');
   if (!badge) return;
+  const KEY = 'rack.appVersion';
+  const show = (text) => {
+    badge.textContent = text;
+    /* the Settings footer (glass mobile layout) copies the badge, so keep it in step */
+    qsa('.settings-version').forEach(p => { p.textContent = 'RACK ' + text; });
+  };
+  /* last known version, so slow or failed fetches don't leave the label blank */
+  try { const last = localStorage.getItem(KEY); if (last) badge.textContent = last; } catch (e) { /* ignore */ }
   try {
     const res = await fetch(`VERSION?v=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) return;
     const v = (await res.text()).trim().split('\n')[0].trim();
     if (!v) return;
-    badge.textContent = 'v' + v.replace(/^v/i, '');
-  } catch (e) { /* offline or blocked — badge stays blank */ }
+    const text = 'v' + v.replace(/^v/i, '');
+    show(text);
+    try { localStorage.setItem(KEY, text); } catch (e) { /* ignore */ }
+  } catch (e) { /* offline or blocked — keeps the last known version */ }
 }
 
 function init() {

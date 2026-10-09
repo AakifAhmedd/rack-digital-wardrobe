@@ -3444,7 +3444,7 @@ function openThemeModal() {
         <input type="text" name="name" value="My theme" required>
       </label>
       ${main.map(colorRow).join('')}
-      <details class="theme-advanced">
+      <details class="advanced-details theme-advanced">
         <summary>Advanced</summary>
         ${advanced.map(colorRow).join('')}
       </details>
@@ -3471,7 +3471,7 @@ function openThemeModal() {
         e.preventDefault();
         const fd = new FormData(e.target);
         const name = String(fd.get('name') || '').trim();
-        if (!name) return;
+        if (!name) { toast('Enter a theme name'); return; }
         const theme = { id: uid('theme'), name, custom: true };
         const bad = [];
         [...main, ...advanced].forEach(([key, label]) => {

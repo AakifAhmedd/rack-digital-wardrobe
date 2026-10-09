@@ -253,15 +253,17 @@ input[type="date"] {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
   padding: 1.2rem;
 }
-.hint-row { display: flex; justify-content: flex-end; margin-bottom: .3rem; }
-.panel-list__header .hint-row { margin: 0; }
-.panel-list__header > p[data-hint] { flex: 1 0 100%; order: 3; }
-.hint-btn {
+.settings-section { position: relative; }
+.settings-hint-btn {
+  position: absolute; top: .28rem; right: .1rem;
   width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; cursor: pointer;
   border: 1px solid var(--line); background: transparent; color: var(--ink-soft);
   font: inherit; font-size: .8rem; line-height: 1;
 }
-.hint-btn:hover, .hint-btn[aria-expanded="true"] { color: var(--text); border-color: var(--ink-soft); }
+.settings-hint-btn:hover, .settings-hint-btn[aria-expanded="true"] { color: var(--text); border-color: var(--ink-soft); }
+.item-group.is-collapsed .settings-hint-btn { display: none; }
+.panel-list__header .btn { margin-left: auto; }
+.panel-list__header > p[data-hint] { flex: 1 0 100%; order: -1; }
 .panel--accent { border-color: var(--accent); background: #FBF6EA; }
 .panel--danger { border-color: var(--warn-bg); }
 .panel--quiet { padding: .75rem 1.2rem; }

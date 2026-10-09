@@ -3002,18 +3002,18 @@ function openActivityModal(existing) {
    ================================================================ */
 /* A collapsible Settings section (same look as the Wardrobe groups). The body is
    only built when the section is open, and open/closed is remembered per device. */
-/* Long explanatory text on Settings stays hidden behind a small "?" button. */
-function collapseHints(root) {
-  qsa('[data-hint]', root).forEach(p => {
-    p.hidden = true;
-    const row = el(`<div class="hint-row"><button type="button" class="hint-btn" aria-expanded="false" aria-label="More info">?</button></div>`);
-    row.style.marginTop = p.style.marginTop; p.style.marginTop = '';
-    p.before(row);
-    qs('.hint-btn', row).addEventListener('click', (e) => {
-      p.hidden = !p.hidden;
-      e.currentTarget.setAttribute('aria-expanded', String(!p.hidden));
-    });
+/* Long explanatory text on Settings stays hidden; one "?" in the section header toggles it. */
+function collapseHints(body, section) {
+  const hints = qsa('[data-hint]', body);
+  if (!hints.length) return;
+  hints.forEach(p => { p.hidden = true; });
+  const btn = el(`<button type="button" class="settings-hint-btn" aria-expanded="false" aria-label="More info">?</button>`);
+  btn.addEventListener('click', () => {
+    const show = hints[0].hidden;
+    hints.forEach(p => { p.hidden = !show; });
+    btn.setAttribute('aria-expanded', String(show));
   });
+  section.appendChild(btn);
 }
 function settingsSection(key, title, buildBody) {
   const open = !!settingsOpen[key];
@@ -3027,7 +3027,7 @@ function settingsSection(key, title, buildBody) {
     </section>`);
   const body = qs('.settings-section__body', section);
   let built = false;
-  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); collapseHints(body); } };
+  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); collapseHints(body, section); } };
   if (open) ensureBody();
   qs('.item-group__head', section).addEventListener('click', () => {
     const nowCollapsed = !section.classList.contains('is-collapsed');

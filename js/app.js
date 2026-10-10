@@ -644,12 +644,13 @@ function syncStatusDetail(status) {
   const meta = loadSyncMeta();
   switch (status) {
     case 'synced': {
+      if (SyncEngine.lastNotice) return SyncEngine.lastNotice;
       const when = fmtDateTime(meta.lastSyncedLocalUpdatedAt);
       return when ? `Last synced ${when}` : 'Up to date.';
     }
     case 'pending': return "You have changes on this device that haven't been pushed yet.";
     case 'syncing': return 'Talking to the cloud…';
-    case 'failed': return (SyncEngine.lastError && SyncEngine.lastError.message) || 'Something went wrong. Retrying automatically.';
+    case 'failed': return (SyncEngine.lastError && SyncEngine.lastError.message) || 'Something went wrong. Try Push or Pull again.';
     case 'conflict': return 'This device and the cloud both have changes. Choose which one wins.';
     case 'not-connected': return "Cloud sync isn't set up yet.";
     default: return '';
@@ -657,10 +658,22 @@ function syncStatusDetail(status) {
 }
 
 let conflictModalShown = false;
+/* All explicit entry points (Settings, header, conflict choice) use the same
+   photo-aware result handling. Background sync never calls this helper. */
+async function runManualSync(action, resolveConflict = false) {
+  try {
+    if (SyncEngine.status === 'conflict') conflictModalShown = false;
+    const result = await SyncEngine[action]({ resolveConflict });
+    if (result.conflict || result.busy) return;
+    toast(result.photoWarning || (action === 'push' ? 'Wardrobe and photos pushed to cloud' : 'Wardrobe and photos pulled from cloud'), result.photoWarning ? 'warn' : undefined);
+  } catch (err) { toast(err.message, 'warn'); }
+}
+
 function openConflictModal() {
   const body = el(`
     <div>
       <p>This device has changes that haven't been pushed, and the cloud copy has changed too — probably from another device. Pick one:</p>
+      <p class="muted">Push and Pull include photos. Pull replaces local photos with the cloud snapshot when available.</p>
       <div class="form-actions" style="flex-direction:column; align-items:stretch; gap:.6rem;">
         <button class="btn btn--primary" id="conflict-pull">Pull remote — discard my local changes</button>
         <button class="btn btn--danger" id="conflict-push">Push mine — overwrite remote</button>
@@ -671,13 +684,11 @@ function openConflictModal() {
     onMount: (root) => {
       qs('#conflict-pull', root).addEventListener('click', async () => {
         Modal.close();
-        try { await SyncEngine.pull(); toast('Pulled remote — local changes replaced'); }
-        catch (err) { toast(err.message, 'warn'); }
+        await runManualSync('pull', true);
       });
       qs('#conflict-push', root).addEventListener('click', async () => {
         Modal.close();
-        try { await SyncEngine.push(); toast('Pushed — remote overwritten'); }
-        catch (err) { toast(err.message, 'warn'); }
+        await runManualSync('push', true);
       });
       qs('#conflict-cancel', root).addEventListener('click', () => Modal.close());
     },
@@ -710,12 +721,10 @@ function initSyncIndicator() {
     switchTab('settings');
   });
   pushBtn.addEventListener('click', async () => {
-    try { await SyncEngine.push(); toast('Pushed to cloud'); }
-    catch (err) { toast(err.message, 'warn'); }
+    await runManualSync('push');
   });
   pullBtn.addEventListener('click', async () => {
-    try { await SyncEngine.pull(); toast('Pulled from cloud'); }
-    catch (err) { toast(err.message, 'warn'); }
+    await runManualSync('pull');
   });
 
   function updateUI(status) {
@@ -1339,7 +1348,7 @@ function itemLeadMarkup(item, color, { small = false } = {}) {
   return `<span class="swatch${small ? ' swatch--sm' : ''}" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>`;
 }
 
-/* ---------------- per-device photos (perfume cards only) ----------------
+/* ---------------- local photos (perfume cards only) ----------------
    The Blob lives in IndexedDB (photos.js) — nothing here touches the synced
    store. Each grid build creates an object URL per photo and registers it
    below; the next build revokes the whole round. The photo box stays hidden
@@ -1668,7 +1677,7 @@ function openItemModal(existing, presetCategoryId) {
         <input type="text" name="subtext" id="subtext-input" value="${esc(item.subtext || '')}" placeholder="e.g. Air Zoom Pegasus 40">
       </label>
       <div class="photo-field" id="photo-field" hidden>
-        <span class="photo-field__label">Photo <span class="muted">(per-device — never synced)</span></span>
+        <span class="photo-field__label">Photo <span class="muted">(included in manual Push/Pull)</span></span>
         <div class="photo-field__preview" id="photo-preview" hidden><img id="photo-preview-img" alt=""></div>
         <div class="photo-field__zoom" id="photo-zoom-row" hidden>
           <span>Zoom</span>
@@ -1765,7 +1774,7 @@ function openItemModal(existing, presetCategoryId) {
         if (subtextInput) subtextInput.placeholder = isPerfume ? 'e.g. Black Orchid' : 'e.g. Air Zoom Pegasus 40';
       }
 
-      /* ---- perfume photo (per-device, IndexedDB — see photos.js) ---- */
+      /* ---- perfume photo (local IndexedDB — see photos.js) ---- */
       const photoField = qs('#photo-field', root);
       const photoPreview = qs('#photo-preview', root);
       const photoPreviewImg = qs('#photo-preview-img', root);
@@ -3094,7 +3103,7 @@ function renderGeneralSettings() {
       </div>
       <div class="panel">
         <h3>Photos</h3>
-        <p class="muted" data-hint>Photos stay on this device and aren't in the data backup. Download them separately to move or keep them.</p>
+        <p class="muted" data-hint>Photos aren't in the data backup. Push/Pull includes them; Download/Restore keeps a separate photo backup. Restore adds photos without removing others.</p>
         <div class="backup-actions">
           <button class="btn btn--ghost" id="photos-export-btn">Download</button>
           <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="photos-import-file" accept="application/json" hidden></label>
@@ -3156,7 +3165,7 @@ function renderGeneralSettings() {
   const syncPanel = el(`
     <div class="panel panel--sync">
       <h3>Cloud sync (optional)</h3>
-      <p class="muted" data-hint>Access your rack on other devices using a private GitHub Gist as storage. Your token stays in this browser only — it's never written into the app's code or repository. This app auto-checks for newer changes when you open or return to it; use Push/Pull here (or the status indicator in the header) to sync manually anytime.</p>
+      <p class="muted" data-hint>Access your rack on other devices using a private GitHub Gist. Your token stays in this browser only — it's never written into the app's code or repository. Push/Pull includes wardrobe data and photos. Pull replaces local photos with the cloud snapshot, including photo deletions; the latest snapshot wins. Background auto-sync on open or return updates wardrobe data only and never transfers or deletes photos. Older Gists without photos still pull wardrobe data and keep local photos.</p>
       <label><span>GitHub personal access token (needs "gist" scope)</span>
         <input type="password" id="sync-token" value="${esc(Sync.getToken())}" placeholder="ghp_…">
       </label>
@@ -3177,20 +3186,14 @@ function renderGeneralSettings() {
   qs('#push-btn', syncPanel).addEventListener('click', async () => {
     Sync.setToken(qs('#sync-token', syncPanel).value.trim());
     Sync.setGistId(qs('#sync-gist', syncPanel).value.trim());
-    try {
-      await SyncEngine.push();
-      qs('#sync-gist', syncPanel).value = Sync.getGistId();
-      toast('Pushed to cloud');
-    } catch (err) { toast(err.message, 'warn'); }
+    await runManualSync('push');
+    qs('#sync-gist', syncPanel).value = Sync.getGistId();
     refreshStatusLine();
   });
   qs('#pull-btn', syncPanel).addEventListener('click', async () => {
     Sync.setToken(qs('#sync-token', syncPanel).value.trim());
     Sync.setGistId(qs('#sync-gist', syncPanel).value.trim());
-    try {
-      await SyncEngine.pull();
-      toast('Pulled from cloud');
-    } catch (err) { toast(err.message, 'warn'); }
+    await runManualSync('pull');
     refreshStatusLine();
   });
   qs('#disconnect-btn', syncPanel).addEventListener('click', () => {

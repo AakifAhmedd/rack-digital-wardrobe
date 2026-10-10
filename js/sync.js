@@ -24,7 +24,13 @@ const Sync = {
     };
   },
 
-  async createGist(data) {
+  _files(data, photos) {
+    const files = { 'rack-wardrobe.json': { content: JSON.stringify(data, null, 2) } };
+    if (photos !== undefined) files['rack-photos.json'] = { content: JSON.stringify(photos) };
+    return files;
+  },
+
+  async createGist(data, photos) {
     const headers = await this._headers();
     const res = await fetch('https://api.github.com/gists', {
       method: 'POST',
@@ -32,40 +38,69 @@ const Sync = {
       body: JSON.stringify({
         description: 'RACK wardrobe data (do not delete)',
         public: false,
-        files: { 'rack-wardrobe.json': { content: JSON.stringify(data, null, 2) } },
+        files: this._files(data, photos),
       }),
     });
     if (!res.ok) throw new Error(`Could not create gist (${res.status}). Check your token's permissions.`);
     const json = await res.json();
     this.setGistId(json.id);
-    return json.id;
+    return json.updated_at || null;
   },
 
-  async pushToCloud(data) {
+  async pushToCloud(data, photos) {
     const gistId = this.getGistId();
-    if (!gistId) return this.createGist(data);
+    if (!gistId) return this.createGist(data, photos);
     const headers = await this._headers();
     const res = await fetch(`https://api.github.com/gists/${gistId}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({
-        files: { 'rack-wardrobe.json': { content: JSON.stringify(data, null, 2) } },
+        files: this._files(data, photos),
       }),
     });
     if (!res.ok) throw new Error(`Sync failed (${res.status}). Check your token and gist ID.`);
-    return true;
+    const json = await res.json();
+    return json.updated_at || null;
   },
 
-  async pullFromCloud() {
+  /* GitHub truncates large files in the API response. Read that revision's
+     raw URL without forwarding the token outside api.github.com. */
+  async _readFile(file) {
+    if (!file.truncated && typeof file.content === 'string') return JSON.parse(file.content);
+    const url = new URL(file.raw_url);
+    if (url.protocol !== 'https:' || url.hostname !== 'gist.githubusercontent.com' || url.username || url.password) {
+      throw new Error('Invalid Gist file URL');
+    }
+    const res = await fetch(url.href, { credentials: 'omit', cache: 'no-store' });
+    if (!res.ok) throw new Error(`Could not read Gist file (${res.status}).`);
+    return JSON.parse(await res.text());
+  },
+
+  async pullFromCloud({ includePhotos = false } = {}) {
     const gistId = this.getGistId();
     if (!gistId) throw new Error('No gist connected yet.');
     const headers = await this._headers();
     const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers });
     if (!res.ok) throw new Error(`Could not fetch cloud data (${res.status}).`);
     const json = await res.json();
-    const file = json.files['rack-wardrobe.json'];
+    const file = json.files && json.files['rack-wardrobe.json'];
     if (!file) throw new Error('Gist does not contain rack-wardrobe.json.');
-    return JSON.parse(file.content);
+    const data = await this._readFile(file);
+    const snapshot = { data, updatedAt: json.updated_at || null, photos: null, photoWarning: null, photoFailed: false };
+    // Background sync does not parse, fetch raw content, or apply photo files.
+    if (includePhotos) {
+      const photoFile = json.files['rack-photos.json'];
+      if (!photoFile) {
+        snapshot.photoWarning = 'Wardrobe pulled; no remote photos were available. Local photos kept.';
+      } else {
+        try { snapshot.photos = await this._readFile(photoFile); }
+        catch (err) {
+          snapshot.photoWarning = 'Wardrobe pulled; could not read remote photos. Local photos kept. Try Pull again.';
+          snapshot.photoFailed = true;
+        }
+      }
+    }
+    return snapshot;
   },
 
   /* Lightweight check: just the gist's last-modified time, no content parsing.
@@ -83,12 +118,14 @@ const Sync = {
 
 /* ============================================================
    SyncEngine — status tracking, conflict detection, auto-pull,
-   and retry-on-failure, layered on top of Sync's raw API calls.
+   and background retry-on-failure, layered on top of Sync's raw API calls.
 
    This only tracks LOCAL bookkeeping (in localStorage) about what
    remote/local state we last knew to be in sync — it never changes
    the shape of the data that actually gets pushed to the gist
-   (still just the full Store.state, exactly as before).
+   (rack-wardrobe.json is still just the full Store.state). Only explicit
+   Push/Pull transfers the separate rack-photos.json snapshot. Manual actions
+   are never retried by a timer, so photos cannot sync in the background.
    ============================================================ */
 
 const SYNC_META_KEY = 'rack.sync.meta';
@@ -107,6 +144,7 @@ const SyncEngine = {
   // 'idle' | 'not-connected' | 'syncing' | 'synced' | 'pending' | 'failed' | 'conflict'
   status: 'idle',
   lastError: null,
+  lastNotice: null,
   _listeners: [],
   _retryTimer: null,
   _retryDelay: 15000,
@@ -125,12 +163,19 @@ const SyncEngine = {
 
   lastSyncedAt() { return loadSyncMeta().lastSyncedLocalUpdatedAt || null; },
 
+  _hasConflict(remoteUpdatedAt) {
+    const meta = loadSyncMeta();
+    return !!meta.lastRemoteUpdatedAt && !!remoteUpdatedAt &&
+      remoteUpdatedAt !== meta.lastRemoteUpdatedAt && this.hasLocalChangesSinceSync();
+  },
+
   /* Called on app open and on tab/app resume. Detects whether the
      remote has moved since we last looked. If it has and we have no
      unsynced local edits, it's safe to auto-pull. If it has AND we
      have unsynced local edits, that's a genuine conflict — caller
      (app.js) is responsible for prompting the user via a modal. */
   async checkAndAutoSync() {
+    if (this.status === 'syncing') return { busy: true };
     if (!Sync.isConnected()) { this._setStatus('not-connected'); return { notConnected: true }; }
     this._setStatus('syncing');
     try {
@@ -154,7 +199,8 @@ const SyncEngine = {
         return { conflict: true };
       }
       if (remoteMoved && !localDirty) {
-        await this.pull({ silent: true, knownRemoteUpdatedAt: remoteUpdatedAt });
+        const result = await this.pull({ silent: true });
+        if (result.conflict) return result;
         if (typeof toast === 'function') toast('Synced latest changes from the cloud');
         return { pulled: true };
       }
@@ -168,45 +214,87 @@ const SyncEngine = {
     }
   },
 
-  async push() {
+  async push(opts = {}) {
+    if (this.status === 'syncing') return { busy: true };
+    this._clearRetry();
     this._setStatus('syncing');
     try {
-      await Sync.pushToCloud(Store.state);
-      const remoteUpdatedAt = await Sync.fetchRemoteUpdatedAt().catch(() => null);
-      saveSyncMeta({ lastRemoteUpdatedAt: remoteUpdatedAt, lastSyncedLocalUpdatedAt: Store.state.meta.updatedAt });
-      this._setStatus('synced');
+      // Capture wardrobe before awaiting the photo export. Later local edits
+      // must remain pending rather than being marked as uploaded.
+      const data = JSON.parse(JSON.stringify(Store.state));
+      let photos;
+      try { photos = await RackPhotos.exportAll(); }
+      catch (err) { throw new Error('Could not read local photos. Nothing was pushed. Try Push again.'); }
+      const before = Sync.getGistId() ? await Sync.fetchRemoteUpdatedAt() : null;
+      if (!opts.resolveConflict && this._hasConflict(before)) {
+        this._setStatus('conflict');
+        return { conflict: true };
+      }
+      const remoteUpdatedAt = await Sync.pushToCloud(data, photos);
+      saveSyncMeta({ lastRemoteUpdatedAt: remoteUpdatedAt, lastSyncedLocalUpdatedAt: data.meta.updatedAt });
+      this.lastNotice = null;
+      this._setStatus(this.hasLocalChangesSinceSync() ? 'pending' : 'synced');
       this._clearRetry();
-      return true;
+      return {};
     } catch (err) {
       this._setStatus('failed', err);
-      this._scheduleRetry(() => this.push());
       throw err;
     }
   },
 
   async pull(opts = {}) {
+    // A silent pull is entered from checkAndAutoSync while status is syncing.
+    if (!opts.silent && this.status === 'syncing') return { busy: true };
+    this._clearRetry();
     this._setStatus('syncing');
     try {
-      const data = await Sync.pullFromCloud();
-      Store.replaceAll(data);
+      const snapshot = await Sync.pullFromCloud({ includePhotos: !opts.silent });
+      let prepared = null;
+      let photoWarning = snapshot.photoWarning;
+      let photoFailed = snapshot.photoFailed;
+      if (!opts.silent && !photoWarning) {
+        try {
+          prepared = await RackPhotos.prepareSnapshot(snapshot.photos, new Set((snapshot.data.items || []).map(i => i.id)));
+        } catch (err) {
+          photoWarning = 'Wardrobe pulled; remote photo snapshot is invalid or unsupported. Local photos kept. Try Pull again.';
+          photoFailed = true;
+        }
+      }
+      // Recheck after all reads/decoding; a local edit during the request must
+      // still produce the existing wardrobe conflict before any replacement.
+      if (!opts.resolveConflict && this._hasConflict(snapshot.updatedAt)) {
+        this._setStatus('conflict');
+        return { conflict: true };
+      }
+      Store.replaceAll(snapshot.data);
+      const localUpdatedAt = Store.state.meta.updatedAt;
+      if (prepared) {
+        try {
+          await RackPhotos.replaceSnapshot(prepared);
+          if (prepared.skipped) photoWarning = `Wardrobe pulled; ${prepared.skipped} remote photo entries skipped (invalid image or no matching item).`;
+        } catch (err) {
+          photoWarning = 'Wardrobe pulled; could not restore photos. Local photos kept. Try Pull again.';
+          photoFailed = true;
+        }
+      }
       if (typeof applyStoredAppearance === 'function') applyStoredAppearance();
-      const remoteUpdatedAt = opts.knownRemoteUpdatedAt || await Sync.fetchRemoteUpdatedAt().catch(() => null);
-      saveSyncMeta({ lastRemoteUpdatedAt: remoteUpdatedAt, lastSyncedLocalUpdatedAt: Store.state.meta.updatedAt });
-      this._setStatus('synced');
+      saveSyncMeta({ lastRemoteUpdatedAt: snapshot.updatedAt, lastSyncedLocalUpdatedAt: localUpdatedAt });
+      if (!opts.silent) this.lastNotice = photoWarning;
+      this._setStatus(photoFailed ? 'failed' : (this.hasLocalChangesSinceSync() ? 'pending' : 'synced'), photoFailed ? new Error(photoWarning) : null);
       this._clearRetry();
       // Always reflect the new data on screen — "silent" only means
       // "don't make a fuss about it", never "leave the UI stale".
       if (typeof render === 'function') render();
-      return true;
+      return { photoWarning };
     } catch (err) {
       this._setStatus('failed', err);
-      this._scheduleRetry(() => this.pull(opts));
       throw err;
     }
   },
 
   disconnect() {
     this._clearRetry();
+    this.lastNotice = null;
     saveSyncMeta({ lastRemoteUpdatedAt: null, lastSyncedLocalUpdatedAt: 0 });
     this._setStatus('not-connected');
   },

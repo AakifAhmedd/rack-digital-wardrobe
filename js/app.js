@@ -272,6 +272,7 @@ function matchRule(rule, item) {
   return true;
 }
 function matchActivity(activity, item) {
+  if (!activity) return false;
   if (activity.excludeCategories?.includes(item.categoryId)) return false;
   if (activity.excludeSubcategories?.includes(item.subcategoryId)) return false;
   if (activity.excludeTags?.some(t => item.tags.includes(t))) return false;
@@ -425,11 +426,24 @@ function chartEmpty(msg) {
 
 /* ---------------- modal system ---------------- */
 const Modal = {
+  _opener: null,
+  _cleanup: null,
+  _background: [],
   open(title, bodyEl, opts = {}) {
     const overlay = qs('#modal-overlay');
     const box = qs('#modal-box');
+    if (!overlay.classList.contains('is-open')) {
+      this._opener = document.activeElement;
+      this._background = qsa('body > *').filter(node => node !== overlay && !node.inert);
+      this._background.forEach(node => { node.inert = true; });
+    }
+    if (this._cleanup) this._cleanup();
+    this._cleanup = opts.onClose || null;
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'modal-title');
     box.innerHTML = '';
-    const header = el(`<div class="modal__header"><h3>${esc(title)}</h3><button class="icon-btn" id="modal-close" aria-label="Close">&times;</button></div>`);
+    const header = el(`<div class="modal__header"><h3 id="modal-title">${esc(title)}</h3><button class="icon-btn" id="modal-close" aria-label="Close">&times;</button></div>`);
     const body = el(`<div class="modal__body"></div>`);
     if (typeof bodyEl === 'string') body.innerHTML = bodyEl; else body.appendChild(bodyEl);
     box.appendChild(header);
@@ -437,12 +451,20 @@ const Modal = {
     overlay.classList.add('is-open');
     document.documentElement.classList.add('modal-open');
     qs('#modal-close').addEventListener('click', () => Modal.close());
+    qs('#modal-close').focus();
     if (opts.onMount) opts.onMount(body);
   },
   close() {
+    if (!qs('#modal-overlay').classList.contains('is-open')) return;
+    if (this._cleanup) this._cleanup();
+    this._cleanup = null;
+    this._background.forEach(node => { node.inert = false; });
+    this._background = [];
     qs('#modal-overlay').classList.remove('is-open');
     document.documentElement.classList.remove('modal-open');
     qs('#modal-box').innerHTML = '';
+    if (this._opener?.isConnected) this._opener.focus();
+    this._opener = null;
   },
   confirm(message, onYes, opts = {}) {
     const body = el(`
@@ -489,7 +511,16 @@ Modal.prompt = function (title, fields, onSubmit, opts = {}) {
   });
 };
 qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'modal-overlay') Modal.close(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') Modal.close(); });
+document.addEventListener('keydown', (e) => {
+  if (!qs('#modal-overlay').classList.contains('is-open')) return;
+  if (e.key === 'Escape') { e.preventDefault(); Modal.close(); }
+  if (e.key !== 'Tab') return;
+  const controls = qsa('button, input, select, textarea, a[href], [tabindex]', qs('#modal-box'))
+    .filter(node => !node.matches(':disabled') && node.tabIndex >= 0 && !node.closest('[hidden]') && node.getClientRects().length);
+  const first = controls[0], last = controls[controls.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+});
 
 /* ---------------- tab navigation ---------------- */
 const TABS = ['dashboard', 'wardrobe', 'outfit', 'settings'];
@@ -613,6 +644,7 @@ function initNavBehaviour() {
 }
 
 function render() {
+  releaseItemCardPhotoUrls();
   const main = qs('#view');
   main.innerHTML = '';
   if (activeTab === 'dashboard') main.appendChild(renderDashboard());
@@ -823,12 +855,12 @@ function renderDashboard() {
     <div class="stat-grid">
       <div class="stat-card stat-hero">
         <span class="stat-card__label">Avg. cost per wear</span>
-        <span class="stat-card__num">${avgCPW !== null ? fmtMoney(avgCPW) : '—'}</span>
+        <span class="stat-card__num">${avgCPW !== null ? esc(fmtMoney(avgCPW)) : '—'}</span>
         <div class="stat-hero__meta">
           <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items</span></div>
           <div class="stat-hero__item"><span class="stat-hero__val">${totalWears.toLocaleString()}</span><span class="stat-card__label">Wears</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(wardrobeValue)}</span><span class="stat-card__label">Wardrobe</span></div>
-          <div class="stat-hero__item"><span class="stat-hero__val">${fmtMoney(perfumeValue)}</span><span class="stat-card__label">Fragrance</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${esc(fmtMoney(wardrobeValue))}</span><span class="stat-card__label">Wardrobe</span></div>
+          <div class="stat-hero__item"><span class="stat-hero__val">${esc(fmtMoney(perfumeValue))}</span><span class="stat-card__label">Fragrance</span></div>
           <div class="stat-hero__item stat-hero__item--wide"><span class="stat-card__label">Most worn type</span><span class="stat-hero__val">${topSub ? esc(G.subcategory(topSub[0])?.name || '—') : '—'}</span></div>
         </div>
       </div>
@@ -919,13 +951,13 @@ function renderDashboard() {
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--muted">${i.wearCount || 0}×</span></div>`)));
 
   cols.appendChild(mkList('Worst value', worstValue, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--warn">${fmtMoney(costPerWear(i))}</span></div>`)));
+    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--warn">${esc(fmtMoney(costPerWear(i)))}</span></div>`)));
 
   quietCols.appendChild(mkList('Most worn', mostWorn.slice(0, 3), i => el(`
     <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip">${i.wearCount || 0}×</span></div>`), true));
 
   quietCols.appendChild(mkList('Best value', bestValue, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--good">${fmtMoney(costPerWear(i))}</span></div>`), true));
+    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--good">${esc(fmtMoney(costPerWear(i)))}</span></div>`), true));
 
   wrap.appendChild(cols);
   wrap.appendChild(quietCols);
@@ -1028,9 +1060,10 @@ function renderWardrobe() {
   qs('#f-status', toolbar).value = wardrobeFilters.status || 'active';
 
   const catSel = qs('#f-category', toolbar);
-  s.categories.filter(c => c.id !== 'cat_perfumes').forEach(c => catSel.appendChild(el(`<option value="${c.id}">${esc(c.name)}</option>`)));
+  s.categories.filter(c => c.id !== 'cat_perfumes').forEach(c => catSel.appendChild(el(`<option value="${esc(c.id)}">${esc(c.name)}</option>`)));
   if (wardrobeFilters.category === 'cat_perfumes') wardrobeFilters.category = '';
   catSel.value = wardrobeFilters.category;
+  if (catSel.value !== wardrobeFilters.category) wardrobeFilters.category = '';
   const perfSeg = wardrobeSegment === 'perfumes';
   if (perfSeg) { catSel.style.display = 'none'; wardrobeFilters.category = ''; }
 
@@ -1039,32 +1072,36 @@ function renderWardrobe() {
     subSel.innerHTML = '<option value="">All subcategories</option>';
     const subs = wardrobeFilters.category ? G.subsFor(wardrobeFilters.category)
       : s.subcategories.filter(sc => (sc.categoryId === 'cat_perfumes') === perfSeg);
-    subs.forEach(sc => subSel.appendChild(el(`<option value="${sc.id}">${esc(sc.name)}</option>`)));
+    subs.forEach(sc => subSel.appendChild(el(`<option value="${esc(sc.id)}">${esc(sc.name)}</option>`)));
     subSel.value = wardrobeFilters.subcategory;
+    if (subSel.value !== wardrobeFilters.subcategory) wardrobeFilters.subcategory = '';
   }
   refreshSubOptions();
 
   const brandSel = qs('#f-brand', toolbar);
   const segBrandIds = new Set(s.items.filter(inWardrobeSegment).map(i => i.brandId));
-  s.brands.filter(b => segBrandIds.has(b.id)).forEach(b => brandSel.appendChild(el(`<option value="${b.id}">${esc(b.name)}</option>`)));
+  s.brands.filter(b => segBrandIds.has(b.id)).forEach(b => brandSel.appendChild(el(`<option value="${esc(b.id)}">${esc(b.name)}</option>`)));
   brandSel.value = wardrobeFilters.brand;
 
   const colorSel = qs('#f-color', toolbar);
-  s.colors.forEach(c => colorSel.appendChild(el(`<option value="${c.id}">${esc(c.name)}</option>`)));
+  s.colors.forEach(c => colorSel.appendChild(el(`<option value="${esc(c.id)}">${esc(c.name)}</option>`)));
   if (perfSeg) { colorSel.style.display = 'none'; wardrobeFilters.color = ''; }
   colorSel.value = wardrobeFilters.color;
+  if (colorSel.value !== wardrobeFilters.color) wardrobeFilters.color = '';
 
   const tagSel = qs('#f-tag', toolbar);
   s.tags.filter(t => !t.categoryIds || !t.categoryIds.length
-    || t.categoryIds.some(id => (id === 'cat_perfumes') === perfSeg)).forEach(t => tagSel.appendChild(el(`<option value="${t.id}">${esc(t.name)}</option>`)));
+    || t.categoryIds.some(id => (id === 'cat_perfumes') === perfSeg)).forEach(t => tagSel.appendChild(el(`<option value="${esc(t.id)}">${esc(t.name)}</option>`)));
   tagSel.value = wardrobeFilters.tag;
   /* a stored filter whose option isn't in this segment would filter invisibly */
   if (wardrobeFilters.brand && brandSel.value !== wardrobeFilters.brand) wardrobeFilters.brand = '';
   if (wardrobeFilters.tag && tagSel.value !== wardrobeFilters.tag) wardrobeFilters.tag = '';
 
   const actSel = qs('#f-activity', toolbar);
-  s.activities.forEach(a => actSel.appendChild(el(`<option value="${a.id}">${esc(a.name)}</option>`)));
+  s.activities.forEach(a => actSel.appendChild(el(`<option value="${esc(a.id)}">${esc(a.name)}</option>`)));
   actSel.value = wardrobeFilters.activity;
+  if (actSel.value !== wardrobeFilters.activity) wardrobeFilters.activity = '';
+  saveWardrobeFilters();
 
   qs('#f-sort', toolbar).value = wardrobeFilters.sort;
 
@@ -1154,7 +1191,7 @@ function renderItemGrid() {
     if (f.activity && !matchActivity(G.activity(f.activity), i)) return false;
     if (f.search) {
       const tagNames = (i.tags || []).map(tid => G.tag(tid)?.name || '').join(' ');
-      const haystack = `${itemTitle(i)} ${G.subcategory(i.subcategoryId)?.name || ''} ${tagNames}`.toLowerCase();
+      const haystack = `${itemTitle(i)} ${i.subtext || ''} ${G.subcategory(i.subcategoryId)?.name || ''} ${tagNames}`.toLowerCase();
       if (!haystack.includes(f.search.trim().toLowerCase())) return false;
     }
     return true;
@@ -1181,7 +1218,8 @@ function renderItemGrid() {
     grid.appendChild(el(`<p class="muted" style="padding: 2rem 0;">${esc(msg)}</p>`));
     return;
   }
-  const makeNode = item => (wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item));
+  const averageCPW = avgCostPerWear();
+  const makeNode = item => (wardrobeViewMode === 'list' ? itemListRow(item) : itemCard(item, averageCPW));
   if (!grouped) {
     items.forEach(item => grid.appendChild(makeNode(item)));
     fitCardTags(grid);
@@ -1349,9 +1387,9 @@ function itemLeadMarkup(item, color, { small = false } = {}) {
     return vol ? `<span class="item-card__vol mono" title="Bottle size">${esc(vol)}</span>` : '';
   }
   const swatchStyle = color?.hex && color.hex !== 'multi'
-    ? `background:${color.hex}`
+    ? `background:${normalizeHex(color.hex) || 'transparent'}`
     : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)';
-  return `<span class="swatch${small ? ' swatch--sm' : ''}" style="${swatchStyle}" title="${esc(color?.name || 'No color')}"></span>`;
+  return `<span class="swatch${small ? ' swatch--sm' : ''}" style="${esc(swatchStyle)}" title="${esc(color?.name || 'No color')}"></span>`;
 }
 
 /* ---------------- local photos (perfume cards only) ----------------
@@ -1381,12 +1419,11 @@ function attachItemCardPhoto(card, itemId) {
     .catch(() => { /* no photo — the card renders exactly as before */ });
 }
 
-function itemCard(item) {
+function itemCard(item, avg = avgCostPerWear()) {
   const color = G.color(item.colorId);
   const cat = G.category(item.categoryId);
   const sub = G.subcategory(item.subcategoryId);
   const cpw = costPerWear(item);
-  const avg = avgCostPerWear();
   const isRetired = item.status === 'retired';
   let cpwClass = '';
   if (cpw !== null && avg !== null && item.categoryId !== 'cat_perfumes') cpwClass = cpw <= avg ? 'tag-chip--good' : 'tag-chip--warn';
@@ -1404,7 +1441,7 @@ function itemCard(item) {
       <div class="item-card__top">
         ${swatchMarkup}
         <div class="item-card__titles">
-          <h4 ${BrandLogo.has(G.brand(item.brandId)) ? `aria-label="${esc(itemTitle(item))}"` : ''}>${BrandLogo.has(G.brand(item.brandId)) ? BrandLogo.html(G.brand(item.brandId), 20, esc(G.brand(item.brandId).name)) : ''}${esc(itemTitle(item, { omitBrand: BrandLogo.has(G.brand(item.brandId)) }))}</h4>
+          <h4 ${BrandLogo.has(G.brand(item.brandId)) ? `aria-label="${esc(itemTitle(item))}"` : ''}>${BrandLogo.has(G.brand(item.brandId)) ? BrandLogo.html(G.brand(item.brandId), 20, G.brand(item.brandId).name) : ''}${esc(itemTitle(item, { omitBrand: BrandLogo.has(G.brand(item.brandId)) }))}</h4>
           <p class="item-card__breadcrumb">${iconSvg(cat.icon, 13, 'style="vertical-align:-2px;margin-right:3px;"')}${esc(cat.name)} &rsaquo; ${esc(sub?.name || '—')}</p>
         </div>
         <div class="item-card__overflow item-row__overflow">
@@ -1434,11 +1471,11 @@ function itemCard(item) {
         </div>
         ` : ''}<div class="stat-cell">
           <span class="stat-cell__icon">${statIconSvg('wallet')}</span>
-          <span class="stat-cell__text"><span class="mono">${item.cost ? fmtMoney(item.cost) : '—'}</span><small>cost</small></span>
+          <span class="stat-cell__text"><span class="mono">${esc(fmtMoney(item.cost))}</span><small>cost</small></span>
         </div>
         ${WearHistory.isClothing(item) ? `<div class="stat-cell ${cpwCellClass}">
           <span class="stat-cell__icon">${statIconSvg('trending-down')}</span>
-          <span class="stat-cell__text"><span class="mono">${cpw !== null ? fmtMoney(cpw) : '—'}</span><small>per wear</small></span>
+          <span class="stat-cell__text"><span class="mono">${cpw !== null ? esc(fmtMoney(cpw)) : '—'}</span><small>per wear</small></span>
         </div>
         ` : ''}
       </div>
@@ -1492,7 +1529,7 @@ function itemListRow(item) {
     `${esc(cat.name)} › ${esc(sub?.name || '—')}`,
     ...(WearHistory.isClothing(item) ? [`${item.wearCount || 0}×`] : []),
   ];
-  if (cpw !== null) metaBits.push(`${fmtMoney(cpw)}/wear`);
+  if (cpw !== null) metaBits.push(`${esc(fmtMoney(cpw))}/wear`);
   if (isRetired) metaBits.push(`${esc(reasonLabel)}`);
 
   const row = el(`
@@ -1598,7 +1635,7 @@ function openRetireModal(item) {
       <p class="muted">Retiring keeps "${esc(itemTitle(item))}" and its wear history on record, just out of your active rack.</p>
       <label>Reason
         <select name="reason">
-          ${reasons.map(r => `<option value="${r.id}" ${r.id === reasons[0].id ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+          ${reasons.map(r => `<option value="${esc(r.id)}" ${r.id === reasons[0].id ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
         </select>
       </label>
       <div class="form-actions">
@@ -1679,7 +1716,7 @@ function openItemModal(existing, presetCategoryId) {
       <label>Category
         <select name="categoryId" required>
           <option value="">Select category…</option>
-          ${s.categories.map(c => `<option value="${c.id}" ${c.id === item.categoryId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+          ${s.categories.map(c => `<option value="${esc(c.id)}" ${c.id === item.categoryId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
         </select>
       </label>
       <label>Subcategory
@@ -1698,7 +1735,7 @@ function openItemModal(existing, presetCategoryId) {
       <label>Color <span class="muted" id="color-optional-hint" style="display:none;">(optional for perfumes)</span>
         <select name="colorId" id="color-select">
           <option value="">Select color…</option>
-          ${s.colors.map(c => `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}><span class="swatch swatch--sm" style="${c.hex && c.hex !== 'multi' ? `background:${c.hex}` : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)'}"></span><span>${esc(c.name)}</span></option>`).join('')}
+          ${s.colors.map(c => `<option value="${esc(c.id)}" ${c.id === item.colorId ? 'selected' : ''}><span class="swatch swatch--sm" style="${c.hex && c.hex !== 'multi' ? `background:${normalizeHex(c.hex) || 'transparent'}` : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE,#A23B33)'}"></span><span>${esc(c.name)}</span></option>`).join('')}
         </select>
       </label>
       <label><span id="subtext-label-text">Additional description</span> <span class="muted" id="subtext-hint-text">(model, product name — optional)</span>
@@ -1718,7 +1755,7 @@ function openItemModal(existing, presetCategoryId) {
           <button type="button" class="btn btn--small btn--ghost" id="photo-replace-btn" hidden>Replace photo</button>
           <button type="button" class="btn btn--small btn--ghost" id="photo-remove-btn" hidden>Remove</button>
         </div>
-        <p class="muted photo-field__hint">A photo of the bottle so you can spot it at a glance. It is stored in this browser only and never leaves the device.</p>
+        <p class="muted photo-field__hint">A photo of the bottle so you can spot it at a glance. It stays separate from wardrobe data. Manual Push/Pull and photo backups transfer it.</p>
       </div>
       <fieldset>
         <legend>Tags <span class="muted">(only tags relevant to this category show up)</span></legend>
@@ -1726,7 +1763,7 @@ function openItemModal(existing, presetCategoryId) {
       </fieldset>
       <div class="form-row">
         <label><span id="cost-label-text">Original cost</span> <span class="muted">(optional)</span>
-          <input type="number" name="cost" min="0" step="0.01" value="${item.cost ?? ''}" placeholder="0.00">
+          <input type="number" name="cost" min="0" step="0.01" value="${esc(item.cost ?? '')}" placeholder="0.00">
         </label>
         <label id="wear-count-field">Times worn
           <input type="number" name="wearCount" min="${item.wearHistory?.events.length || 0}" step="1" value="${item.wearCount || 0}">
@@ -1750,18 +1787,19 @@ function openItemModal(existing, presetCategoryId) {
 
       let showAllBrands = false;
       function refreshBrands() {
+        const selectedBrand = brandSelect.options.length ? brandSelect.value : item.brandId;
         const logoOrGap = (b) => BrandLogo.html(b, 16) || '<span class="brand-logo brand-logo--none"></span>';
         const inScope = s.brands.filter(b => brandMatchesCategory(b, catSelect.value));
         /* Editing an item whose brand predates scoping (or was changed in
            Masters) must still show it, or the select would silently drop the
            item's brand on save. */
         const list = showAllBrands ? s.brands
-          : (item.brandId && !inScope.some(b => b.id === item.brandId)
-            ? [...inScope, s.brands.find(b => b.id === item.brandId)].filter(Boolean)
+          : (selectedBrand && !inScope.some(b => b.id === selectedBrand)
+            ? [...inScope, s.brands.find(b => b.id === selectedBrand)].filter(Boolean)
             : inScope);
         const sortedList = [...list].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
         brandSelect.innerHTML = `<option value="">${logoOrGap(null)}<span>No brand / unbranded</span></option>` +
-          sortedList.map(b => `<option value="${b.id}" ${b.id === item.brandId ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
+          sortedList.map(b => `<option value="${esc(b.id)}" ${b.id === selectedBrand ? 'selected' : ''}>${logoOrGap(b)}<span>${esc(b.name)}</span></option>`).join('');
         const allBtn = qs('#show-all-brands', root);
         if (allBtn) {
           allBtn.hidden = showAllBrands || s.brands.length === list.length;
@@ -1773,7 +1811,10 @@ function openItemModal(existing, presetCategoryId) {
       function refreshSubs() {
         const subs = G.subsFor(catSelect.value);
         subSelect.innerHTML = '<option value="">Select subcategory…</option>' +
-          subs.map(sc => `<option value="${sc.id}" ${sc.id === item.subcategoryId ? 'selected' : ''}>${esc(sc.name)}</option>`).join('');
+          subs.map(sc => `<option value="${esc(sc.id)}" ${sc.id === item.subcategoryId ? 'selected' : ''}>${esc(sc.name)}</option>`).join('');
+      }
+      function rememberTags() {
+        item.tags = qsa('#tag-checks input:checked', root).map(cb => cb.value);
       }
       function refreshTags() {
         const box = qs('#tag-checks', root);
@@ -1785,7 +1826,7 @@ function openItemModal(existing, presetCategoryId) {
         if (!relevant.length) { box.innerHTML = '<p class="muted">No tags for this category yet — add some in Settings \u203a Masters.</p>'; return; }
         box.innerHTML = relevant.map(t => `
           <label class="tag-check">
-            <input type="checkbox" value="${t.id}" ${item.tags?.includes(t.id) ? 'checked' : ''}> ${esc(t.name)}
+            <input type="checkbox" value="${esc(t.id)}" ${item.tags?.includes(t.id) ? 'checked' : ''}> ${esc(t.name)}
           </label>`).join('');
       }
 
@@ -1822,10 +1863,17 @@ function openItemModal(existing, presetCategoryId) {
       let previewUrl = null;
       let zoomBase = null;      // un-zoomed blob the slider scales; null until first slide
       let zoomBaseStored = false; // true when zoomBase is the saved photo (100% = no change)
+      let photoBusy = false;
+      const submitButton = qs('[type="submit"]', form);
+      Modal._cleanup = () => {
+        zoomRun++;
+        if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+      };
       let zoomRun = 0;          // latest-wins guard for async re-encodes
 
       function resetZoom() {
         zoomBase = null; zoomRun++;
+        photoBusy = false; submitButton.disabled = false;
         zoomInput.value = 100; zoomVal.textContent = '100%';
       }
 
@@ -1868,6 +1916,7 @@ function openItemModal(existing, presetCategoryId) {
         }
         if (!zoomBase) return;
         const run = ++zoomRun;
+        photoBusy = true; submitButton.disabled = true;
         try {
           const blob = z === 1 ? zoomBase : await RackPhotos.zoomBlob(zoomBase, z);
           if (run !== zoomRun || !root.isConnected) return;
@@ -1876,6 +1925,8 @@ function openItemModal(existing, presetCategoryId) {
           renderPhotoPreview(blob);
         } catch (e) {
           if (root.isConnected) toast('Couldn\u2019t zoom that photo', 'warn');
+        } finally {
+          if (run === zoomRun) { photoBusy = false; submitButton.disabled = false; }
         }
       });
 
@@ -1891,10 +1942,13 @@ function openItemModal(existing, presetCategoryId) {
         const file = photoInput.files && photoInput.files[0];
         photoInput.value = ''; // allow picking the same file again
         if (!file) return;
-        photoAddBtn.disabled = photoReplaceBtn.disabled = true;
+        resetZoom();
+        const run = zoomRun;
+        photoBusy = true; submitButton.disabled = true;
+        photoAddBtn.disabled = photoReplaceBtn.disabled = photoRemoveBtn.disabled = zoomInput.disabled = true;
         try {
           const blob = await RackPhotos.processImageFile(file);
-          if (!root.isConnected) return;
+          if (!root.isConnected || run !== zoomRun) return;
           pendingPhoto = blob;
           removePhoto = false;
           resetZoom();
@@ -1903,7 +1957,8 @@ function openItemModal(existing, presetCategoryId) {
         } catch (e) {
           if (root.isConnected) toast('Couldn\u2019t read that photo — try another', 'warn');
         } finally {
-          photoAddBtn.disabled = photoReplaceBtn.disabled = false;
+          photoBusy = false; submitButton.disabled = false;
+          photoAddBtn.disabled = photoReplaceBtn.disabled = photoRemoveBtn.disabled = zoomInput.disabled = false;
         }
       });
 
@@ -1912,12 +1967,13 @@ function openItemModal(existing, presetCategoryId) {
       updateColorRequirement();
       refreshPhotoField();
       catSelect.addEventListener('change', () => {
+        rememberTags();
         /* Switching category changes which brands are in scope, so the list is
            rebuilt from scratch rather than keeping the previous category's. */
         showAllBrands = false;
         refreshSubs(); refreshTags(); updateGiftedHint(); updateColorRequirement(); refreshBrands(); refreshPhotoField();
       });
-      subSelect.addEventListener('change', () => { refreshTags(); updateGiftedHint(); });
+      subSelect.addEventListener('change', () => { rememberTags(); refreshTags(); updateGiftedHint(); });
       qs('#show-all-brands', root).addEventListener('click', () => {
         showAllBrands = !showAllBrands;
         refreshBrands();
@@ -1973,7 +2029,7 @@ function openItemModal(existing, presetCategoryId) {
       let saving = false;
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (saving) return;
+        if (saving || photoBusy) return;
         const fd = new FormData(form);
         const catId = fd.get('categoryId');
         const missingColor = catId !== 'cat_perfumes' && !fd.get('colorId');
@@ -2103,7 +2159,13 @@ function openOutfitBuilderFor(activityId) {
 const LiquidGlass = (() => {
   const supported = /Chrome\/|Chromium\//.test(navigator.userAgent) && !!(window.CSS && CSS.supports('backdrop-filter', 'blur(1px)'));
   const NS = 'http://www.w3.org/2000/svg';
-  const owners = new Map(); // filter id -> chip
+  const owners = new Map(); // filter id -> { chip, observer }
+  let cleanupObserver = null;
+  function cleanup() {
+    owners.forEach(({ chip, observer }, id) => {
+      if (!chip.isConnected) { observer.disconnect(); owners.delete(id); defs.querySelector('#' + id)?.remove(); }
+    });
+  }
   let defs = null, seq = 0;
 
   function ensureDefs() {
@@ -2156,9 +2218,13 @@ const LiquidGlass = (() => {
     if (!supported) return;
     ensureDefs();
     /* Drop filters of chips from earlier renders (after this render has attached its own). */
-    setTimeout(() => owners.forEach((node, id) => { if (!node.isConnected) { owners.delete(id); defs.querySelector('#' + id)?.remove(); } }), 1000);
+    if (!cleanupObserver) {
+      cleanupObserver = new MutationObserver(records => {
+        if (records.some(record => record.removedNodes.length)) cleanup();
+      });
+      cleanupObserver.observe(document.body, { childList: true, subtree: true });
+    }
     const id = 'lg-' + (++seq);
-    owners.set(id, chip);
     const filter = document.createElementNS(NS, 'filter');
     filter.setAttribute('id', id); filter.setAttribute('filterUnits', 'userSpaceOnUse');
     filter.setAttribute('color-interpolation-filters', 'sRGB');
@@ -2184,7 +2250,9 @@ const LiquidGlass = (() => {
       feImg.setAttribute('href', mapFor(w, h, r, bezel));
       disp.setAttribute('scale', String(Math.round(bezel * 3.4)));
     };
-    new ResizeObserver(update).observe(chip);
+    const observer = new ResizeObserver(update);
+    owners.set(id, { chip, observer });
+    observer.observe(chip);
     update();
   }
   return { apply, supported };
@@ -2334,7 +2402,7 @@ function renderOutfitSummary(matches, refresh) {
   box.appendChild(el(`
     <div class="outfit-summary__header">
       <strong>${selected.length} item${selected.length === 1 ? '' : 's'} selected</strong>
-      <span class="muted">${totalCost ? fmtMoney(totalCost) + ' total' : ''}</span>
+      <span class="muted">${totalCost ? esc(fmtMoney(totalCost)) + ' total' : ''}</span>
     </div>`));
 
   const list = el(`<div class="outfit-summary__list"></div>`);
@@ -2450,7 +2518,7 @@ function renderCategoriesPanel() {
         </div>
         <div class="sub-list">
           ${subs.map(sc => `
-            <span class="sub-pill" data-sub="${sc.id}">
+            <span class="sub-pill" data-sub="${esc(sc.id)}">
               ${esc(sc.name)}
               <button data-act="rename-sub" title="Rename">✎</button>
               <button data-act="delete-sub" title="Delete">&times;</button>
@@ -2583,7 +2651,7 @@ function openTagModal(existing) {
         <legend>Restrict to categories <span class="muted">(none checked = applies everywhere)</span></legend>
         <div class="tag-check-grid">
           ${s.categories.map(c => `
-            <label class="tag-check"><input type="checkbox" value="${c.id}" ${existing?.categoryIds?.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>
+            <label class="tag-check"><input type="checkbox" value="${esc(c.id)}" ${existing?.categoryIds?.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>
           `).join('')}
         </div>
       </fieldset>
@@ -2713,10 +2781,10 @@ function renderColorsPanel() {
   const grid = el(`<div class="chip-grid"></div>`);
   s.colors.forEach(c => {
     const count = s.items.filter(i => i.colorId === c.id).length;
-    const swatchStyle = c.hex && c.hex !== 'multi' ? `background:${c.hex}` : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE)';
+    const swatchStyle = c.hex && c.hex !== 'multi' ? `background:${normalizeHex(c.hex) || 'transparent'}` : 'background:conic-gradient(#A23B33,#3B6EA5,#4C6B4F,#D8CBAE)';
     const chip = el(`
       <div class="chip-card">
-        <span class="swatch swatch--sm" style="${swatchStyle}"></span>
+        <span class="swatch swatch--sm" style="${esc(swatchStyle)}"></span>
         <span>${esc(c.name)}</span>
         <span class="muted">${count}</span>
         <button data-act="delete" title="Delete">&times;</button>
@@ -2757,7 +2825,7 @@ function renderActivitiesPanel() {
             <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
           </div>
         </div>
-        <p class="muted rule-summary">${describeActivityRules(act)}</p>
+        <p class="muted rule-summary">${esc(describeActivityRules(act))}</p>
       </div>`);
     qs('[data-act="build"]', card).addEventListener('click', () => openOutfitBuilderFor(act.id));
     qs('[data-act="edit"]', card).addEventListener('click', () => openActivityModal(act));
@@ -2845,7 +2913,7 @@ function openActivityModal(existing) {
         <div class="activity-preview__list" id="activity-preview-list"></div>
       </div>
 
-      <fieldset>
+      <fieldset id="simple-activity-rules">
         <legend>What does this look use?</legend>
         <p class="muted">Turn on the categories this activity draws from. Leave a category as "Any subcategory", or pick specific ones.</p>
         <div id="cat-rules"></div>
@@ -2954,8 +3022,23 @@ function openActivityModal(existing) {
           wrap.appendChild(row);
         });
       }
-      renderCatRules();
-      syncFromCatState();
+      function refreshSimpleBuilder() {
+        catState = parseActivityCatState(activity);
+        const canonical = rules => rules.map(rule => JSON.stringify({
+          category: rule.category || '', subcategory: rule.subcategory || '',
+          requiredTags: [...(rule.requiredTags || [])].sort(), excludeTags: [...(rule.excludeTags || [])].sort(),
+        })).sort();
+        const supported = JSON.stringify(canonical(activity.includeRules || [])) ===
+          JSON.stringify(canonical(rulesFromCatState(catState)));
+        qs('#simple-activity-rules', root).disabled = !supported;
+        renderCatRules();
+        if (!supported) {
+          qs('#cat-rules', root).prepend(el('<p class="muted">These rules need the advanced editor below. Their conditions will be preserved.</p>'));
+          qs('#advanced-toggle', root).open = true;
+        }
+      }
+      refreshSimpleBuilder();
+      updatePreview();
 
       /* ---------------- advanced / raw rule fallback ---------------- */
       const ruleRows = qs('#rule-rows', root);
@@ -2967,26 +3050,26 @@ function openActivityModal(existing) {
               <small>Category</small>
               <select data-f="category">
                 <option value="">Any category</option>
-                ${s.categories.map(c => `<option value="${c.id}" ${rule.category === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+                ${s.categories.map(c => `<option value="${esc(c.id)}" ${rule.category === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
               </select>
             </div>
             <div class="rule-field">
               <small>Subcategory</small>
               <select data-f="subcategory">
                 <option value="">Any subcategory</option>
-                ${subs.map(sc => `<option value="${sc.id}" ${rule.subcategory === sc.id ? 'selected' : ''}>${esc(sc.name)}</option>`).join('')}
+                ${subs.map(sc => `<option value="${esc(sc.id)}" ${rule.subcategory === sc.id ? 'selected' : ''}>${esc(sc.name)}</option>`).join('')}
               </select>
             </div>
             <div class="rule-field rule-field--wide">
               <small>Requires tags</small>
               <select data-f="requiredTags" multiple size="3" title="Must have ALL of these tags">
-                ${s.tags.map(t => `<option value="${t.id}" ${rule.requiredTags?.includes(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+                ${s.tags.map(t => `<option value="${esc(t.id)}" ${rule.requiredTags?.includes(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
               </select>
             </div>
             <div class="rule-field rule-field--wide">
               <small>Excludes tags</small>
               <select data-f="excludeTags" multiple size="3" title="Must have NONE of these tags">
-                ${s.tags.map(t => `<option value="${t.id}" ${rule.excludeTags?.includes(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+                ${s.tags.map(t => `<option value="${esc(t.id)}" ${rule.excludeTags?.includes(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
               </select>
             </div>
             <div class="rule-field">
@@ -3024,15 +3107,16 @@ function openActivityModal(existing) {
       qs('#add-rule', root).addEventListener('click', () => {
         activity.includeRules.push({});
         rerenderRawRules();
+        updatePreview();
       });
 
       const advancedToggle = qs('#advanced-toggle', root);
       advancedToggle.addEventListener('toggle', () => {
         if (advancedToggle.open) {
+          qs('#simple-activity-rules', root).disabled = true;
           rerenderRawRules();
         } else {
-          catState = parseActivityCatState(activity);
-          renderCatRules();
+          refreshSimpleBuilder();
         }
         updatePreview();
       });
@@ -3076,7 +3160,7 @@ function openActivityModal(existing) {
         activity.name = name;
         activity.excludeSubcategories = [...excludeSubs];
         activity.excludeTags = [...excludeTagsSet];
-        activity.includeRules = (activity.includeRules || []).filter(r => r.category || r.subcategory || r.requiredTags?.length || r.excludeTags?.length);
+        // An empty raw rule deliberately matches any item; keep it intact.
 
         if (isEdit) {
           const idx = s.activities.findIndex(a => a.id === activity.id);
@@ -3202,6 +3286,7 @@ function renderGeneralSettings() {
     a.href = URL.createObjectURL(blob);
     a.download = `rack-wardrobe-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
   qs('#photos-export-btn', backupPanel).addEventListener('click', async () => {
     try {
@@ -3213,6 +3298,7 @@ function renderGeneralSettings() {
       a.href = URL.createObjectURL(blob);
       a.download = `rack-photos-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       toast(`${n} photo${n === 1 ? '' : 's'} downloaded`);
     } catch (err) { toast('Couldn\u2019t read the photos on this device', 'warn'); }
   });
@@ -3225,18 +3311,24 @@ function renderGeneralSettings() {
       const ids = new Set(Store.state.items.map(i => i.id));
       const { restored, skipped } = await RackPhotos.importAll(data, ids);
       render();
-      toast(`${restored} photo${restored === 1 ? '' : 's'} restored` + (skipped ? ` (${skipped} skipped — no matching item)` : ''));
+      toast(`${restored} photo${restored === 1 ? '' : 's'} restored` + (skipped ? ` (${skipped} skipped — invalid image or no matching item)` : ''));
     } catch (err) { toast('That file could not be read as a photo backup', 'warn'); }
   });
   qs('#import-file', backupPanel).addEventListener('change', (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
         Modal.confirm('Replace all current data with this backup?', () => {
-          Store.replaceAll(data);
+          try {
+            Store.replaceAll(data);
+          } catch (err) {
+            toast('Could not restore this backup. Your current wardrobe was kept.', 'warn');
+            return;
+          }
           applyStoredAppearance();
           render();
           toast('Backup restored');
@@ -3395,7 +3487,11 @@ function renderAppearanceSettings() {
     </div>`);
   const themeGrid = qs('#theme-grid', themePanel);
   const allThemes = [...defaultThemes(), ...s.appearance.customThemes];
-  allThemes.forEach(theme => {
+  allThemes.forEach(storedTheme => {
+    const theme = { ...storedTheme };
+    for (const key of ['canvas', 'surfaceRaised', 'text', 'ink', 'accentInk', 'accent', 'thread', 'good']) {
+      theme[key] = normalizeHex(theme[key]) || defaultThemes()[0][key];
+    }
     const isActive = s.appearance.themeId === theme.id;
     const card = el(`
       <div class="theme-card ${isActive ? 'is-active' : ''}" style="background:${theme.canvas}; border-color:${isActive ? theme.accent : theme.canvas};">
@@ -3654,6 +3750,33 @@ async function initVersion() {
 }
 
 function init() {
+  try { Store.load(); }
+  catch (err) {
+    const recovery = el(`<section class="panel">
+      <h2>Saved wardrobe could not be loaded</h2>
+      <p>Your saved data has been kept. Download it before resetting this browser or asking for help.</p>
+      <button class="btn btn--primary" id="recover-download">Download saved data</button>
+      <button class="btn btn--danger-ghost" id="recover-reset">Reset saved wardrobe</button>
+    </section>`);
+    qs('#view').replaceChildren(recovery);
+    qs('#recover-download', recovery).addEventListener('click', () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw === null) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
+        a.download = 'rack-wardrobe-recovery.json'; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      } catch (_) { toast('Browser storage is unavailable', 'warn'); }
+    });
+    qs('#recover-reset', recovery).addEventListener('click', () => {
+      Modal.confirm('Erase the saved wardrobe on this device? Download a recovery copy first.', () => {
+        try { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+        catch (_) { toast('Browser storage is unavailable', 'warn'); }
+      }, { danger: true, yesLabel: 'Erase saved wardrobe' });
+    });
+    return;
+  }
   if (!Store.state.meta.currency) { Store.state.meta.currency = 'LKR'; Store.save(); }
   RackPhotos.init().catch(() => {});
   applyStoredAppearance();

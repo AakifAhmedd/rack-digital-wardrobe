@@ -246,7 +246,8 @@ const SyncEngine = {
   async pull(opts = {}) {
     // A silent pull is entered from checkAndAutoSync while status is syncing.
     if (!opts.silent && this.status === 'syncing') return { busy: true };
-    this._clearRetry();
+    this._clearRetry(!opts.silent);
+    const localAtStart = Store.state.meta.updatedAt;
     this._setStatus('syncing');
     try {
       const snapshot = await Sync.pullFromCloud({ includePhotos: !opts.silent });
@@ -263,7 +264,7 @@ const SyncEngine = {
       }
       // Recheck after all reads/decoding; a local edit during the request must
       // still produce the existing wardrobe conflict before any replacement.
-      if (!opts.resolveConflict && this._hasConflict(snapshot.updatedAt)) {
+      if (Store.state.meta.updatedAt !== localAtStart || (!opts.resolveConflict && this._hasConflict(snapshot.updatedAt))) {
         this._setStatus('conflict');
         return { conflict: true };
       }
@@ -301,13 +302,13 @@ const SyncEngine = {
   },
 
   _scheduleRetry(fn) {
-    this._clearRetry();
+    this._clearRetry(false);
     this._retryTimer = setTimeout(() => { fn().catch(() => { /* status already reflects failure */ }); }, this._retryDelay);
     this._retryDelay = Math.min(this._retryDelay * 2, 5 * 60 * 1000);
   },
-  _clearRetry() {
+  _clearRetry(resetDelay = true) {
     if (this._retryTimer) clearTimeout(this._retryTimer);
     this._retryTimer = null;
-    this._retryDelay = 15000;
+    if (resetDelay) this._retryDelay = 15000;
   },
 };

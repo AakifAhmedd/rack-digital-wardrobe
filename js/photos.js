@@ -69,21 +69,20 @@ const RackPhotos = {
       .catch(() => null); // no photo (or no IndexedDB) — degrade silently
   },
 
-  put(itemId, blob) {
-    return this._store('readwrite').then(store => new Promise((resolve, reject) => {
-      const r = store.put(blob, itemId);
-      r.onsuccess = () => resolve();
-      r.onerror = () => reject(r.error);
-    }));
+  async _write(write) {
+    const db = await this._open();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error || new Error('Photo storage transaction aborted'));
+      tx.onerror = () => { /* onabort reports failure after rollback */ };
+      try { write(tx.objectStore(STORE_NAME)); }
+      catch (err) { tx.abort(); reject(err); }
+    });
   },
 
-  delete(itemId) {
-    return this._store('readwrite').then(store => new Promise((resolve, reject) => {
-      const r = store.delete(itemId);
-      r.onsuccess = () => resolve();
-      r.onerror = () => reject(r.error);
-    }));
-  },
+  put(itemId, blob) { return this._write(store => store.put(blob, itemId)); },
+  delete(itemId) { return this._write(store => store.delete(itemId)); },
 
   /* ---------- photo snapshots (separate from the wardrobe JSON backup) ---------- */
 
@@ -113,16 +112,9 @@ const RackPhotos = {
   /* Restore photos from an exportAll() object. Only ids in `validIds` (items
      that exist on this device) are written; returns { restored, skipped }. */
   async importAll(data, validIds) {
-    if (!data || data.format !== 'rack-photos' || !data.photos || typeof data.photos !== 'object') {
-      throw new Error('Not a RACK photo backup');
-    }
-    let restored = 0, skipped = 0;
-    for (const [id, url] of Object.entries(data.photos)) {
-      if (!validIds.has(id) || typeof url !== 'string' || !url.startsWith('data:image/')) { skipped++; continue; }
-      await this.put(id, await (await fetch(url)).blob());
-      restored++;
-    }
-    return { restored, skipped };
+    const snapshot = await this.prepareSnapshot(data, validIds);
+    await this._write(store => snapshot.entries.forEach(([id, blob]) => store.put(blob, id)));
+    return { restored: snapshot.restored, skipped: snapshot.skipped };
   },
 
   /* Validate and decode BEFORE opening a write transaction. Only the base64
@@ -154,20 +146,9 @@ const RackPhotos = {
      removed, and an empty snapshot clears all photos. Failure rolls back
      the clear and every put, leaving the previous local photos intact. */
   async replaceSnapshot(snapshot) {
-    const db = await this._open();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.oncomplete = () => resolve();
-      tx.onabort = () => reject(tx.error || new Error('Photo storage transaction aborted'));
-      tx.onerror = () => { /* onabort reports failure after rollback */ };
-      try {
-        const store = tx.objectStore(STORE_NAME);
-        store.clear();
-        snapshot.entries.forEach(([id, blob]) => store.put(blob, id));
-      } catch (err) {
-        tx.abort();
-        reject(err);
-      }
+    await this._write(store => {
+      store.clear();
+      snapshot.entries.forEach(([id, blob]) => store.put(blob, id));
     });
     return { restored: snapshot.restored, skipped: snapshot.skipped };
   },

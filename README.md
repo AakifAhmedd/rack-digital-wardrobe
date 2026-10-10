@@ -15,7 +15,7 @@ RACK catalogs your clothes, shoes, accessories, and perfumes, tracks how often y
 - **Usage tracking** — log a wear with one tap; see most-worn and least-worn items, categories, and subcategories.
 - **Donation prompts** — items with zero wears are surfaced on the dashboard with a nudge toward donating rather than reselling.
 - **Cost per wear** — record what an item cost you; RACK divides by wear count and colour-codes it against your wardrobe average, so you can see which purchases earned their keep.
-- **Per-device photos** — attach a photo to a perfume. On upload, transparent borders are trimmed and the image is centred on a 4:3 transparent frame so the whole bottle shows on the card; a zoom slider in the item form fine-tunes it. Photos live in the browser's IndexedDB (`js/photos.js`), never in the synced data or the JSON backup — use Settings → Backup → *Download photos* / *Restore photos* to move or keep them.
+- **Perfume photos** — attach a photo to a perfume. On upload, transparent borders are trimmed and the image is centred on a 4:3 transparent frame so the whole bottle shows on the card; a zoom slider in the item form fine-tunes it. Photos live in the browser's IndexedDB (`js/photos.js`), never in `Store.state`, localStorage, `rack-wardrobe.json`, or the ordinary JSON backup. Explicit cloud Push/Pull transfers them in a separate `rack-photos.json` file. Settings → Backup → *Download photos* / *Restore photos* still provides an independent, additive photo backup.
 - **Installable (PWA)** — a web manifest and a network-first service worker (`sw.js`) let you add RACK to your home screen; the cache is only an offline fallback, so updates always win when online. Home-screen shortcuts open Outfit and Wardrobe directly.
 - **Finished vs. donated** — perfumes retire as *Finished* rather than *Donated*, since a used-up bottle isn't a donation. Bottles are collected, so "used up" and "empty" are the same event and only one option is offered.
 
@@ -43,10 +43,16 @@ This is a plain HTML/CSS/JS app — no build step, no framework — which keeps 
 ## Setting up cloud sync (optional)
 
 1. On GitHub, go to Settings → Developer settings → Personal access tokens → generate one with the **`gist`** scope only.
-2. In RACK's Settings tab, paste it into "GitHub personal access token" and click **Push to cloud** — this creates a private Gist and remembers its ID.
+2. In RACK's Settings tab, paste it into "GitHub personal access token" and click **Push to cloud** — this creates a private Gist containing both `rack-wardrobe.json` and `rack-photos.json` and remembers its ID.
 3. On another device, open RACK, paste the *same* token and Gist ID into Settings, and click **Pull from cloud**.
 
-Your token never leaves your browser except to call `api.github.com` directly, and it's never committed to this repository.
+Explicit **Push** uploads the current wardrobe and the complete photo snapshot together in one Gist create/update request. Explicit **Pull** reads both files from the same Gist revision, uses the existing wardrobe replacement path, then replaces IndexedDB photos in one transaction. Only photos for items in the pulled wardrobe are restored. Photos absent from the snapshot are deleted locally, including when the snapshot is empty; items without photos remain valid. The latest successful Push/Pull snapshot wins, with the existing wardrobe conflict choice when both devices have wardrobe changes. There is no per-photo merge or conflict dialog.
+
+Background checks on app open/resume continue to auto-pull **wardrobe data only**. They never export, restore, or delete photos. Failed manual actions require another explicit Push/Pull; they do not retry photo transfers on a timer.
+
+Older Gists containing only `rack-wardrobe.json` still pull successfully, keep local photos, and show a warning that no remote photos were available. Unreadable or unsupported photo snapshots also keep local photos and report a warning while allowing the wardrobe pull. Photo payloads must use `format: "rack-photos"`, `version: 1`, and an object of item IDs to base64 WebP/PNG/JPEG data URLs. Entries for unknown items or invalid images are skipped and reported; skipped entries are absent from the applied snapshot. Storage failures roll back the entire photo transaction, leaving previous photos intact; the pulled wardrobe remains usable. Wardrobe and photo storage use different browser storage systems, so they cannot share one atomic transaction.
+
+Large Gist files are retrieved from their revision-specific raw URL when [GitHub truncates API content](https://docs.github.com/en/rest/gists/gists#truncation). Raw file requests never include the token. Your token never leaves your browser except to call `api.github.com` directly, and it's never committed to this repository.
 
 ## Versioning
 
@@ -65,6 +71,12 @@ python3 -m http.server 8000
 # visit http://localhost:8000
 ```
 
+Open `http://localhost:8000/tests/sync.html` for the zero-dependency browser
+regression checks. These use a mocked Gist API, isolated localStorage and
+temporary IndexedDB databases, exercising photo transfer/deletion, old Gists,
+malformed payloads, rollback, wardrobe conflicts and additive manual Restore.
+They never read your real wardrobe, use credentials or contact GitHub.
+
 ## Structure
 
 ```
@@ -74,7 +86,7 @@ VERSIONING.md      rules for bumping the version
 css/style.css      design system
 js/data.js         default master data + localStorage persistence
 js/sync.js         optional GitHub Gist cloud sync
-js/photos.js       per-device item photos (IndexedDB), trim/pad/zoom, photo backup
+js/photos.js       local item photos (IndexedDB), trim/pad/zoom, backup and snapshot sync
 js/brand-logos.js  brand logo registry
 sw.js              service worker (offline fallback)
 manifest.webmanifest  PWA manifest

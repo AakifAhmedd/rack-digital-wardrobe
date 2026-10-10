@@ -1271,3 +1271,8 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .outfit-history__items { padding-left: 1.2rem; margin: .5rem 0 0; overflow-wrap: anywhere; }
 .outfit-history__header button { min-height: 44px; }
 .outfit-repeat { margin: 0 0 .6rem; }
+
+/* Individual history stays inside the existing scrollable modal. */
+.wear-history { overflow-wrap: anywhere; }
+.wear-history__list { padding-left: 1.4rem; }
+.wear-history__list li { padding: .4rem 0; border-bottom: 1px solid var(--line); }

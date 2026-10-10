@@ -241,6 +241,60 @@ function defaultFonts() {
 /* icon keys used by categories, rendered from app.js's ICONS registry */
 const DEFAULT_CATEGORY_ICON = 'tag';
 
+/* ---------- clothing wear history ----------
+   Older counts are undated: never infer individual events from outfit logs or
+   from a single last-worn timestamp. Event order is recording order for Undo. */
+const WearHistory = {
+  isClothing(item) { return item.categoryId !== 'cat_perfumes'; },
+
+  ensure(item) {
+    if (!item.wearHistory) {
+      item.wearHistory = {
+        events: [],
+        undatedCount: Math.max(0, Math.trunc(Number(item.wearCount) || 0)),
+        legacyLastWornAt: Number.isFinite(item.lastWornAt) && item.lastWornAt > 0 ? item.lastWornAt : null,
+      };
+    }
+    return item.wearHistory;
+  },
+
+  recalculate(item) {
+    if (!this.isClothing(item)) return;
+    const history = this.ensure(item);
+    if (!history.undatedCount) history.legacyLastWornAt = null;
+    item.wearCount = history.undatedCount + history.events.length;
+    const latest = history.events.reduce((max, event) => Math.max(max, event.wornAt), history.legacyLastWornAt || 0);
+    item.lastWornAt = latest || null;
+  },
+
+  record(item, wornAt = Date.now()) {
+    if (!this.isClothing(item) || item.status === 'retired' || !Number.isFinite(wornAt) || wornAt <= 0) return false;
+    this.ensure(item).events.push({ id: uid('wear'), wornAt });
+    this.recalculate(item);
+    return true;
+  },
+
+  undo(item) {
+    if (!this.isClothing(item) || item.status === 'retired') return false;
+    const history = this.ensure(item);
+    if (history.events.length) history.events.pop();
+    else if (history.undatedCount) history.undatedCount--;
+    else return false;
+    this.recalculate(item);
+    return true;
+  },
+
+  setCount(item, count) {
+    if (!this.isClothing(item)) return false;
+    const history = this.ensure(item);
+    // Count edits may adjust unknown wears, never silently erase dated events.
+    if (!Number.isSafeInteger(count) || count < history.events.length) return false;
+    history.undatedCount = count - history.events.length;
+    this.recalculate(item);
+    return true;
+  },
+};
+
 /* ---------- persistence ---------- */
 
 const Store = {
@@ -278,6 +332,7 @@ const Store = {
     if (!s.appearance.popoverBlur) s.appearance.popoverBlur = 'frosted';
     s.categories.forEach(c => { if (!c.icon) c.icon = DEFAULT_CATEGORY_ICON; });
     s.items.forEach(i => {
+      WearHistory.recalculate(i);
       if (!i.status) i.status = 'active';
       if (i.retiredReason === undefined) i.retiredReason = null;
       if (i.retiredAt === undefined) i.retiredAt = null;
@@ -369,7 +424,9 @@ const Store = {
   },
 
   save() {
-    this._state.meta.updatedAt = Date.now();
+    this._state.items.forEach(item => WearHistory.recalculate(item));
+    // Every edit must be visible to sync, even two saves in one millisecond.
+    this._state.meta.updatedAt = Math.max(Date.now(), (this._state.meta.updatedAt || 0) + 1);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this._state));
   },
 

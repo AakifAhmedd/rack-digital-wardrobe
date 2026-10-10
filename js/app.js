@@ -319,6 +319,7 @@ function itemTitle(item, opts = {}) {
   return parts.join(' ') || 'Unnamed item';
 }
 function costPerWear(item) {
+  if (!WearHistory.isClothing(item)) return null;
   if (item.cost === null || item.cost === undefined || item.cost === '') return null;
   if (!item.wearCount) return null;
   return item.cost / item.wearCount;
@@ -673,7 +674,7 @@ function openConflictModal() {
   const body = el(`
     <div>
       <p>This device has changes that haven't been pushed, and the cloud copy has changed too — probably from another device. Pick one:</p>
-      <p class="muted">Push and Pull replace the whole wardrobe, including outfit history; entries are not merged. Pull replaces local photos with the cloud snapshot when available.</p>
+      <p class="muted">Push and Pull replace the whole wardrobe, including item wear history and outfit history; entries are not merged. Pull replaces local photos with the cloud snapshot when available.</p>
       <div class="form-actions" style="flex-direction:column; align-items:stretch; gap:.6rem;">
         <button class="btn btn--primary" id="conflict-pull">Pull remote — discard my local changes</button>
         <button class="btn btn--danger" id="conflict-push">Push mine — overwrite remote</button>
@@ -790,9 +791,10 @@ function renderDashboard() {
   const neverWorn = items.filter(i => !i.wearCount && i.categoryId !== 'cat_perfumes').length;
   const DORMANT_DAYS = 60;
   const idleDays = i => Math.floor((Date.now() - (i.lastWornAt || i.createdAt || Date.now())) / 86400000);
-  const dormant = items.filter(i => idleDays(i) >= DORMANT_DAYS).length;
-  const longestIdle = [...items].sort((a, b) => idleDays(b) - idleDays(a))[0];
-  const totalWears = items.reduce((s, i) => s + (i.wearCount || 0), 0);
+  const clothing = items.filter(i => WearHistory.isClothing(i));
+  const dormant = clothing.filter(i => idleDays(i) >= DORMANT_DAYS).length;
+  const longestIdle = [...clothing].sort((a, b) => idleDays(b) - idleDays(a))[0];
+  const totalWears = clothing.reduce((s, i) => s + (i.wearCount || 0), 0);
   const avgCPW = avgCostPerWear();
 
   const byCategoryWears = {};
@@ -800,8 +802,10 @@ function renderDashboard() {
   const byCategoryCount = {};
   const byCategoryCPW = {};
   items.forEach(i => {
-    byCategoryWears[i.categoryId] = (byCategoryWears[i.categoryId] || 0) + (i.wearCount || 0);
-    bySubcategoryWears[i.subcategoryId] = (bySubcategoryWears[i.subcategoryId] || 0) + (i.wearCount || 0);
+    if (WearHistory.isClothing(i)) {
+      byCategoryWears[i.categoryId] = (byCategoryWears[i.categoryId] || 0) + (i.wearCount || 0);
+      bySubcategoryWears[i.subcategoryId] = (bySubcategoryWears[i.subcategoryId] || 0) + (i.wearCount || 0);
+    }
     byCategoryCount[i.categoryId] = (byCategoryCount[i.categoryId] || 0) + 1;
     const cpw = costPerWear(i);
     if (cpw !== null && i.categoryId !== 'cat_perfumes') {
@@ -810,8 +814,8 @@ function renderDashboard() {
   });
   const topSub = Object.entries(bySubcategoryWears).sort((a, b) => b[1] - a[1])[0];
 
-  const mostWorn = [...items].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0)).slice(0, 5);
-  const leastWorn = [...items].sort((a, b) => (a.wearCount || 0) - (b.wearCount || 0)).slice(0, 5);
+  const mostWorn = [...clothing].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0)).slice(0, 5);
+  const leastWorn = [...clothing].sort((a, b) => (a.wearCount || 0) - (b.wearCount || 0)).slice(0, 5);
   const bestValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(a) - costPerWear(b)).slice(0, 3);
   const worstValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(b) - costPerWear(a)).slice(0, 5);
 
@@ -1287,16 +1291,16 @@ if (!__tagFitBound) {
 function wireItemActions(root, item, isRetired) {
   if (!isRetired) {
     const wearBtn = qs('[data-act="wear"]', root);
-    if (wearBtn) wearBtn.addEventListener('click', () => {
-      item.wearCount = (item.wearCount || 0) + 1;
-      item.lastWornAt = Date.now();
+    if (wearBtn) wearBtn.addEventListener('click', (e) => {
+      if (e.detail > 1 || wearBtn.disabled || !WearHistory.record(item)) return;
+      wearBtn.disabled = true;
       Store.save();
       renderItemGrid();
     });
     const undoBtn = qs('[data-act="undo"]', root);
-    if (undoBtn) undoBtn.addEventListener('click', () => {
-      if (!item.wearCount) return;
-      item.wearCount -= 1;
+    if (undoBtn) undoBtn.addEventListener('click', (e) => {
+      if (e.detail > 1 || undoBtn.disabled || !WearHistory.undo(item)) return;
+      undoBtn.disabled = true;
       Store.save();
       renderItemGrid();
     });
@@ -1315,6 +1319,8 @@ function wireItemActions(root, item, isRetired) {
       toast('Item reactivated');
     });
   }
+  const historyBtn = qs('[data-act="history"]', root);
+  if (historyBtn) historyBtn.addEventListener('click', () => openWearHistoryModal(item));
   qs('[data-act="edit"]', root).addEventListener('click', () => openItemModal(item));
   qs('[data-act="delete"]', root).addEventListener('click', () => {
     Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear counts. Outfit logs keep its ID and show it as deleted. This can't be undone.`, () => {
@@ -1404,9 +1410,9 @@ function itemCard(item) {
         <div class="item-card__overflow item-row__overflow">
           <button type="button" class="item-card__hole-btn" data-act="overflow-toggle" aria-label="More actions"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
           <div class="item-row__menu">
-            ${isRetired ? '' : `
-              <button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
-              <button type="button" data-act="retire">Retire</button>`}
+            ${!isRetired && WearHistory.isClothing(item) ? `<button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo last wear</button>` : ''}
+            ${WearHistory.isClothing(item) ? '<button type="button" data-act="history">Wear history</button>' : ''}
+            ${!isRetired ? '<button type="button" data-act="retire">Retire</button>' : ''}
             <button type="button" data-act="edit">Edit</button>
             <button type="button" data-act="delete" class="danger">Delete</button>
           </div>
@@ -1418,7 +1424,7 @@ function itemCard(item) {
         ${(item.tags || []).map(tid => `<span class="tag-chip">${esc(G.tag(tid).name)}</span>`).join('')}
       </div>
       <div class="item-card__stats">
-        <div class="stat-cell">
+        ${WearHistory.isClothing(item) ? `<div class="stat-cell">
           <span class="stat-cell__icon">${statIconSvg('wears')}</span>
           <span class="stat-cell__text"><span class="mono">${item.wearCount || 0}</span><small>wears</small></span>
         </div>
@@ -1426,22 +1432,23 @@ function itemCard(item) {
           <span class="stat-cell__icon">${statIconSvg('calendar')}</span>
           <span class="stat-cell__text"><span class="mono" title="${item.lastWornAt ? esc(fmtDate(item.lastWornAt)) : ''}">${fmtDateShort(item.lastWornAt)}</span><small>last worn</small></span>
         </div>
-        <div class="stat-cell">
+        ` : ''}<div class="stat-cell">
           <span class="stat-cell__icon">${statIconSvg('wallet')}</span>
           <span class="stat-cell__text"><span class="mono">${item.cost ? fmtMoney(item.cost) : '—'}</span><small>cost</small></span>
         </div>
-        <div class="stat-cell ${cpwCellClass}">
+        ${WearHistory.isClothing(item) ? `<div class="stat-cell ${cpwCellClass}">
           <span class="stat-cell__icon">${statIconSvg('trending-down')}</span>
           <span class="stat-cell__text"><span class="mono">${cpw !== null ? fmtMoney(cpw) : '—'}</span><small>per wear</small></span>
         </div>
+        ` : ''}
       </div>
       <div class="item-card__actions">
         ${isRetired
           ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
-          : `<div class="item-card__actions-row item-card__actions-row--primary">
+          : WearHistory.isClothing(item) ? `<div class="item-card__actions-row item-card__actions-row--primary">
                <button class="btn btn--primary btn--wear" data-act="wear">+1 Worn</button>
                <button class="btn btn--ghost btn--wear" data-act="backfill">Log past</button>
-             </div>`}
+             </div>` : ''}
       </div>
     </article>`);
 
@@ -1483,7 +1490,7 @@ function itemListRow(item) {
 
   const metaBits = [
     `${esc(cat.name)} › ${esc(sub?.name || '—')}`,
-    `${item.wearCount || 0}×`,
+    ...(WearHistory.isClothing(item) ? [`${item.wearCount || 0}×`] : []),
   ];
   if (cpw !== null) metaBits.push(`${fmtMoney(cpw)}/wear`);
   if (isRetired) metaBits.push(`${esc(reasonLabel)}`);
@@ -1497,14 +1504,15 @@ function itemListRow(item) {
       </div>
       ${isRetired
         ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
-        : `<button class="btn btn--small btn--primary" data-act="wear">+1 Worn</button>`}
+        : WearHistory.isClothing(item) ? `<button class="btn btn--small btn--primary" data-act="wear">+1 Worn</button>` : ''}
       <div class="item-row__overflow">
         <button type="button" class="btn btn--tiny btn--ghost item-row__overflow-btn" data-act="overflow-toggle" aria-label="More actions">&#8942;</button>
         <div class="item-row__menu">
-          ${isRetired ? '' : `
-            <button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo</button>
-            <button type="button" data-act="backfill">Log past wear</button>
-            <button type="button" data-act="retire">Retire</button>`}
+          ${!isRetired && WearHistory.isClothing(item) ? `
+            <button type="button" data-act="undo" ${!item.wearCount ? 'disabled' : ''}>Undo last wear</button>
+            <button type="button" data-act="backfill">Log past wear</button>` : ''}
+          ${WearHistory.isClothing(item) ? '<button type="button" data-act="history">Wear history</button>' : ''}
+          ${!isRetired ? '<button type="button" data-act="retire">Retire</button>' : ''}
           <button type="button" data-act="edit">Edit</button>
           <button type="button" data-act="delete" class="danger">Delete</button>
         </div>
@@ -1524,13 +1532,14 @@ function itemListRow(item) {
 }
 
 
-function todayDateStr() {
-  const d = new Date();
+function todayDateStr(ts = Date.now()) {
+  const d = new Date(ts);
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function openBackfillModal(item) {
+  if (!WearHistory.isClothing(item) || item.status === 'retired') return;
   const maxDate = todayDateStr();
   const body = el(`
     <form class="form" id="backfill-form">
@@ -1546,14 +1555,18 @@ function openBackfillModal(item) {
   Modal.open('Log a past wear', body, {
     onMount: (root) => {
       qs('#backfill-cancel', root).addEventListener('click', () => Modal.close());
-      qs('#backfill-form', root).addEventListener('submit', (e) => {
+      const form = qs('#backfill-form', root);
+      const submit = qs('[type="submit"]', form);
+      form.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (submit.disabled) return;
         const dateStr = new FormData(e.target).get('date');
         if (!dateStr) return;
         if (dateStr > maxDate) { toast('Pick a date up to today', 'warn'); return; }
         const ts = new Date(dateStr + 'T12:00:00').getTime();
-        item.wearCount = (item.wearCount || 0) + 1;
-        if (ts > (item.lastWornAt || 0)) item.lastWornAt = ts;
+        if (!Number.isFinite(ts) || todayDateStr(ts) !== dateStr) { toast('Pick a valid date', 'warn'); return; }
+        if (!WearHistory.record(item, ts)) return;
+        submit.disabled = true;
         Store.save();
         Modal.close();
         renderItemGrid();
@@ -1561,6 +1574,21 @@ function openBackfillModal(item) {
       });
     },
   });
+}
+
+function openWearHistoryModal(item) {
+  if (!WearHistory.isClothing(item)) return;
+  const history = WearHistory.ensure(item);
+  const body = el(`<div class="wear-history">
+    <p>${esc(itemTitle(item))} · ${item.wearCount || 0} wear${item.wearCount === 1 ? '' : 's'}</p>
+    ${history.undatedCount ? `<p class="muted">${history.undatedCount} earlier or manually entered wear${history.undatedCount === 1 ? '' : 's'} without individual dates.</p>` : ''}
+    ${history.legacyLastWornAt ? `<p class="muted">Previously recorded last worn: ${esc(fmtDate(history.legacyLastWornAt))}.</p>` : ''}
+    ${history.events.length ? `<ol class="wear-history__list">${[...history.events].sort((a, b) => b.wornAt - a.wornAt)
+      .map(event => `<li><time datetime="${esc(todayDateStr(event.wornAt))}">${esc(fmtDate(event.wornAt))}</time></li>`).join('')}</ol>`
+      : '<p class="muted">No individually dated wears yet.</p>'}
+    <p class="muted">Undo last wear removes the most recently logged wear. Outfit logs remain separate.</p>
+  </div>`);
+  Modal.open('Wear history', body);
 }
 
 function openRetireModal(item) {
@@ -1640,7 +1668,7 @@ function openAddItemModal() {
 function openItemModal(existing, presetCategoryId) {
   const s = Store.state;
   const isEdit = !!existing;
-  const item = existing ? { ...existing } : {
+  const item = existing ? { ...existing, ...(existing.wearHistory ? { wearHistory: JSON.parse(JSON.stringify(existing.wearHistory)) } : {}) } : {
     id: uid('item'), categoryId: presetCategoryId || '', subcategoryId: '', brandId: '', colorId: '',
     tags: [], subtext: '', cost: '', wearCount: 0, lastWornAt: null, createdAt: Date.now(),
     status: 'active', retiredReason: null, retiredAt: null,
@@ -1700,8 +1728,9 @@ function openItemModal(existing, presetCategoryId) {
         <label><span id="cost-label-text">Original cost</span> <span class="muted">(optional)</span>
           <input type="number" name="cost" min="0" step="0.01" value="${item.cost ?? ''}" placeholder="0.00">
         </label>
-        <label>Times worn
-          <input type="number" name="wearCount" min="0" step="1" value="${item.wearCount || 0}">
+        <label id="wear-count-field">Times worn
+          <input type="number" name="wearCount" min="${item.wearHistory?.events.length || 0}" step="1" value="${item.wearCount || 0}">
+          <small class="muted">Count edits adjust undated wears. Use Undo last wear to remove a dated wear.</small>
         </label>
       </div>
       <p class="muted" id="gifted-hint" style="display:none; margin-top:-.6rem;">Tagged as Gifted — enter what it would have cost, so it still shows up in value analytics.</p>
@@ -1764,6 +1793,8 @@ function openItemModal(existing, presetCategoryId) {
       function updateColorRequirement() {
         const isPerfume = catSelect.value === 'cat_perfumes';
         colorSelect.required = !isPerfume;
+        qs('#wear-count-field', root).hidden = isPerfume;
+        form.elements.namedItem('wearCount').disabled = isPerfume;
         const hint = qs('#color-optional-hint', root);
         if (hint) hint.style.display = isPerfume ? 'inline' : 'none';
         const subtextLabel = qs('#subtext-label-text', root);
@@ -1939,8 +1970,10 @@ function openItemModal(existing, presetCategoryId) {
 
       qs('#item-cancel', root).addEventListener('click', () => Modal.close());
 
+      let saving = false;
       form.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (saving) return;
         const fd = new FormData(form);
         const catId = fd.get('categoryId');
         const missingColor = catId !== 'cat_perfumes' && !fd.get('colorId');
@@ -1956,7 +1989,10 @@ function openItemModal(existing, presetCategoryId) {
         item.colorId = fd.get('colorId');
         item.subtext = fd.get('subtext').trim();
         item.cost = fd.get('cost') === '' ? null : Number(fd.get('cost'));
-        item.wearCount = Math.max(0, parseInt(fd.get('wearCount'), 10) || 0);
+        if (WearHistory.isClothing(item) && !WearHistory.setCount(item, Number(fd.get('wearCount')))) {
+          toast('Count cannot be lower than dated wears. Use Undo last wear to remove one.', 'warn');
+          return;
+        }
         item.tags = qsa('#tag-checks input:checked', root).map(cb => cb.value);
 
         /* Using a brand outside its scope (e.g. a clothing house on a perfume)
@@ -1971,8 +2007,8 @@ function openItemModal(existing, presetCategoryId) {
           if (twin) {
             const { carried, retired, message } = perfumeTwinDetails(twin);
             const note = retired
-              ? 'Brand, name, scent family and concentration carry over from that bottle — adjust the cost and wear count for this one.'
-              : 'Brand, name, scent family and concentration will be carried over — you can change the cost and wear count after adding.';
+              ? 'Brand, name, scent family and concentration carry over from that bottle — adjust the cost for this one.'
+              : 'Brand, name, scent family and concentration will be carried over — you can change the cost after adding.';
             const body = el(`
               <div class="confirm">
                 <p>${esc(message)} ${retired ? 'Add it again?' : 'Add another bottle of the same scent?'}</p>
@@ -1997,6 +2033,8 @@ function openItemModal(existing, presetCategoryId) {
         commitItem();
 
         async function commitItem() {
+          if (saving) return;
+          saving = true;
           if (isEdit) {
             const idx = s.items.findIndex(i => i.id === item.id);
             s.items[idx] = item;
@@ -2321,14 +2359,11 @@ function renderOutfitSummary(matches, refresh) {
     if (wearButton.disabled) return;
     wearButton.disabled = true;
     const now = Date.now();
-    selected.forEach(item => {
-      item.wearCount = (item.wearCount || 0) + 1;
-      item.lastWornAt = now;
-    });
+    const worn = selected.filter(item => WearHistory.record(item, now));
     Store.state.outfitHistory.push({ id: uid('outfit'), wornAt: now, itemIds: selected.map(item => item.id) });
     Store.save();
     outfitSelectedIds.clear();
-    toast(`Outfit logged — ${selected.length} item${selected.length === 1 ? '' : 's'} marked worn`);
+    toast(`Outfit logged — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`);
     refresh();
   });
   box.appendChild(actions);

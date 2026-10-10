@@ -2324,7 +2324,7 @@ function renderMasters() {
     ['brands', 'Brands', () => renderSimpleListPanel('brands', 'Brand')],
     ['colors', 'Colors', () => renderColorsPanel()],
     ['activities', 'Activities', () => renderActivitiesPanel()],
-  ].forEach(([key, title, build]) => wrap.appendChild(settingsSection('m:' + key, title, build)));
+  ].forEach(([key, title, build]) => wrap.appendChild(settingsSection('m:' + key, title, build, Store.state[key].length)));
   return wrap;
 }
 
@@ -3014,13 +3014,14 @@ function collapseHints(body, section) {
   });
   section.appendChild(btn);
 }
-function settingsSection(key, title, buildBody) {
+function settingsSection(key, title, buildBody, count) {
   const open = !!settingsOpen[key];
   const section = el(`
     <section class="item-group settings-section ${open ? '' : 'is-collapsed'}" data-key="${esc(key)}">
       <button type="button" class="item-group__head" aria-expanded="${open}">
         <span class="item-group__chev" aria-hidden="true"></span>
         <span class="item-group__name">${esc(title)}</span>
+        ${count == null ? '' : `<span class="item-group__count mono">${count}</span>`}
       </button>
       <div class="settings-section__body"></div>
     </section>`);

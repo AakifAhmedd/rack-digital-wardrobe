@@ -1260,3 +1260,14 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 [data-style="brutalist"] input[type="checkbox"] { border: 2px solid var(--text); border-radius: 0; }
 [data-style="brutalist"] input[type="checkbox"]:checked { background: var(--accent); border-color: var(--text); }
 [data-style="brutalist"] input[type="checkbox"]::after { background: var(--text); }
+
+/* Outfit history follows the builder and remains readable on narrow screens. */
+.outfit-history { border-top: 1px solid var(--line); padding-top: 1.25rem; }
+.outfit-history h2 { font-family: var(--font-display); font-size: 1.3rem; }
+.outfit-history__list { list-style: none; padding: 0; display: grid; gap: .75rem; }
+.outfit-history__entry { border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface-raised); padding: 1rem; min-width: 0; }
+.outfit-history__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.outfit-history__header time { font-weight: 600; }
+.outfit-history__items { padding-left: 1.2rem; margin: .5rem 0 0; overflow-wrap: anywhere; }
+.outfit-history__header button { min-height: 44px; }
+.outfit-repeat { margin: 0 0 .6rem; }

@@ -309,7 +309,9 @@ const Store = {
         this._migrate();
         return this._state;
       } catch (e) {
-        console.error('Corrupt wardrobe data, starting fresh defaults', e);
+        // Keep the original bytes available for recovery; never overwrite them.
+        this._state = null;
+        throw new Error('Saved wardrobe could not be loaded. Your saved data has been kept.');
       }
     }
     this._state = buildDefaultState();
@@ -431,9 +433,16 @@ const Store = {
   },
 
   replaceAll(newState) {
-    this._state = newState;
-    this._migrate();
-    this.save();
+    const previous = this._state;
+    try {
+      // Migration must not mutate the caller's backup or the live wardrobe.
+      this._state = JSON.parse(JSON.stringify(newState));
+      this._migrate();
+      this.save();
+    } catch (err) {
+      this._state = previous;
+      throw err;
+    }
   },
 
   get state() { return this.load(); },

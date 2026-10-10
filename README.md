@@ -63,6 +63,22 @@ Older Gists containing only `rack-wardrobe.json` still pull successfully, keep l
 
 Large Gist files are retrieved from their revision-specific raw URL when [GitHub truncates API content](https://docs.github.com/en/rest/gists/gists#truncation). Raw file requests never include the token. Your token never leaves your browser except to call `api.github.com` directly, and it's never committed to this repository.
 
+## Reliability and recovery
+
+If saved wardrobe data cannot be read or migrated, RACK keeps the original data
+and offers a recovery download instead of replacing it with an empty wardrobe.
+A failed JSON/cloud replacement keeps the previous in-memory wardrobe. Download
+a recovery copy before choosing to reset a damaged local wardrobe.
+
+Manual photo Restore validates the same raster image formats and snapshot version
+as cloud Pull, but remains additive. It commits valid entries in one transaction;
+a storage failure rolls them all back. Item photo saves and deletes report success
+only after the IndexedDB transaction commits.
+
+The activity editor preserves advanced rules when opening or renaming an activity.
+When its conditions cannot be represented by the simple category builder, use the
+existing advanced editor. This does not change rule matching or the synced format.
+
 ## Versioning
 
 The live version shows in the header next to the RACK wordmark. It's read at load time from the plain-text `VERSION` file at the repo root (one line, no build step) and rendered as `v<number>`.
@@ -85,6 +101,23 @@ regression checks. These use a mocked Gist API, isolated localStorage and
 temporary IndexedDB databases, exercising photo transfer/deletion, old Gists,
 malformed payloads, rollback, wardrobe conflicts and additive manual Restore, plus outfit logging, repeated combinations, history removal, quick/past/outfit wear dates, Undo, count editing and cancellation, retirement, perfume exclusions, idempotent migration and old/new JSON/Gist history round trips.
 They never read your real wardrobe, use credentials or contact GitHub.
+The additional cases in `tests/review.js` cover advanced-rule preservation,
+failed replacements and startup recovery, aborted photo writes, additive photo
+validation, escaped rendering, deleted filters, form selections, modal focus,
+concurrent Pull edits, retry backoff, photo processing and service-worker cache
+isolation. All checks run from the same page.
+
+For UI/offline changes, also check the app in a fresh browser profile:
+
+- At desktop, 390px and 320px widths, try all four styles and visit each tab.
+  Open Appearance, the filter sheet and a perfume editor; check for horizontal
+  overflow and confirm clothing wear fields stay hidden for perfumes.
+- Open a modal by keyboard, cycle forward/backward with Tab, and close it with
+  Escape. Background controls should be unavailable while it is open, and focus
+  should return to its opener. Repeat with reduced motion enabled.
+- Load online and wait for the service worker to activate, then reload offline
+  and visit `?tab=outfit`. Verify the shell still loads. Other apps' caches on the
+  same origin must remain intact.
 
 ## Structure
 

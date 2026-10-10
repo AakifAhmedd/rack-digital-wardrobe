@@ -5,9 +5,10 @@ const BUILTIN_BRAND_LOGOS = {"dior": "M.0728 8.7751h3.1157c2.6789 0 3.7272 1.572
 const BrandLogo = {
   /* HTML for a small logo (uploaded image wins over built-in), or '' when the brand has none. */
   html(brand, size = 16, title = '') {
-    const t = title ? ` title="${title}"` : '';
+    const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const t = title ? ` title="${escape(title)}"` : '';
     if (!brand) return '';
-    if (brand.logo) return `<img class="brand-logo"${t} src="${brand.logo}" width="${size}" height="${size}" alt="" loading="lazy">`;
+    if (brand.logo) return `<img class="brand-logo"${t} src="${escape(brand.logo)}" width="${size}" height="${size}" alt="" loading="lazy">`;
     const d = BUILTIN_BRAND_LOGOS[String(brand.name || '').trim().toLowerCase()];
     return d ? `<svg class="brand-logo"${t} viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>` : '';
   },

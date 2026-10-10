@@ -171,6 +171,7 @@ function buildDefaultState() {
     tags,
     activities,
     items: [],         // NEVER pre-populated
+    outfitHistory: [], // { id, wornAt, itemIds }; photos stay in IndexedDB
     appearance: {
       themeId: 'theme_canvas',
       fontId: 'font_fraunces_plex',
@@ -266,6 +267,7 @@ const Store = {
     const s = this._state;
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
+    if (!Array.isArray(s.outfitHistory)) s.outfitHistory = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
     if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', popoverBlur: 'frosted', customThemes: [], customFonts: [] };
     if (!s.appearance.customThemes) s.appearance.customThemes = [];

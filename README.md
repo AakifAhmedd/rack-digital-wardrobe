@@ -12,6 +12,7 @@ RACK catalogs your clothes, shoes, accessories, and perfumes, tracks how often y
 - **Duplicate bottle detection** — adding a perfume whose brand + name is already on your rack asks "Add another bottle" and carries over brand, name, scent family and concentration, instead of quietly creating a near-identical item. Retired bottles count too, so finishing a scent you love and buying it again months later is recognised as a re-buy and the new bottle inherits the old one's details.
 - **Tags scoped to categories** — a tag like *Cargo* only shows up when tagging Pants; *Collared* only shows up for Shirts. You manage the tag list yourself in Settings › Masters.
 - **Activities with a real rule engine** — instead of manually assigning every item to every activity, an activity like "Office Smart Casual" is defined as a set of category/subcategory/tag rules (with always-exclude rules for things like Shorts). Items are matched automatically. Two worked examples from the spec — *Office Smart Casual* and *Badminton* — ship configured out of the box.
+- **Outfit history** — “Wear this outfit” logs the exact selected items and date/time while marking each item worn. Review newest-first history in Outfit; a previously worn combination shows its last wear in the builder. Removing a log requires confirmation and leaves item wear counts unchanged. Retired items remain labelled; deleted items show their stable ID.
 - **Usage tracking** — log a wear with one tap; see most-worn and least-worn items, categories, and subcategories.
 - **Donation prompts** — items with zero wears are surfaced on the dashboard with a nudge toward donating rather than reselling.
 - **Cost per wear** — record what an item cost you; RACK divides by wear count and colour-codes it against your wardrobe average, so you can see which purchases earned their keep.
@@ -27,6 +28,8 @@ This is a plain HTML/CSS/JS app — no build step, no framework — which keeps 
 - **`localStorage`** as the fast, always-available local store (works offline, zero setup).
 - **Optional sync via a private GitHub Gist**, using a personal access token *you* generate and paste into Settings. It's stored only in that browser's `localStorage` and calls the GitHub API directly from the client — RACK's own source code never contains or receives your token. Add the same token + Gist ID on a second device and it pulls the same data. This is genuinely cross-device, adds no server for anyone to run, and costs nothing.
 - **Export/Import JSON** is always available as a manual backup path, independent of the Gist sync.
+
+**Outfit logs.** `Store.state.outfitHistory` is an additive array of `{ id, wornAt, itemIds }`: a generated log ID, wear timestamp in milliseconds, and stable item IDs only. Older local data, backups and Gists default to an empty history on load/restore. JSON backup/restore and wardrobe Gist Push/Pull include the array naturally; photos remain separate. History reflects current item names, not historical name snapshots. Update all devices before logging outfits: older app versions do not understand this field and can omit it when replacing data.
 
 **Master data vs. item data.** Categories, subcategories, tags, brands, colors, and activity rules are stored separately from individual items, so editing a master (renaming a tag, adjusting an activity's rules) doesn't require touching every item that uses it.
 
@@ -46,7 +49,7 @@ This is a plain HTML/CSS/JS app — no build step, no framework — which keeps 
 2. In RACK's Settings tab, paste it into "GitHub personal access token" and click **Push to cloud** — this creates a private Gist containing both `rack-wardrobe.json` and `rack-photos.json` and remembers its ID.
 3. On another device, open RACK, paste the *same* token and Gist ID into Settings, and click **Pull from cloud**.
 
-Explicit **Push** uploads the current wardrobe and the complete photo snapshot together in one Gist create/update request. Explicit **Pull** reads both files from the same Gist revision, uses the existing wardrobe replacement path, then replaces IndexedDB photos in one transaction. Only photos for items in the pulled wardrobe are restored. Photos absent from the snapshot are deleted locally, including when the snapshot is empty; items without photos remain valid. The latest successful Push/Pull snapshot wins, with the existing wardrobe conflict choice when both devices have wardrobe changes. There is no per-photo merge or conflict dialog.
+Explicit **Push** uploads the current wardrobe and the complete photo snapshot together in one Gist create/update request. Explicit **Pull** reads both files from the same Gist revision, uses the existing wardrobe replacement path, then replaces IndexedDB photos in one transaction. Only photos for items in the pulled wardrobe are restored. Photos absent from the snapshot are deleted locally, including when the snapshot is empty; items without photos remain valid. The latest successful Push/Pull snapshot wins, with the existing wardrobe conflict choice when both devices have wardrobe changes. Outfit history is part of that whole-wardrobe snapshot: Pull replaces local history, Push replaces remote history, and logging/removing an outfit is a local wardrobe edit. Conflicting histories are not merged. The conflict dialog explains this choice. There is no per-photo merge or conflict dialog.
 
 Background checks on app open/resume continue to auto-pull **wardrobe data only**. They never export, restore, or delete photos. Failed manual actions require another explicit Push/Pull; they do not retry photo transfers on a timer.
 
@@ -74,7 +77,7 @@ python3 -m http.server 8000
 Open `http://localhost:8000/tests/sync.html` for the zero-dependency browser
 regression checks. These use a mocked Gist API, isolated localStorage and
 temporary IndexedDB databases, exercising photo transfer/deletion, old Gists,
-malformed payloads, rollback, wardrobe conflicts and additive manual Restore.
+malformed payloads, rollback, wardrobe conflicts and additive manual Restore, plus outfit logging, repeated combinations, history removal, migration and JSON/Gist history round trips.
 They never read your real wardrobe, use credentials or contact GitHub.
 
 ## Structure

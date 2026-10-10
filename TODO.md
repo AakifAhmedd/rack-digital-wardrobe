@@ -2,13 +2,15 @@
 
 ## Next planned work
 
-- Outfit log: save the date and items when “Wear this outfit” is used, so repeated combinations can be avoided and outfit history can be viewed. This will change the synced data shape and needs an implementation review before work starts.
+- No committed work queued.
 
 ## Under consideration
 
 - Cost-per-wear targets: explore whether showing the additional wears needed to reach a target cost-per-wear is useful. This is an idea only, not a committed task.
 
 ## Completed
+
+- Outfit log: “Wear this outfit” records selected item IDs and date/time alongside existing wear counts. Outfit history supports review and confirmed entry removal; the builder flags previously worn combinations. JSON/Gist snapshots include history under the existing whole-wardrobe conflict choice.
 
 - Perfume images: the IndexedDB photo prototype, card display, zoom handling, manual backup, and explicit Gist Push/Pull transfer are implemented.
 

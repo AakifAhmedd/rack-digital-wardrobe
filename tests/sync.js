@@ -4,7 +4,7 @@
   const results = document.querySelector('#results');
   const lines = [];
   const devices = [];
-  const sources = await Promise.all(['data', 'sync', 'photos'].map(async name =>
+  const sources = await Promise.all(['data', 'sync', 'photos', 'app'].map(async name =>
     [name, await (await fetch(`../js/${name}.js`)).text()]));
   const cloud = { files: {}, updated_at: 'revision-0', id: 'test-gist' };
   const requests = [];
@@ -51,12 +51,14 @@
       }
       return new w.Response(JSON.stringify(cloud), { headers: { 'Content-Type': 'application/json' } });
     };
+    w.document.body.innerHTML = '<div id="modal-overlay"></div>';
     for (const [name, source] of sources) {
       const script = w.document.createElement('script');
-      const exports = name === 'data' ? 'Store, buildDefaultState' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : 'RackPhotos';
-      script.textContent = `${source}\nObject.assign(window, { ${exports} });`;
+      const exports = name === 'data' ? 'Store, buildDefaultState' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, Modal';
+      script.textContent = `${source.replace("document.addEventListener('DOMContentLoaded', init);", '')}\nObject.assign(window, { ${exports} });`;
       w.document.body.append(script);
     }
+    w.eval('render = () => {}; toast = () => {};');
     // Stub headers so the tests never need or store even a fake token.
     w.Sync._headers = async () => ({ Accept: 'application/vnd.github+json' });
     w.Sync.isConnected = () => !!w.Sync.getGistId();
@@ -233,6 +235,84 @@
       const result = await b.RackPhotos.importAll(backup, new Set(['bottle', 'empty']));
       assert(result.restored === 1 && result.skipped === 0, 'Manual restore compatible');
       equal(Object.keys(await photos(b)).sort(), ['bottle', 'empty'], 'Restore does not delete other photos');
+    });
+    await check('Outfit migration and JSON restore are idempotent and compatible', async () => {
+      const old = a.buildDefaultState();
+      delete old.outfitHistory;
+      a.Store.replaceAll(old);
+      equal(a.Store.state.outfitHistory, [], 'Old backup defaults history');
+      a.Store.state.outfitHistory.push({ id: 'log-test', wornAt: 123456789, itemIds: ['missing'] });
+      const backup = a.Store.exportJSON();
+      b.Store.replaceAll(JSON.parse(backup));
+      b.Store._migrate(); b.Store._migrate();
+      equal(b.Store.state.outfitHistory, a.Store.state.outfitHistory, 'History survives repeated migration and restore');
+      b.Store._state = null;
+      equal(b.Store.state.outfitHistory, a.Store.state.outfitHistory, 'History survives local reload');
+    });
+    await check('Wear action logs exact selection once, preserves wear counts and warns on repeats', async () => {
+      a.Store.replaceAll(a.buildDefaultState());
+      const items = ['one', 'two', 'unselected'].map(id => ({ id, categoryId: 'cat_shirts', subcategoryId: 'sub_shirts_t-shirts', tags: [], status: 'active', wearCount: 2 }));
+      a.Store.state.items = items;
+      a.eval("outfitSelectedIds = new Set(['one', 'two']); toast = () => {};");
+      const box = a.renderOutfitSummary(items, () => {});
+      const button = box.querySelector('#outfit-wear');
+      const before = Date.now();
+      button.click(); button.click();
+      equal(a.Store.state.outfitHistory.length, 1, 'Double click creates one log');
+      const log = a.Store.state.outfitHistory[0];
+      equal(log.itemIds, ['one', 'two'], 'Exact selected IDs');
+      equal(Object.keys(log).sort(), ['id', 'itemIds', 'wornAt'], 'No item/photo snapshots');
+      assert(log.id.startsWith('outfit_') && log.wornAt >= before, 'Generated ID and timestamp');
+      equal(items.map(i => i.wearCount), [3, 3, 2], 'Selected items only increment once');
+      equal(items[0].lastWornAt, log.wornAt, 'Wear time matches');
+      a.eval("outfitSelectedIds = new Set(['two', 'one']);");
+      assert(a.renderOutfitSummary(items, () => {}).querySelector('.outfit-repeat'), 'Order-independent repeat warning');
+      a.eval("outfitSelectedIds = new Set(['one']);");
+      assert(!a.renderOutfitSummary(items, () => {}).querySelector('.outfit-repeat'), 'Subset is not an exact repeat');
+    });
+    await check('History renders retired/deleted items safely, without activities, and confirms removal', async () => {
+      a.Store.state.items[0].status = 'retired';
+      a.Store.state.items[0].categoryId = 'cat_perfumes';
+      a.Store.state.items[0].subtext = '<img src=x onerror=alert(1)>';
+      a.Store.state.items = a.Store.state.items.filter(i => i.id !== 'two');
+      a.Store.state.activities = [];
+      const history = a.renderOutfitBuilder();
+      assert(history.textContent.includes('Retired') && history.textContent.includes('Deleted item'), 'Historical items retained');
+      assert(history.querySelector('time').getAttribute('datetime'), 'Date/time present');
+      assert(!history.querySelector('.outfit-history img') && history.textContent.includes('<img src=x onerror=alert(1)>'), 'Names escaped');
+      let confirm;
+      a.Modal.confirm = (_, yes) => { confirm = yes; };
+      a.eval('render = () => {};');
+      history.querySelector('.outfit-history button').click();
+      assert(a.Store.state.outfitHistory.length === 1, 'Removal waits for confirmation');
+      confirm();
+      assert(a.Store.state.outfitHistory.length === 0, 'Confirmed removal');
+      assert(a.Store.state.items[0].wearCount === 3, 'Removal keeps wear count');
+      assert(a.renderOutfitHistory().textContent.includes('No outfits logged yet'), 'Empty state after removal');
+    });
+    await check('History syncs via Push/Pull and participates in whole-wardrobe conflicts', async () => {
+      a.Store.state.outfitHistory = [{ id: 'remote-log', wornAt: 123, itemIds: ['one'] }];
+      await a.SyncEngine.push({ resolveConflict: true });
+      await b.SyncEngine.pull({ resolveConflict: true });
+      equal(b.Store.state.outfitHistory, a.Store.state.outfitHistory, 'History pushed/pulled');
+      markClean(b);
+      b.Store.state.outfitHistory.push({ id: 'local-log', wornAt: 456, itemIds: ['two'] });
+      b.Store.save();
+      b.Store.state.meta.updatedAt += 100;
+      advance();
+      assert((await b.SyncEngine.checkAndAutoSync()).conflict, 'History edit triggers auto-sync conflict');
+      assert((await b.SyncEngine.push()).conflict, 'Push blocked');
+      assert((await b.SyncEngine.pull()).conflict, 'Pull blocked');
+      assert(b.Store.state.outfitHistory.length === 2, 'Conflict preserves local history');
+      await b.SyncEngine.push({ resolveConflict: true });
+      equal(JSON.parse(cloud.files['rack-wardrobe.json'].content).outfitHistory, b.Store.state.outfitHistory, 'Push choice replaces cloud history');
+      cloudFile('rack-wardrobe.json', JSON.parse(a.Store.exportJSON())); advance();
+      await b.SyncEngine.pull({ resolveConflict: true });
+      equal(b.Store.state.outfitHistory, a.Store.state.outfitHistory, 'Pull choice replaces local history');
+      const old = JSON.parse(a.Store.exportJSON()); delete old.outfitHistory;
+      cloudFile('rack-wardrobe.json', old); advance();
+      await b.SyncEngine.pull({ resolveConflict: true });
+      equal(b.Store.state.outfitHistory, [], 'Legacy Gist defaults empty');
     });
     window.testResult = { passed: lines.length, failed: 0 };
     lines.push(`\nAll ${lines.length} checks passed.`);

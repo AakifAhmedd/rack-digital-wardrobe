@@ -673,7 +673,7 @@ function openConflictModal() {
   const body = el(`
     <div>
       <p>This device has changes that haven't been pushed, and the cloud copy has changed too — probably from another device. Pick one:</p>
-      <p class="muted">Push and Pull include photos. Pull replaces local photos with the cloud snapshot when available.</p>
+      <p class="muted">Push and Pull replace the whole wardrobe, including outfit history; entries are not merged. Pull replaces local photos with the cloud snapshot when available.</p>
       <div class="form-actions" style="flex-direction:column; align-items:stretch; gap:.6rem;">
         <button class="btn btn--primary" id="conflict-pull">Pull remote — discard my local changes</button>
         <button class="btn btn--danger" id="conflict-push">Push mine — overwrite remote</button>
@@ -1317,7 +1317,7 @@ function wireItemActions(root, item, isRetired) {
   }
   qs('[data-act="edit"]', root).addEventListener('click', () => openItemModal(item));
   qs('[data-act="delete"]', root).addEventListener('click', () => {
-    Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear history. This can't be undone.`, () => {
+    Modal.confirm(`Permanently delete "${itemTitle(item)}"? This removes it completely, including its wear counts. Outfit logs keep its ID and show it as deleted. This can't be undone.`, () => {
       Store.state.items = Store.state.items.filter(i => i.id !== item.id);
       Store.save();
       RackPhotos.delete(item.id).catch(() => {}); // the photo is per-device — drop it with the item
@@ -2168,6 +2168,7 @@ function renderOutfitBuilder() {
       setSettingsSectionOpen('m:activities', true);
       switchTab('settings');
     });
+    wrap.appendChild(renderOutfitHistory());
     return wrap;
   }
 
@@ -2197,8 +2198,11 @@ function renderOutfitBuilder() {
 
   const body = el(`<div id="outfit-body"></div>`);
   wrap.appendChild(body);
+  const history = el('<div class="outfit-history-container"></div>');
+  wrap.appendChild(history);
 
   function renderOutfitBody() {
+    history.replaceChildren(renderOutfitHistory());
     body.innerHTML = '';
     if (!outfitActivityId) {
       body.appendChild(el(`<p class="muted outfit-hint">Pick an activity above to see suggested items.</p>`));
@@ -2282,6 +2286,12 @@ function renderOutfitSummary(matches, refresh) {
     return box;
   }
 
+  const ids = new Set(selected.map(i => i.id));
+  const previous = Store.state.outfitHistory
+    .filter(entry => entry.itemIds.length === ids.size && entry.itemIds.every(id => ids.has(id)))
+    .sort((a, b) => b.wornAt - a.wornAt)[0];
+  if (previous) box.appendChild(el(`<p class="muted outfit-repeat" role="status">Last wore this combination ${esc(outfitLogDate(previous.wornAt))}.</p>`));
+
   const totalCost = selected.reduce((s, i) => s + (Number(i.cost) || 0), 0);
   box.appendChild(el(`
     <div class="outfit-summary__header">
@@ -2306,12 +2316,16 @@ function renderOutfitSummary(matches, refresh) {
       <button type="button" class="btn btn--primary" id="outfit-wear">Wear this outfit</button>
     </div>`);
   qs('#outfit-clear', actions).addEventListener('click', () => { outfitSelectedIds.clear(); refresh(); });
-  qs('#outfit-wear', actions).addEventListener('click', () => {
+  const wearButton = qs('#outfit-wear', actions);
+  wearButton.addEventListener('click', () => {
+    if (wearButton.disabled) return;
+    wearButton.disabled = true;
     const now = Date.now();
     selected.forEach(item => {
       item.wearCount = (item.wearCount || 0) + 1;
       item.lastWornAt = now;
     });
+    Store.state.outfitHistory.push({ id: uid('outfit'), wornAt: now, itemIds: selected.map(item => item.id) });
     Store.save();
     outfitSelectedIds.clear();
     toast(`Outfit logged — ${selected.length} item${selected.length === 1 ? '' : 's'} marked worn`);
@@ -2320,6 +2334,43 @@ function renderOutfitSummary(matches, refresh) {
   box.appendChild(actions);
 
   return box;
+}
+
+/* Logs retain only stable IDs. Names/status are resolved from today's rack. */
+function outfitLogDate(ts) {
+  return new Date(ts).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function renderOutfitHistory() {
+  const section = el('<section class="outfit-history" aria-label="Outfit history"><h2>Outfit history</h2></section>');
+  const entries = [...Store.state.outfitHistory].sort((a, b) => b.wornAt - a.wornAt);
+  if (!entries.length) {
+    section.appendChild(el('<p class="muted">No outfits logged yet. Wear an outfit to save it here.</p>'));
+    return section;
+  }
+  const list = el('<ol class="outfit-history__list"></ol>');
+  entries.forEach(entry => {
+    const row = el(`<li class="outfit-history__entry">
+      <div class="outfit-history__header"><time datetime="${esc(new Date(entry.wornAt).toISOString())}">${esc(outfitLogDate(entry.wornAt))}</time>
+      <button type="button" class="btn btn--ghost btn--small" aria-label="Remove outfit logged ${esc(outfitLogDate(entry.wornAt))}">Remove</button></div>
+      <ul class="outfit-history__items">${entry.itemIds.map(id => {
+        const item = G.item(id);
+        return `<li>${item ? esc(itemTitle(item)) + (item.status === 'retired' ? ' <span class="muted">(Retired)</span>' : '') : `Deleted item <span class="muted">(${esc(id)})</span>`}</li>`;
+      }).join('')}</ul></li>`);
+    qs('button', row).addEventListener('click', () => {
+      Modal.confirm('Remove this outfit log? Item wear counts stay unchanged.', () => {
+        Store.state.outfitHistory = Store.state.outfitHistory.filter(log => log.id !== entry.id);
+        Store.save();
+        render();
+        toast('Outfit log removed');
+      }, { danger: true, yesLabel: 'Remove log' });
+    });
+    list.appendChild(row);
+  });
+  section.appendChild(list);
+  return section;
 }
 
 /* ================================================================

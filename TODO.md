@@ -10,7 +10,7 @@ When asked to build through a roadmap milestone, complete milestones in order. F
 
 The wardrobe remains RACK's primary feature. Version 3 completes its date tracking and introduces the Bookshelf as an optional, separate collection.
 
-- **3.0 — Consistent wardrobe date tracking.** Record a date for every wear action, including quick wear logging. Make last-worn dates and wear history consistent across item edits, outfit logs, backups, restores, and sync. Existing date-aware flows should be consolidated and completed rather than duplicated.
+- **3.0 — Consistent wardrobe date tracking — complete.** Quick wear, past-date wear, and outfit wear share dated per-item clothing history. Counts and last-worn dates remain consistent through Undo, count edits, retirement, backups/restores and sync. Old counts remain undated; known last-worn summaries are retained. Outfit logs remain independent, and perfumes stay outside clothing wear tracking.
 - **3.1 — Wardrobe history and time-based insights.** Add practical views for recent and older wears and useful monthly summaries. Preserve perfume's separate collection behavior and its exclusion from clothing cost-per-wear averages.
 - **3.2 — Wardrobe polish and reliability.** Review search, filters, mobile layouts, empty states, retirement, and backup/sync recovery. Complete the core wardrobe experience.
 - **3.3 — Bookshelf foundation.** Add an optional Bookshelf alongside Wardrobe. Support adding, editing, searching, and archiving books, with title, author, fiction/non-fiction, genre, format, and reading status. Keep book records separate from wardrobe categories, activities, wear counts, outfits, and cost-per-wear.
@@ -48,6 +48,8 @@ Books without cover images must remain fully usable. Keep image storage and back
 - **Cost-per-wear targets:** explore whether showing the additional wears needed to reach a target cost-per-wear is useful. This is an idea only, not a committed roadmap milestone.
 
 ### Completed
+
+- **Milestone 3.0:** consistent individual clothing wear dates and history, additive legacy migration, count/last-worn reconciliation, and compatible JSON/Gist round trips.
 
 - **Outfit log:** “Wear this outfit” records selected item IDs and date/time alongside existing wear counts. Outfit history supports review and confirmed entry removal; the builder flags previously worn combinations. JSON/Gist snapshots include history under the existing whole-wardrobe conflict choice.
 - **Perfume images:** the IndexedDB photo prototype, card display, zoom handling, manual backup, and explicit Gist Push/Pull transfer are implemented.

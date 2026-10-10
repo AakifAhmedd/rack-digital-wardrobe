@@ -123,7 +123,7 @@ const Sync = {
    This only tracks LOCAL bookkeeping (in localStorage) about what
    remote/local state we last knew to be in sync — it never changes
    the shape of the data that actually gets pushed to the gist
-   (rack-wardrobe.json is still just the full Store.state, including outfitHistory).
+   (rack-wardrobe.json is still just the full Store.state, including item wearHistory and outfitHistory).
    Conflict choices replace that entire snapshot; outfit entries are not merged. Only explicit
    Push/Pull transfers the separate rack-photos.json snapshot. Manual actions
    are never retried by a timer, so photos cannot sync in the background.

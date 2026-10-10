@@ -4,7 +4,7 @@
   const results = document.querySelector('#results');
   const lines = [];
   const devices = [];
-  const sources = await Promise.all(['data', 'sync', 'photos', 'app'].map(async name =>
+  const sources = await Promise.all(['data', 'sync', 'photos', 'brand-logos', 'app'].map(async name =>
     [name, await (await fetch(`../js/${name}.js`)).text()]));
   const cloud = { files: {}, updated_at: 'revision-0', id: 'test-gist' };
   const requests = [];
@@ -51,14 +51,14 @@
       }
       return new w.Response(JSON.stringify(cloud), { headers: { 'Content-Type': 'application/json' } });
     };
-    w.document.body.innerHTML = '<div id="modal-overlay"></div>';
+    w.document.body.innerHTML = '<div id="modal-overlay"><div id="modal-box"></div></div>';
     for (const [name, source] of sources) {
       const script = w.document.createElement('script');
-      const exports = name === 'data' ? 'Store, buildDefaultState' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, Modal';
+      const exports = name === 'data' ? 'Store, buildDefaultState, WearHistory' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : name === 'brand-logos' ? 'BrandLogo' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, wireItemActions, openBackfillModal, openWearHistoryModal, openItemModal, openRetireModal, costPerWear, renderDashboard, itemCard, itemListRow, Modal';
       script.textContent = `${source.replace("document.addEventListener('DOMContentLoaded', init);", '')}\nObject.assign(window, { ${exports} });`;
       w.document.body.append(script);
     }
-    w.eval('render = () => {}; toast = () => {};');
+    w.eval('render = () => {}; renderItemGrid = () => {}; toast = () => {};');
     // Stub headers so the tests never need or store even a fake token.
     w.Sync._headers = async () => ({ Accept: 'application/vnd.github+json' });
     w.Sync.isConnected = () => !!w.Sync.getGistId();
@@ -313,6 +313,209 @@
       cloudFile('rack-wardrobe.json', old); advance();
       await b.SyncEngine.pull({ resolveConflict: true });
       equal(b.Store.state.outfitHistory, [], 'Legacy Gist defaults empty');
+    });
+    function clothingItem(id, count = 0, last = null) {
+      return { id, categoryId: 'cat_shirts', subcategoryId: 'sub_shirts_collared-shirts',
+        colorId: 'col_white', brandId: '', tags: [], subtext: '', cost: 1200,
+        status: 'active', wearCount: count, lastWornAt: last };
+    }
+    function submit(w, form) { form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); }
+    await check('Wear migration preserves legacy items and dates without inventing events', async () => {
+      const old = a.buildDefaultState();
+      old.items = [clothingItem('legacy', 7, 1600000000000), clothingItem('unknown', 3), clothingItem('unused'),
+        { id: 'perfume', categoryId: 'cat_perfumes', tags: [], wearCount: 9, lastWornAt: 1600000000000 }];
+      old.outfitHistory = [{ id: 'old-outfit', wornAt: 1600000000000, itemIds: ['legacy'] }];
+      const legacyOutfits = JSON.stringify(old.outfitHistory);
+      a.Store.replaceAll(old);
+      const [legacy, unknown, unused, perfume] = a.Store.state.items;
+      equal(legacy.wearHistory, { events: [], undatedCount: 7, legacyLastWornAt: 1600000000000 }, 'Legacy count/date preserved');
+      equal([legacy.wearCount, legacy.lastWornAt], [7, 1600000000000], 'Legacy summaries preserved');
+      equal(unknown.wearHistory, { events: [], undatedCount: 3, legacyLastWornAt: null }, 'Unknown dates stay unknown');
+      equal(unused.wearHistory, { events: [], undatedCount: 0, legacyLastWornAt: null }, 'Zero count stays zero');
+      assert(!perfume.wearHistory && perfume.wearCount === 9 && perfume.lastWornAt === 1600000000000, 'Perfume stored values untouched');
+      equal(JSON.stringify(a.Store.state.outfitHistory), legacyOutfits, 'No reconstruction from outfits');
+      const migrated = a.Store.exportJSON();
+      a.Store._migrate(); a.Store._migrate();
+      equal(a.Store.exportJSON(), migrated, 'Migration idempotent');
+      a.Store._state = null;
+      equal(a.Store.exportJSON(), migrated, 'Local reload preserves history');
+    });
+    await check('Quick wear and Undo work on cards/list rows and reject repeat submission', async () => {
+      const item = clothingItem('quick', 2, 1600000000000);
+      a.Store.state.items = [item]; a.Store.save();
+      for (const renderRow of [a.itemCard, a.itemListRow]) {
+        const row = renderRow(item);
+        const wear = row.querySelector('[data-act="wear"]');
+        wear.click(); wear.click();
+        const event = item.wearHistory.events.at(-1);
+        equal([item.wearCount, item.wearHistory.events.length], [3, 1], 'Exactly one quick event');
+        assert(event.id.startsWith('wear_') && item.lastWornAt === event.wornAt, 'Timestamp and summary agree');
+        const refreshed = renderRow(item);
+        const undo = refreshed.querySelector('[data-act="undo"]');
+        undo.click(); undo.click();
+        equal([item.wearCount, item.lastWornAt, item.wearHistory.events.length], [2, 1600000000000, 0], 'Undo restores prior state once');
+      }
+      a.WearHistory.undo(item); a.WearHistory.undo(item);
+      equal([item.wearCount, item.lastWornAt], [0, null], 'Undo exhausts unknown count safely');
+      assert(!a.WearHistory.undo(item), 'Zero undo is a no-op');
+      const row = a.itemCard(item);
+      row.querySelector('[data-act="wear"]').dispatchEvent(new a.MouseEvent('click', { detail: 2 }));
+      equal(item.wearCount, 0, 'Second click of double click ignored on newly rendered button');
+      a.WearHistory.record(item, 1600000000000);
+      a.WearHistory.record(item, 1700000000000);
+      a.WearHistory.record(item, 1650000000000);
+      assert(new Set(item.wearHistory.events.map(event => event.id)).size === 3, 'Event IDs unique');
+      a.WearHistory.undo(item);
+      equal(item.lastWornAt, 1700000000000, 'Undo older backfill keeps newest date');
+      a.WearHistory.undo(item);
+      equal(item.lastWornAt, 1600000000000, 'Undo newest wear restores previous dated wear');
+    });
+    await check('Existing past-wear form records chosen local date once and keeps last worn forward', async () => {
+      const item = clothingItem('past', 4, 1700000000000);
+      a.Store.state.items = [item]; a.Store.save();
+      a.openBackfillModal(item);
+      const form = a.document.querySelector('#backfill-form');
+      form.elements.namedItem('date').value = '2020-02-29';
+      submit(a, form); submit(a, form);
+      equal(item.wearCount, 5, 'Past submission adds once');
+      equal(item.wearHistory.events[0].wornAt, new a.Date('2020-02-29T12:00:00').getTime(), 'Local calendar date retained');
+      equal(item.lastWornAt, 1700000000000, 'Old wear cannot move last worn back');
+      a.WearHistory.record(item, 1750000000000);
+      a.openBackfillModal(item);
+      const form2 = a.document.querySelector('#backfill-form');
+      form2.elements.namedItem('date').value = '2021-01-01';
+      submit(a, form2);
+      equal(item.lastWornAt, 1750000000000, 'Backfill cannot move latest event back');
+      a.WearHistory.undo(item);
+      equal(item.lastWornAt, 1750000000000, 'Undo removes last logged backfill, not latest date');
+      a.WearHistory.undo(item);
+      equal(item.lastWornAt, 1700000000000, 'Undo latest date restores legacy baseline');
+      a.openBackfillModal(item);
+      const invalid = a.document.querySelector('#backfill-form');
+      invalid.elements.namedItem('date').value = '2099-01-01';
+      const count = item.wearCount;
+      submit(a, invalid);
+      equal(item.wearCount, count, 'Future date rejected');
+      invalid.elements.namedItem('date').value = '';
+      submit(a, invalid);
+      equal(item.wearCount, count, 'Empty date rejected');
+      a.Modal.close();
+    });
+    await check('Outfit wear creates dated item events and preserves independent outfit logs', async () => {
+      const shirt = clothingItem('outfit-shirt', 1, 1600000000000);
+      const pants = { ...clothingItem('outfit-pants'), categoryId: 'cat_pants' };
+      const perfume = { id: 'scent', categoryId: 'cat_perfumes', tags: [], wearCount: 8, lastWornAt: 1600000000000 };
+      a.Store.state.items = [shirt, pants, perfume]; a.Store.state.outfitHistory = []; a.Store.save();
+      a.eval("outfitSelectedIds = new Set(['outfit-shirt', 'outfit-pants', 'scent']);");
+      const summary = a.renderOutfitSummary(a.Store.state.items, () => {});
+      const wear = summary.querySelector('#outfit-wear'); wear.click(); wear.click();
+      const log = a.Store.state.outfitHistory[0];
+      equal(log.itemIds, ['outfit-shirt', 'outfit-pants', 'scent'], 'Outfit keeps exact selection including perfume');
+      equal([shirt.wearCount, pants.wearCount, perfume.wearCount], [2, 1, 8], 'Clothing only wears');
+      assert(shirt.wearHistory.events[0].wornAt === log.wornAt && pants.wearHistory.events[0].wornAt === log.wornAt, 'Shared outfit date');
+      assert(!perfume.wearHistory, 'No perfume events');
+      a.WearHistory.undo(shirt); a.Store.save();
+      assert(a.Store.state.outfitHistory.length === 1 && pants.wearCount === 1, 'Individual undo leaves outfit and other items intact');
+      let remove;
+      a.Modal.confirm = (_, yes) => { remove = yes; };
+      const history = a.renderOutfitHistory(); history.querySelector('button').click(); remove();
+      equal([pants.wearCount, pants.wearHistory.events.length, a.Store.state.outfitHistory.length], [1, 1, 0], 'Outfit removal leaves item history intact');
+    });
+    await check('Count edits preserve dated history, handle undated counts, and do not mutate on cancel', async () => {
+      const item = clothingItem('edit', 5, 1600000000000);
+      a.Store.state.items = [item]; a.Store.save();
+      a.WearHistory.record(item, 1700000000000);
+      const event = JSON.stringify(item.wearHistory.events);
+      assert(a.WearHistory.setCount(item, 8), 'Count increase accepted');
+      equal(item.wearHistory.undatedCount, 7, 'Increase adds unknown wears');
+      assert(a.WearHistory.setCount(item, 1), 'Undated wears can be removed');
+      equal([item.wearCount, item.lastWornAt, item.wearHistory.legacyLastWornAt], [1, 1700000000000, null], 'Legacy baseline removed when no undated wears');
+      const before = JSON.stringify(item);
+      assert(!a.WearHistory.setCount(item, 0), 'Cannot delete dated history by count edit');
+      equal(JSON.stringify(item), before, 'Rejected edit does not mutate');
+      a.openItemModal(item);
+      const form = a.document.querySelector('#item-form');
+      form.elements.namedItem('wearCount').value = '4';
+      form.querySelector('#item-cancel').click();
+      equal(JSON.stringify(item), before, 'Cancelled form changes nothing');
+      a.openItemModal(item);
+      const save = a.document.querySelector('#item-form');
+      save.elements.namedItem('wearCount').value = '4';
+      save.elements.namedItem('subtext').value = 'Edited description';
+      submit(a, save); submit(a, save);
+      await new Promise(resolve => a.setTimeout(resolve, 0));
+      const updated = a.Store.state.items[0];
+      equal([updated.wearCount, updated.wearHistory.undatedCount, updated.lastWornAt], [4, 3, 1700000000000], 'Saved edit updates unknown count only');
+      equal(JSON.stringify(updated.wearHistory.events), event, 'Edited item retains same dated events');
+      assert(updated.subtext === 'Edited description' && updated !== item, 'Clone replaces item');
+      equal(JSON.stringify(item), before, 'Original history not mutated by shallow clone');
+    });
+    await check('Retirement preserves readable per-item history; perfumes have no wear UI or CPW', async () => {
+      const item = a.Store.state.items[0];
+      const before = JSON.stringify(item.wearHistory);
+      a.openRetireModal(item);
+      submit(a, a.document.querySelector('#retire-form'));
+      equal(JSON.stringify(item.wearHistory), before, 'Retirement preserves history');
+      assert(item.status === 'retired' && !a.WearHistory.record(item), 'Retired items cannot record wears');
+      const card = a.itemCard(item);
+      assert(card.querySelector('[data-act="history"]') && !card.querySelector('[data-act="wear"]'), 'Retired history accessible');
+      card.querySelector('[data-act="history"]').click();
+      assert(a.document.querySelector('.wear-history time'), 'History date shown');
+      a.Modal.close();
+      card.querySelector('[data-act="reactivate"]').click();
+      assert(item.status === 'active', 'Reactivation works');
+      equal(JSON.stringify(item.wearHistory), before, 'Reactivation preserves history');
+      const perfume = { ...clothingItem('perfume-ui', 100, 1600000000000), categoryId: 'cat_perfumes' };
+      assert(!a.WearHistory.record(perfume) && !a.WearHistory.undo(perfume), 'Perfume wear helpers are no-ops');
+      equal(a.costPerWear(perfume), null, 'Perfume has no CPW');
+      for (const renderRow of [a.itemCard, a.itemListRow]) {
+        const row = renderRow(perfume);
+        assert(!row.querySelector('[data-act="wear"], [data-act="undo"], [data-act="history"], [data-act="backfill"]'), 'No perfume wear controls');
+        assert(row.querySelector('[data-act="retire"]'), 'Perfume retirement preserved');
+      }
+      a.openItemModal(perfume);
+      const form = a.document.querySelector('#item-form');
+      assert(form.querySelector('#wear-count-field').hidden && form.elements.namedItem('wearCount').disabled, 'Perfume count editor excluded');
+      a.Modal.close();
+    });
+    await check('New and old JSON backups/Gists round trip item history with whole-wardrobe conflicts', async () => {
+      const item = a.Store.state.items[0];
+      a.WearHistory.record(item, 1760000000000); a.Store.save();
+      const history = JSON.stringify(item.wearHistory);
+      const backup = a.Store.exportJSON();
+      b.Store.replaceAll(JSON.parse(backup));
+      equal(JSON.stringify(b.Store.state.items[0].wearHistory), history, 'New JSON restore retains events and unknown count');
+      const summary = [item.wearCount, item.lastWornAt];
+      equal([b.Store.state.items[0].wearCount, b.Store.state.items[0].lastWornAt], summary, 'Restored summaries consistent');
+      await a.SyncEngine.push({ resolveConflict: true });
+      await b.SyncEngine.pull({ resolveConflict: true });
+      equal(JSON.stringify(b.Store.state.items[0].wearHistory), history, 'Gist round trip retains history');
+      assert(!cloud.files['rack-wardrobe.json'].content.includes('data:image/'), 'History never stores photos');
+      markClean(b);
+      const lastSaved = b.Store.state.meta.updatedAt;
+      b.WearHistory.record(b.Store.state.items[0], 1760100000000); b.Store.save();
+      assert(b.Store.state.meta.updatedAt > lastSaved, 'Every edit is visible to sync');
+      const nativeNow = b.Date.now;
+      const sameTime = b.Store.state.meta.updatedAt;
+      b.Date.now = () => sameTime;
+      try { b.Store.save(); b.Store.save(); }
+      finally { b.Date.now = nativeNow; }
+      assert(b.Store.state.meta.updatedAt === sameTime + 2, 'Same-millisecond saves remain visible to sync');
+      advance();
+      assert((await b.SyncEngine.pull()).conflict && (await b.SyncEngine.push()).conflict, 'Dated history edits participate in conflict');
+      await b.SyncEngine.pull({ resolveConflict: true });
+      equal(JSON.stringify(b.Store.state.items[0].wearHistory), history, 'Conflict Pull replaces entire history');
+      markClean(b); b.WearHistory.undo(b.Store.state.items[0]); b.Store.save(); advance();
+      await b.SyncEngine.push({ resolveConflict: true });
+      equal(JSON.parse(cloud.files['rack-wardrobe.json'].content).items[0].wearHistory, b.Store.state.items[0].wearHistory, 'Conflict Push replaces remote history');
+      const old = JSON.parse(backup); delete old.items[0].wearHistory;
+      b.Store.replaceAll(JSON.parse(JSON.stringify(old)));
+      equal(b.Store.state.items[0].wearHistory.events, [], 'Old JSON has no invented events');
+      equal([b.Store.state.items[0].wearCount, b.Store.state.items[0].lastWornAt], summary, 'Old JSON keeps legacy summaries');
+      cloudFile('rack-wardrobe.json', old); advance();
+      await b.SyncEngine.pull({ resolveConflict: true });
+      equal([b.Store.state.items[0].wearCount, b.Store.state.items[0].lastWornAt], summary, 'Old Gist keeps legacy summaries');
+      equal(b.Store.state.items[0].wearHistory.events, [], 'Old Gist migrates without duplicates');
     });
     window.testResult = { passed: lines.length, failed: 0 };
     lines.push(`\nAll ${lines.length} checks passed.`);

@@ -2460,7 +2460,8 @@ function renderOutfitHistory() {
       <button type="button" class="btn btn--ghost btn--small" aria-label="Remove outfit logged ${esc(outfitLogDate(entry.wornAt))}">Remove</button></div>
       <ul class="outfit-history__items">${entry.itemIds.map(id => {
         const item = G.item(id);
-        return `<li>${item ? esc(itemTitle(item)) + (item.status === 'retired' ? ' <span class="muted">(Retired)</span>' : '') : `Deleted item <span class="muted">(${esc(id)})</span>`}</li>`;
+        if (!item) return `<li class="tag-chip tag-chip--muted">Deleted item</li>`;
+        return `<li class="tag-chip outfit-history__chip">${itemLeadMarkup(item, G.color(item.colorId), { small: true })}${esc(itemTitle(item))}${item.status === 'retired' ? ' <span class="muted">(Retired)</span>' : ''}</li>`;
       }).join('')}</ul></li>`);
     qs('button', row).addEventListener('click', () => {
       Modal.confirm('Remove this outfit log? Item wear counts stay unchanged.', () => {

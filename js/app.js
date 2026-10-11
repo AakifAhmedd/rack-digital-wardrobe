@@ -2826,7 +2826,6 @@ function renderActivitiesPanel() {
             <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
           </div>
         </div>
-        <p class="muted rule-summary">${esc(describeActivityRules(act))}</p>
       </div>`);
     qs('[data-act="build"]', card).addEventListener('click', () => openOutfitBuilderFor(act.id));
     qs('[data-act="edit"]', card).addEventListener('click', () => openActivityModal(act));
@@ -2840,17 +2839,6 @@ function renderActivitiesPanel() {
   });
   return box;
 }
-function describeActivityRules(act) {
-  const catIds = [...new Set((act.includeRules || []).map(r => r.category).filter(Boolean))];
-  const catNames = catIds.map(id => G.category(id)?.name).filter(Boolean);
-  let str = catNames.length ? `Uses: ${catNames.join(', ')}` : 'No categories selected yet';
-  const avoid = [];
-  if (act.excludeSubcategories?.length) avoid.push(act.excludeSubcategories.map(id => G.subcategory(id)?.name).filter(Boolean).join(', '));
-  if (act.excludeTags?.length) avoid.push(act.excludeTags.map(id => G.tag(id)?.name).filter(Boolean).join(', '));
-  if (avoid.length) str += `  ·  avoiding ${avoid.join(', ')}`;
-  return str;
-}
-
 /* Translate between the friendly "category builder" view and the raw
    includeRules[] the engine actually runs on, so matchRule/matchActivity/
    itemsForActivity never have to change.

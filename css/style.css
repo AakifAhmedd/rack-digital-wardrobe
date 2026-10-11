@@ -543,6 +543,9 @@ input[type="date"] {
 .master-card__row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .master-card__row strong { font-size: 1.02rem; flex: 1; min-width: 100px; }
 .master-card__actions { display: flex; gap: .4rem; }
+.master-card__actions--split { flex: 1 1 100%; align-items: center; }
+.master-card__actions--split [data-act="edit"] { margin-left: auto; }
+.btn--icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 32px; padding: 0; }
 
 .sub-list { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .7rem; }
 .cat-icon-badge {

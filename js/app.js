@@ -3268,7 +3268,7 @@ function renderGeneralSettings() {
       <div class="panel">
         <h3>Data</h3>
         <div class="backup-actions">
-          <button class="btn btn--ghost" id="export-btn">Download</button>
+          <button class="btn btn--primary" id="export-btn">Download</button>
           <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="import-file" accept="application/json" hidden></label>
         </div>
       </div>
@@ -3276,7 +3276,7 @@ function renderGeneralSettings() {
         <h3>Photos</h3>
         <p class="muted" data-hint>Photos aren't in the data backup. Push/Pull includes them; Download/Restore keeps a separate photo backup. Restore adds photos without removing others.</p>
         <div class="backup-actions">
-          <button class="btn btn--ghost" id="photos-export-btn">Download</button>
+          <button class="btn btn--primary" id="photos-export-btn">Download</button>
           <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="photos-import-file" accept="application/json" hidden></label>
         </div>
       </div>

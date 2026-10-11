@@ -151,6 +151,8 @@ const STAT_ICONS = {
   wears: '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>',
   calendar: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
   wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   'trending-down': '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
 };
 function statIconSvg(key, size = 16) {
@@ -2820,10 +2822,10 @@ function renderActivitiesPanel() {
         <div class="master-card__row">
           <strong>${esc(act.name)}</strong>
           <span class="muted">${count} matching item${count === 1 ? '' : 's'}</span>
-          <div class="master-card__actions">
+          <div class="master-card__actions master-card__actions--split">
             <button class="btn btn--tiny btn--ghost" data-act="build">Build outfit</button>
-            <button class="btn btn--tiny btn--ghost" data-act="edit">Edit rules</button>
-            <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
+            <button class="btn btn--tiny btn--ghost btn--icon" data-act="edit" aria-label="Edit rules for ${esc(act.name)}" title="Edit rules">${statIconSvg('pencil', 17)}</button>
+            <button class="btn btn--tiny btn--danger-ghost btn--icon" data-act="delete" aria-label="Delete ${esc(act.name)}" title="Delete">${statIconSvg('trash', 17)}</button>
           </div>
         </div>
       </div>`);

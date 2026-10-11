@@ -140,21 +140,46 @@ function defaultActivities(categories, subcategories, tags) {
       excludeTags: [tag('Sporty')],
     },
     {
-      id: 'act_badminton',
-      name: 'Badminton',
+      id: 'act_gym',
+      name: 'Gym',
       custom: false,
       includeRules: [
         { category: cat('Shirts'), subcategory: sub('T-Shirts') },
         { category: cat('Shirts'), requiredTags: [tag('Sports-appropriate')] },
         { category: cat('Pants'), subcategory: sub('Shorts') },
+        { category: cat('Pants'), subcategory: sub('Joggers') },
         { category: cat('Pants'), requiredTags: [tag('Stretch')] },
         { category: cat('Shoes'), subcategory: sub('Sports Shoes') },
+        { category: cat('Shoes'), subcategory: sub('Running Shoes') },
       ],
       excludeCategories: [],
       excludeSubcategories: [],
       excludeTags: [tag('Collared')],
     },
   ];
+}
+
+/* The retired Badminton default, kept only so migration can tell whether a
+   stored copy is still untouched before replacing it with Gym. */
+function legacyBadmintonActivity(categories, subcategories, tags) {
+  const cat = name => categories.find(c => c.name === name)?.id;
+  const sub = name => subcategories.find(s => s.name === name)?.id;
+  const tag = name => tags.find(t => t.name === name)?.id;
+  return {
+    id: 'act_badminton',
+    name: 'Badminton',
+    custom: false,
+    includeRules: [
+      { category: cat('Shirts'), subcategory: sub('T-Shirts') },
+      { category: cat('Shirts'), requiredTags: [tag('Sports-appropriate')] },
+      { category: cat('Pants'), subcategory: sub('Shorts') },
+      { category: cat('Pants'), requiredTags: [tag('Stretch')] },
+      { category: cat('Shoes'), subcategory: sub('Sports Shoes') },
+    ],
+    excludeCategories: [],
+    excludeSubcategories: [],
+    excludeTags: [tag('Collared')],
+  };
 }
 
 function buildDefaultState() {
@@ -339,6 +364,18 @@ const Store = {
       if (i.retiredReason === undefined) i.retiredReason = null;
       if (i.retiredAt === undefined) i.retiredAt = null;
     });
+    // Badminton default was replaced by Gym; swap only an untouched stored copy.
+    const badIdx = s.activities.findIndex(a => a.id === 'act_badminton');
+    if (badIdx >= 0 && !s.activities.some(a => a.id === 'act_gym')) {
+      const legacy = legacyBadmintonActivity(s.categories, s.subcategories, s.tags);
+      const stored = s.activities[badIdx];
+      const same = k => JSON.stringify(stored[k]) === JSON.stringify(legacy[k]);
+      if (stored.name === legacy.name && ['includeRules', 'excludeCategories', 'excludeSubcategories', 'excludeTags'].every(same)) {
+        const gym = defaultActivities(s.categories, s.subcategories, s.tags).find(a => a.id === 'act_gym');
+        s.activities.splice(badIdx, 1, gym);
+      }
+    }
+
     // Gifted tag may be missing on wardrobes created before this feature existed.
     if (!s.tags.find(t => t.id === 'tag_gifted')) {
       s.tags.push({

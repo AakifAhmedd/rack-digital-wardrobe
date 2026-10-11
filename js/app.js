@@ -450,6 +450,7 @@ const Modal = {
     if (typeof bodyEl === 'string') body.innerHTML = bodyEl; else body.appendChild(bodyEl);
     box.appendChild(header);
     box.appendChild(body);
+    overlay.classList.toggle('modal-overlay--center', !!opts.center);
     overlay.classList.add('is-open');
     document.documentElement.classList.add('modal-open');
     qs('#modal-close').addEventListener('click', () => Modal.close());
@@ -478,6 +479,7 @@ const Modal = {
         </div>
       </div>`);
     Modal.open(opts.title || 'Please confirm', body, {
+      center: true,
       onMount: (root) => {
         qs('#confirm-no', root).addEventListener('click', () => Modal.close());
         qs('#confirm-yes', root).addEventListener('click', () => { onYes(); Modal.close(); });
@@ -2825,7 +2827,7 @@ function renderActivitiesPanel() {
           <div class="master-card__actions master-card__actions--split">
             <button class="btn btn--tiny btn--ghost" data-act="build">Build outfit</button>
             <button class="btn btn--tiny btn--ghost btn--icon" data-act="edit" aria-label="Edit rules for ${esc(act.name)}" title="Edit rules">${statIconSvg('pencil', 17)}</button>
-            <button class="btn btn--tiny btn--danger-ghost btn--icon" data-act="delete" aria-label="Delete ${esc(act.name)}" title="Delete">${statIconSvg('trash', 17)}</button>
+            <button class="btn btn--tiny btn--danger btn--icon" data-act="delete" aria-label="Delete ${esc(act.name)}" title="Delete">${statIconSvg('trash', 17)}</button>
           </div>
         </div>
       </div>`);

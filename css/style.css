@@ -722,6 +722,7 @@ input[type="date"] {
 }
 html.modal-open, html.modal-open body { overflow: hidden; }
 .modal-overlay.is-open { display: flex; }
+.modal-overlay--center { align-items: center; }
 .modal-box {
   background: var(--surface); border-radius: var(--radius-m); max-width: 720px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,.25);

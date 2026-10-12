@@ -371,6 +371,7 @@ const Store = {
 
   _migrate() {
     const s = this._state;
+    this.validateSnapshot(s);
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (!Array.isArray(s.outfitHistory)) s.outfitHistory = [];
@@ -384,6 +385,7 @@ const Store = {
     if (!s.appearance.popoverBlur) s.appearance.popoverBlur = 'frosted';
     s.categories.forEach(c => { if (!c.icon) c.icon = DEFAULT_CATEGORY_ICON; });
     s.items.forEach(i => {
+      if (!i.tags) i.tags = [];
       WearHistory.recalculate(i);
       if (!i.status) i.status = 'active';
       if (i.retiredReason === undefined) i.retiredReason = null;
@@ -504,6 +506,66 @@ const Store = {
     } catch (err) {
       this._state = previous;
       throw err;
+    }
+  },
+
+  // Reject structurally damaged backups/cloud snapshots before replacing data.
+  // Missing optional fields from older releases are still migrated normally.
+  validateSnapshot(s) {
+    const object = value => value && typeof value === 'object' && !Array.isArray(value);
+    const fail = () => { throw new Error('Invalid RACK data backup'); };
+    if (!object(s)) fail();
+    for (const key of ['categories', 'subcategories', 'tags', 'activities', 'brands', 'items']) {
+      const rows = s[key];
+      if (rows === undefined && ['brands', 'items'].includes(key)) continue;
+      if (!Array.isArray(rows)) fail();
+      const ids = new Set();
+      for (const row of rows) {
+        if (!object(row) || typeof row.id !== 'string' || !row.id || ids.has(row.id)) fail();
+        ids.add(row.id);
+        if (row.name !== undefined && typeof row.name !== 'string') fail();
+      }
+    }
+    if (s.meta !== undefined && !object(s.meta)) fail();
+    if (s.appearance !== undefined && !object(s.appearance)) fail();
+    const stringList = value => Array.isArray(value) && value.every(id => typeof id === 'string');
+    for (const tag of s.tags) {
+      for (const key of ['categoryIds', 'subcategoryIds']) if (tag[key] != null && !stringList(tag[key])) fail();
+    }
+    for (const activity of s.activities) {
+      for (const key of ['excludeCategories', 'excludeSubcategories', 'excludeTags']) if (activity[key] != null && !stringList(activity[key])) fail();
+      if (activity.includeRules != null) {
+        if (!Array.isArray(activity.includeRules)) fail();
+        for (const rule of activity.includeRules) {
+          if (!object(rule)) fail();
+          for (const key of ['requiredTags', 'excludeTags']) if (rule[key] != null && !stringList(rule[key])) fail();
+        }
+      }
+    }
+    for (const key of ['customThemes', 'customFonts']) {
+      if (s.appearance?.[key] != null && (!Array.isArray(s.appearance[key]) || s.appearance[key].some(row => !object(row)))) fail();
+    }
+    for (const item of s.items || []) {
+      if (typeof item.categoryId !== 'string' || !item.categoryId) fail();
+      if (item.tags !== undefined && (!Array.isArray(item.tags) || item.tags.some(id => typeof id !== 'string'))) fail();
+      const history = item.wearHistory;
+      if (history !== undefined) {
+        if (!object(history) || !Array.isArray(history.events) || !Number.isSafeInteger(history.undatedCount) || history.undatedCount < 0) fail();
+        const ids = new Set();
+        for (const event of history.events) {
+          if (!object(event) || typeof event.id !== 'string' || !event.id || ids.has(event.id)
+              || !Number.isFinite(event.wornAt) || event.wornAt <= 0 || !Number.isFinite(new Date(event.wornAt).getTime())) fail();
+          ids.add(event.id);
+        }
+        if (history.legacyLastWornAt != null && (!Number.isFinite(history.legacyLastWornAt) || history.legacyLastWornAt <= 0)) fail();
+      }
+    }
+    if (s.outfitHistory !== undefined) {
+      if (!Array.isArray(s.outfitHistory)) fail();
+      for (const log of s.outfitHistory) {
+        if (!object(log) || typeof log.id !== 'string' || !Number.isFinite(log.wornAt) || log.wornAt <= 0
+            || !Array.isArray(log.itemIds) || log.itemIds.some(id => typeof id !== 'string')) fail();
+      }
     }
   },
 

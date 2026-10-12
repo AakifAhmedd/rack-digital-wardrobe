@@ -557,7 +557,12 @@ function loadWardrobeFilters() {
   try {
     const raw = localStorage.getItem(WARDROBE_FILTERS_KEY);
     if (!raw) return { ...DEFAULT_WARDROBE_FILTERS };
-    return { ...DEFAULT_WARDROBE_FILTERS, ...JSON.parse(raw) };
+    const saved = JSON.parse(raw);
+    const filters = { ...DEFAULT_WARDROBE_FILTERS };
+    Object.keys(filters).forEach(key => { if (typeof saved?.[key] === 'string') filters[key] = saved[key]; });
+    if (!['active', 'retired', 'all'].includes(filters.status)) filters.status = 'active';
+    if (!['recent', 'most', 'least', 'cpw-asc', 'cpw-desc'].includes(filters.sort)) filters.sort = 'recent';
+    return filters;
   } catch (e) { return { ...DEFAULT_WARDROBE_FILTERS }; }
 }
 function saveWardrobeFilters() {
@@ -589,7 +594,6 @@ function setWardrobeSegment(seg) {
   try { localStorage.setItem(WARDROBE_SEGMENT_KEY, wardrobeSegment); } catch (e) { /* ignore */ }
 }
 const inWardrobeSegment = i => (i.categoryId === 'cat_perfumes') === (wardrobeSegment === 'perfumes');
-let filtersSheetOpen = false;
 
 const WARDROBE_VIEW_MODE_KEY = 'rack.wardrobe.viewMode';
 function loadViewMode() {
@@ -814,13 +818,13 @@ function renderDashboard() {
     wrap.appendChild(el(`
       <div class="empty-state">
         <h2>Every item is retired</h2>
-        <p>All ${allItems.length} item${allItems.length === 1 ? '' : 's'} in your rack ${allItems.length === 1 ? 'has' : 'have'} been marked donated, sold, or disposed. Add something new, or review what's retired.</p>
+        <p>All ${allItems.length} item${allItems.length === 1 ? '' : 's'} in your rack ${allItems.length === 1 ? 'is' : 'are'} retired. Add something new, or review what's retired.</p>
         <button class="btn btn--primary" id="empty-add">Add an item</button>
         <button class="btn btn--ghost" id="empty-retired">View retired items</button>
       </div>`));
     qs('#empty-add', wrap).addEventListener('click', openAddItemModal);
     qs('#empty-retired', wrap).addEventListener('click', () => {
-      wardrobeFilters = { ...wardrobeFilters, status: 'retired', category: '', subcategory: '', brand: '', color: '', tag: '' };
+      wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS, status: 'retired' };
       setWardrobeSegment(retiredItems().some(i => i.categoryId !== 'cat_perfumes') ? 'clothing' : 'perfumes');
       saveWardrobeFilters();
       switchTab('wardrobe');
@@ -935,7 +939,7 @@ function renderDashboard() {
         <button class="btn btn--ghost btn--small" id="view-retired" style="margin-top:.6rem;">View ${retired.length} retired item${retired.length === 1 ? '' : 's'}</button>
       </div>`);
     qs('#view-retired', retiredPanel).addEventListener('click', () => {
-      wardrobeFilters = { ...wardrobeFilters, status: 'retired', category: '', subcategory: '', brand: '', color: '', tag: '' };
+      wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS, status: 'retired' };
       setWardrobeSegment(retiredItems().some(i => i.categoryId !== 'cat_perfumes') ? 'clothing' : 'perfumes');
       saveWardrobeFilters();
       switchTab('wardrobe');
@@ -1008,8 +1012,8 @@ function renderWardrobe() {
         <button type="button" class="view-toggle__btn ${wardrobeSegment === 'perfumes' ? 'is-active' : ''}" data-seg="perfumes">Perfumes (${segCounts.perfumes})</button>
       </div>
       <div class="toolbar">
-        <input type="search" class="search-input" id="wardrobe-search" placeholder="Search wardrobe…" autocomplete="off" value="${esc(wardrobeFilters.search || '')}">
-        <button type="button" class="btn btn--ghost filters-toggle-btn" id="filters-toggle-btn">
+        <input type="search" class="search-input" id="wardrobe-search" aria-label="Search wardrobe" placeholder="Search wardrobe…" autocomplete="off" value="${esc(wardrobeFilters.search || '')}">
+        <button type="button" class="btn btn--ghost filters-toggle-btn" id="filters-toggle-btn" aria-expanded="false" aria-controls="toolbar-filters">
           Filters<span class="filter-count-badge" id="filter-count-badge" hidden></span>
         </button>
         <div class="toolbar__filters" id="toolbar-filters">
@@ -1046,6 +1050,11 @@ function renderWardrobe() {
     </div>
   `);
   wrap.appendChild(toolbar);
+  const filterLabels = ['Status', 'Category', 'Subcategory', 'Brand', 'Color', 'Tag', 'Activity', 'Sort'];
+  qsa('#toolbar-filters select', toolbar).forEach((select, i) => {
+    const label = el(`<label class="wardrobe-filter-field">${filterLabels[i]}</label>`);
+    select.before(label); label.appendChild(select);
+  });
 
   qsa('#segment-toggle .view-toggle__btn', toolbar).forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1076,7 +1085,7 @@ function renderWardrobe() {
   catSel.value = wardrobeFilters.category;
   if (catSel.value !== wardrobeFilters.category) wardrobeFilters.category = '';
   const perfSeg = wardrobeSegment === 'perfumes';
-  if (perfSeg) { catSel.style.display = 'none'; wardrobeFilters.category = ''; }
+  if (perfSeg) { catSel.closest('label').hidden = true; wardrobeFilters.category = ''; }
 
   const subSel = qs('#f-subcategory', toolbar);
   function refreshSubOptions() {
@@ -1096,7 +1105,7 @@ function renderWardrobe() {
 
   const colorSel = qs('#f-color', toolbar);
   s.colors.forEach(c => colorSel.appendChild(el(`<option value="${esc(c.id)}">${esc(c.name)}</option>`)));
-  if (perfSeg) { colorSel.style.display = 'none'; wardrobeFilters.color = ''; }
+  if (perfSeg) { colorSel.closest('label').hidden = true; wardrobeFilters.color = ''; }
   colorSel.value = wardrobeFilters.color;
   if (colorSel.value !== wardrobeFilters.color) wardrobeFilters.color = '';
 
@@ -1155,31 +1164,36 @@ function renderWardrobe() {
   });
 
   resetBtn.addEventListener('click', () => {
+    Modal.close();
     wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS };
     saveWardrobeFilters();
     render();
+    qs('#filters-toggle-btn')?.focus();
     toast('Filters reset');
   });
 
-  /* mobile-only filter sheet: same live selects, just repositioned via CSS */
+  /* Reuse the modal's focus trap, scroll lock and background isolation. */
   const filtersPanel = qs('#toolbar-filters', toolbar);
   const backdrop = qs('#filters-backdrop', toolbar);
   const toggleBtn = qs('#filters-toggle-btn', toolbar);
   const doneBtn = qs('#filters-done-btn', toolbar);
   function openFiltersSheet() {
-    filtersSheetOpen = true;
     filtersPanel.classList.add('is-open');
-    backdrop.classList.add('is-open');
+    toggleBtn.setAttribute('aria-expanded', 'true');
+    Modal.open('Wardrobe filters', filtersPanel, {
+      onClose: () => {
+        filtersPanel.classList.remove('is-open');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        qs('#view-toggle', toolbar).before(filtersPanel);
+      },
+    });
   }
   function closeFiltersSheet() {
-    filtersSheetOpen = false;
-    filtersPanel.classList.remove('is-open');
-    backdrop.classList.remove('is-open');
+    Modal.close();
   }
-  toggleBtn.addEventListener('click', () => (filtersSheetOpen ? closeFiltersSheet() : openFiltersSheet()));
+  toggleBtn.addEventListener('click', openFiltersSheet);
   backdrop.addEventListener('click', closeFiltersSheet);
   doneBtn.addEventListener('click', closeFiltersSheet);
-  if (filtersSheetOpen) { filtersPanel.classList.add('is-open'); backdrop.classList.add('is-open'); }
 
   return wrap;
 }
@@ -1199,11 +1213,11 @@ function renderItemGrid() {
     if (f.subcategory && i.subcategoryId !== f.subcategory) return false;
     if (f.brand && i.brandId !== f.brand) return false;
     if (f.color && i.colorId !== f.color) return false;
-    if (f.tag && !i.tags.includes(f.tag)) return false;
+    if (f.tag && !(i.tags || []).includes(f.tag)) return false;
     if (f.activity && !matchActivity(G.activity(f.activity), i)) return false;
     if (f.search) {
       const tagNames = (i.tags || []).map(tid => G.tag(tid)?.name || '').join(' ');
-      const haystack = `${itemTitle(i)} ${i.subtext || ''} ${G.subcategory(i.subcategoryId)?.name || ''} ${tagNames}`.toLowerCase();
+      const haystack = `${itemTitle(i)} ${i.subtext || ''} ${G.category(i.categoryId).name} ${G.subcategory(i.subcategoryId)?.name || ''} ${tagNames}`.toLowerCase();
       if (!haystack.includes(f.search.trim().toLowerCase())) return false;
     }
     return true;
@@ -1226,8 +1240,20 @@ function renderItemGrid() {
   grid.classList.toggle('item-groups', grouped);
 
   if (!items.length) {
-    const msg = (f.status === 'retired') ? "No retired items yet." : "No items match these filters.";
-    grid.appendChild(el(`<p class="muted" style="padding: 2rem 0;">${esc(msg)}</p>`));
+    const hasFilters = ['category', 'subcategory', 'brand', 'color', 'tag', 'activity', 'search'].some(key => f[key]);
+    const name = wardrobeSegment === 'perfumes' ? 'perfumes' : 'clothing items';
+    const empty = el(`<div class="empty-state wardrobe-empty">
+      <h2>${hasFilters ? 'No matches' : f.status === 'retired' ? 'No retired ' + name : 'No ' + name + ' here yet'}</h2>
+      <p>${hasFilters ? 'Try a different search or clear filters to see this collection.' : 'Add an item to this collection, or change the status filter to review other items.'}</p>
+      ${hasFilters ? '<button type="button" class="btn btn--ghost" id="empty-clear-filters">Clear filters</button>' : ''}
+      <button type="button" class="btn btn--primary" id="empty-add-item">Add item</button>
+    </div>`);
+    qs('#empty-clear-filters', empty)?.addEventListener('click', () => {
+      wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS, status: f.status }; saveWardrobeFilters(); render();
+      qs('#wardrobe-search')?.focus();
+    });
+    qs('#empty-add-item', empty).addEventListener('click', openAddItemModal);
+    grid.appendChild(empty);
     return;
   }
   const averageCPW = avgCostPerWear();
@@ -3401,7 +3427,8 @@ function renderGeneralSettings() {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        Modal.confirm('Replace all current data with this backup?', () => {
+        Store.validateSnapshot(data);
+        Modal.confirm(`Replace all current data with this backup (${(data.items || []).length} items)? Photos on this device are kept. Download your current data first if you need a copy.`, () => {
           try {
             Store.replaceAll(data);
           } catch (err) {
@@ -3416,6 +3443,7 @@ function renderGeneralSettings() {
         toast('That file could not be read as a backup', 'warn');
       }
     };
+    reader.onerror = () => toast('Could not read this file. Your saved data was kept.', 'warn');
     reader.readAsText(file);
   });
 

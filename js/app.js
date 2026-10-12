@@ -2115,11 +2115,16 @@ function openWardrobeHistoryModal(initial = new Date()) {
     let lastDay, list;
     summary.events.slice(0, shown).forEach(event => {
       if (event.day !== lastDay) {
-        host.appendChild(el(`<h4><time datetime="${todayDateStr(event.wornAt)}">${esc(fmtDate(event.wornAt))}</time></h4>`));
-        list = el('<ul class="wear-month-list"></ul>'); host.appendChild(list);
+        host.appendChild(el(`<h4 class="wear-month-day-heading"><time datetime="${todayDateStr(event.wornAt)}">${esc(fmtDate(event.wornAt))}</time></h4>`));
+        list = el('<ul class="wear-month-list wear-month-list--events"></ul>'); host.appendChild(list);
         lastDay = event.day;
       }
-      const row = el(`<li><button type="button" class="btn btn--ghost btn--small">${esc(itemTitle(event.item))}</button>${event.item.status === 'retired' ? '<span class="tag-chip tag-chip--muted">Retired</span>' : ''}</li>`);
+      const brand = G.brand(event.item.brandId);
+      const hasLogo = BrandLogo.has(brand);
+      const fullTitle = itemTitle(event.item);
+      const visibleTitle = itemTitle(event.item, { omitBrand: hasLogo });
+      const logo = hasLogo ? BrandLogo.html(brand, 18, brand.name) : '';
+      const row = el(`<li><button type="button" class="btn btn--ghost btn--small wear-month-event-chip" aria-label="${esc(fullTitle)}" title="${esc(fullTitle)}">${logo}<span>${esc(visibleTitle)}</span></button>${event.item.status === 'retired' ? '<span class="tag-chip tag-chip--muted">Retired</span>' : ''}</li>`);
       qs('button', row).addEventListener('click', () => openWearHistoryModal(event.item));
       list.appendChild(row);
     });

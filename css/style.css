@@ -1306,6 +1306,12 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-month-list { list-style: none; padding: 0; }
 .wear-month-list li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem 0; border-bottom: 1px solid var(--line); }
 .wear-month-list li > :first-child { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.wear-month-day-heading { margin-bottom: .35rem; }
+.wear-month-list--events { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0 0 .9rem; }
+.wear-month-list--events li { max-width: 100%; justify-content: flex-start; border: 0; padding: 0; }
+.wear-month-event-chip { display: inline-flex; align-items: center; gap: .4rem; max-width: 100%; min-height: 40px; white-space: normal; text-align: left; }
+.wear-month-event-chip > span { min-width: 0; overflow-wrap: anywhere; }
+.wear-month-event-chip .brand-logo { flex: 0 0 auto; margin: 0; vertical-align: middle; }
 
 .wardrobe-empty { grid-column: 1 / -1; }
 .wardrobe-filter-field { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; min-width: 0; }

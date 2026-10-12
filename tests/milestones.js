@@ -73,4 +73,104 @@ async function runMilestoneChecks({ check, assert, equal, device }) {
     const dashboard = w.renderDashboard(); dashboard.querySelector('#empty-retired').click();
     equal(w.eval('[wardrobeFilters.search, wardrobeFilters.activity, wardrobeFilters.status]'), ['', '', 'retired'], 'Retired items visible without stale filters');
   });
+  await check('Bookshelf migration is additive and idempotent without changing wardrobe metrics', async () => {
+    const old = w.buildDefaultState(); delete old.books;
+    old.items = [clothing('existing-clothing')];
+    w.Store.replaceAll(old);
+    equal(w.Store.state.books, [], 'Old wardrobe receives an empty bookshelf');
+    const before = JSON.stringify(w.Store.state.items);
+    const book = w.BookCollection.save({ title: '  Sample book  ', author: 'An author', genre: 'History', type: 'non-fiction', format: 'ebook', readingStatus: 'reading' });
+    equal(book.title, 'Sample book', 'Title normalized');
+    w.Store._migrate(); w.Store._migrate();
+    equal(w.Store.state.books.length, 1, 'Repeated migrations preserve one book');
+    equal(JSON.stringify(w.Store.state.items), before, 'Wardrobe history and counts unaffected');
+    assert(!w.Store.state.categories.some(category => category.name === 'Books'), 'No wardrobe category added');
+    const saved = w.Store.exportJSON();
+    w.setBookshelfEnabled(false);
+    assert(!w.bookshelfEnabled(), 'Bookshelf can be hidden');
+    equal(w.Store.exportJSON(), saved, 'Hiding the collection cannot delete or edit books');
+    w.setBookshelfEnabled(true);
+    assert(w.bookshelfEnabled(), 'Bookshelf can be enabled');
+  });
+  await check('Book forms support editing, cancel, search, safe rendering, archive and restore', async () => {
+    w.Store.state.books = []; w.Store.save();
+    const submit = form => form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    w.openBookModal();
+    let form = w.document.querySelector('#book-form');
+    form.elements.title.value = '<img src=x onerror=alert(1)> A book';
+    form.elements.author.value = 'A writer'; form.elements.genre.value = 'History';
+    form.elements.type.value = 'non-fiction'; form.elements.format.value = 'audiobook'; form.elements.readingStatus.value = 'paused';
+    submit(form); submit(form);
+    equal(w.Store.state.books.length, 1, 'Repeated submit adds one book');
+    const book = w.Store.state.books[0];
+    w.openBookModal(book); form = w.document.querySelector('#book-form');
+    form.elements.title.value = 'Cancelled edit'; w.Modal.close();
+    assert(book.title.includes('<img'), 'Cancel preserves original title');
+    w.openBookModal(book); form = w.document.querySelector('#book-form');
+    form.elements.readingStatus.value = 'finished'; submit(form);
+    equal(w.Store.state.books[0].readingStatus, 'finished', 'Reading status edited');
+    const shelf = w.renderBookshelf();
+    assert(!shelf.querySelector('img') && shelf.textContent.includes('<img src=x'), 'Book title rendered as text');
+    const search = shelf.querySelector('#bookshelf-search');
+    search.value = 'a writer'; search.dispatchEvent(new w.Event('input'));
+    assert(shelf.querySelectorAll('.book-card').length === 1, 'Search matches author');
+    search.value = 'history'; search.dispatchEvent(new w.Event('input'));
+    assert(shelf.querySelectorAll('.book-card').length === 1, 'Search matches genre');
+    search.value = 'missing'; search.dispatchEvent(new w.Event('input'));
+    assert(shelf.querySelector('#bookshelf-clear-search'), 'Empty search has recovery action');
+    shelf.querySelector('#bookshelf-clear-search').click();
+    shelf.querySelector('[data-book-act="archive"]').click();
+    assert(!w.Store.state.books[0].archived, 'Archive waits for confirmation');
+    w.document.querySelector('#confirm-no').click();
+    assert(!w.Store.state.books[0].archived, 'Cancelled archive keeps book');
+    shelf.querySelector('[data-book-act="archive"]').click(); w.document.querySelector('#confirm-yes').click();
+    assert(w.Store.state.books[0].archived, 'Archive preserves the book');
+    w.eval("bookshelfArchiveFilter = 'archived'");
+    const archived = w.renderBookshelf(); archived.querySelector('[data-book-act="archive"]').click();
+    assert(!w.Store.state.books[0].archived, 'Restore returns the archived book');
+    w.eval("bookshelfArchiveFilter = 'active'");
+  });
+  await check('Book save/archive failures preserve memory, persisted data and sync timestamps', async () => {
+    const before = w.Store.exportJSON(), timestamp = w.Store.state.meta.updatedAt;
+    const setItem = w.localStorage.setItem;
+    w.localStorage.setItem = () => { throw new Error('Simulated storage full'); };
+    try {
+      for (const action of [
+        () => w.BookCollection.save({ title: 'Failed add', author: '', genre: '', type: 'fiction', format: 'paperback', readingStatus: 'to-read' }),
+        () => w.BookCollection.archive(w.Store.state.books[0].id, true),
+        () => w.BookCollection.save({ ...w.Store.state.books[0], title: 'Failed edit' }, w.Store.state.books[0].id),
+      ]) {
+        let failed = false; try { action(); } catch (_) { failed = true; }
+        assert(failed, 'Failed save reports an error');
+        equal(w.Store.exportJSON(), before, 'Book change rolled back');
+        equal(w.Store.state.meta.updatedAt, timestamp, 'Failed save does not create a sync edit');
+      }
+    } finally { w.localStorage.setItem = setItem; }
+    equal(JSON.parse(w.localStorage.getItem('rack.wardrobe.v1')), JSON.parse(before), 'Persisted snapshot unchanged');
+  });
+  await check('Books round trip through backups, reload and mocked Gist snapshots; malformed books are rejected', async () => {
+    const books = JSON.stringify(w.Store.state.books), backup = w.Store.exportJSON();
+    const other = await device();
+    other.Store.replaceAll(JSON.parse(backup)); other.Store._state = null;
+    equal(JSON.stringify(other.Store.state.books), books, 'Backup and local reload preserve book fields');
+    assert(other.bookshelfEnabled(), 'New device with books shows the optional collection');
+    await w.SyncEngine.push(); other.Sync.setGistId(w.Sync.getGistId());
+    await other.SyncEngine.pull({ resolveConflict: true });
+    equal(JSON.stringify(other.Store.state.books), books, 'Gist includes books with ordinary data');
+    const saved = other.Store.exportJSON();
+    for (const damage of [
+      state => { state.books = {}; },
+      state => { state.books.push({ ...state.books[0] }); },
+      state => { state.books[0].title = ''; },
+      state => { state.books[0].readingStatus = 'invalid'; },
+    ]) {
+      const state = JSON.parse(saved); damage(state);
+      let failed = false; try { other.Store.replaceAll(state); } catch (_) { failed = true; }
+      assert(failed, 'Malformed book data rejected');
+      equal(other.Store.exportJSON(), saved, 'Current books and wardrobe retained');
+    }
+    const legacy = JSON.parse(backup); delete legacy.books;
+    other.Store.replaceAll(legacy);
+    equal(other.Store.state.books, [], 'Old backup restores an empty bookshelf explicitly');
+  });
 }

@@ -54,7 +54,7 @@
     w.document.body.innerHTML = '<div id="modal-overlay"><div id="modal-box"></div></div>';
     for (const [name, source] of sources) {
       const script = w.document.createElement('script');
-      const exports = name === 'data' ? 'Store, buildDefaultState, WearHistory, WearInsights' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : name === 'brand-logos' ? 'BrandLogo' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, wireItemActions, openBackfillModal, openWearHistoryModal, openItemModal, openRetireModal, costPerWear, renderDashboard, itemCard, itemListRow, Modal, openActivityModal, renderActivitiesPanel, renderWardrobe, matchActivity, openWardrobeHistoryModal';
+      const exports = name === 'data' ? 'Store, buildDefaultState, WearHistory, WearInsights, BookCollection' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : name === 'brand-logos' ? 'BrandLogo' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, wireItemActions, openBackfillModal, openWearHistoryModal, openItemModal, openRetireModal, costPerWear, renderDashboard, itemCard, itemListRow, Modal, openActivityModal, renderActivitiesPanel, renderWardrobe, matchActivity, openWardrobeHistoryModal, renderBookshelf, openBookModal, setBookshelfEnabled, bookshelfEnabled';
       script.textContent = `${source.replace("document.addEventListener('DOMContentLoaded', init);", '')}\nObject.assign(window, { ${exports} });`;
       w.document.body.append(script);
     }

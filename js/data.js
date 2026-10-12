@@ -351,6 +351,7 @@ const WearInsights = {
 const BOOK_TYPES = { fiction: 'Fiction', 'non-fiction': 'Non-fiction' };
 const BOOK_FORMATS = { paperback: 'Paperback', hardcover: 'Hardcover', ebook: 'E-book', audiobook: 'Audiobook', other: 'Other' };
 const BOOK_READING_STATUSES = { 'to-read': 'To read', reading: 'Reading', finished: 'Finished', paused: 'Paused' };
+const BOOK_OWNERSHIP = { owned: 'Owned', borrowed: 'Borrowed', wishlist: 'Wishlist' };
 const ReadingDates = {
   today() {
     const date = new Date();
@@ -415,6 +416,7 @@ const BookCollection = {
       throw new Error('Invalid book record');
     }
     if (book.readingHistory !== undefined) BookReading.validate(book.readingHistory);
+    if (book.ownership !== undefined && (typeof book.ownership !== 'string' || !Object.hasOwn(BOOK_OWNERSHIP, book.ownership))) throw new Error('Invalid book collection state');
   },
   save(values, id = null) {
     const existing = id ? Store.state.books.find(book => book.id === id) : null;
@@ -425,6 +427,7 @@ const BookCollection = {
       genre: String(values.genre || '').trim(), type: values.type, format: values.format,
       readingStatus: values.readingStatus, archived: existing?.archived || false,
       readingHistory: existing?.readingHistory || [],
+      ownership: values.ownership ?? existing?.ownership ?? 'owned',
       createdAt: existing?.createdAt || now, updatedAt: now };
     this.validate(book);
     this._commit(existing ? Store.state.books.map(row => row.id === id ? book : row) : [...Store.state.books, book]);
@@ -475,7 +478,10 @@ const Store = {
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (s.books === undefined) s.books = [];
-    s.books.forEach(book => { if (book.readingHistory === undefined) book.readingHistory = []; });
+    s.books.forEach(book => {
+      if (book.readingHistory === undefined) book.readingHistory = [];
+      if (book.ownership === undefined) book.ownership = 'owned';
+    });
     if (!Array.isArray(s.outfitHistory)) s.outfitHistory = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
     if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', popoverBlur: 'frosted', customThemes: [], customFonts: [] };

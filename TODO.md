@@ -15,7 +15,7 @@ The wardrobe remains RACK's primary feature. Version 3 completes its date tracki
 - **3.2 — Wardrobe polish and reliability — complete.** Keyboard-safe filters, labelled controls, category search, actionable empty states, clean retired-item navigation, and structural backup/cloud validation with recovery preservation.
 - **3.3 — Bookshelf foundation — complete.** Optional Bookshelf tab with adding, editing, title/author/genre search, archive/restore, and title, author, fiction/non-fiction, genre, format and reading status. Book records stay separate from wardrobe metrics and rules, and are included in ordinary data backups and Gist sync.
 - **3.4 — Reading history — complete.** Per-book start/finish dates, rereads, finish-only records for unknown starts, editing and confirmed removal. Old reading statuses remain undated; recorded history travels in data backups and Gist snapshots.
-- **3.5 — Collection management.** Add useful bookshelf sorting and filters, and practical states such as owned, borrowed, or wishlist where they fit the collection.
+- **3.5 — Collection management — complete.** Owned, borrowed and wishlist states; combined reading-status/type/format/ownership/genre filters; title, author, added, updated and last-finished sorting. Sorting/filter preferences are device-local and empty results offer reset.
 - **3.6 — Reading summaries.** Provide useful yearly or date-range reading summaries based on the recorded history. This completes the planned Bookshelf reading-history scope.
 - **3.7–3.9 — Reserved.** Use these for focused improvements justified by use or compatibility needs. They are reserved milestones, not a reason to invent features.
 
@@ -48,6 +48,8 @@ Books without cover images must remain fully usable. Keep image storage and back
 - **Cost-per-wear targets:** explore whether showing the additional wears needed to reach a target cost-per-wear is useful. This is an idea only, not a committed roadmap milestone.
 
 ### Completed
+
+- **Milestone 3.5:** practical book ownership states, combined collection filters and sorting, remembered view preferences and clear reset actions.
 
 - **Milestone 3.4:** per-book reading history with calendar dates, rereads, safe corrections, additive migration and backup/Gist round trips.
 

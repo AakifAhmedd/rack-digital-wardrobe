@@ -83,4 +83,48 @@ async function runBooksChecks({ check, assert, equal, device }) {
     await w.SyncEngine.push(); other.Sync.setGistId(w.Sync.getGistId()); await other.SyncEngine.pull({ resolveConflict: true });
     equal(other.Store.state.books[0].readingHistory, book().readingHistory, 'Gist keeps reading dates');
   });
+  await check('Ownership migrates old books, survives edits and rejects invalid snapshot values', async () => {
+    const old = JSON.parse(w.Store.exportJSON()); delete old.books[0].ownership;
+    const history = JSON.stringify(old.books[0].readingHistory);
+    w.Store.replaceAll(old); w.Store._migrate();
+    equal(book().ownership, 'owned', 'Old books default to Owned');
+    w.BookCollection.save({ ...book(), ownership: 'borrowed' }, book().id);
+    equal(book().ownership, 'borrowed', 'Borrowed state saved');
+    equal(JSON.stringify(book().readingHistory), history, 'Ownership change keeps reading history');
+    const before = w.Store.exportJSON(), invalid = JSON.parse(before); invalid.books[0].ownership = 'invalid';
+    let failed = false; try { w.Store.replaceAll(invalid); } catch (_) { failed = true; }
+    assert(failed, 'Invalid ownership rejected'); equal(w.Store.exportJSON(), before, 'Failed restore keeps books');
+    const other = await device(); await w.SyncEngine.push(); other.Sync.setGistId(w.Sync.getGistId()); await other.SyncEngine.pull();
+    equal(other.Store.state.books[0].ownership, 'borrowed', 'Ownership survives Gist round trip');
+  });
+  await check('Combined book filters, all sort choices and empty reset work without syncing view preferences', async () => {
+    w.Store.replaceAll(w.buildDefaultState());
+    w.eval("bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';");
+    const alpha = w.BookCollection.save({ ...values, title: 'Alpha', author: 'Z writer', ownership: 'owned' });
+    const beta = w.BookCollection.save({ ...values, title: 'Beta', author: 'A writer', ownership: 'borrowed', format: 'ebook', readingStatus: 'reading' });
+    const gamma = w.BookCollection.save({ ...values, title: 'Gamma', ownership: 'wishlist', type: 'fiction', genre: 'Mystery' });
+    w.BookReading.save(alpha.id, { startedOn: '2025-01-01', finishedOn: '2025-01-02' });
+    w.BookReading.save(gamma.id, { startedOn: '2026-01-01', finishedOn: '2026-01-02' });
+    w.Store.state.books.forEach((row, i) => { row.createdAt = i + 1; row.updatedAt = i + 1; }); w.Store.save();
+    const before = w.Store.exportJSON(), shelf = w.renderBookshelf();
+    const select = (selector, value) => { const node = shelf.querySelector(selector); node.value = value; node.dispatchEvent(new w.Event('change')); };
+    const titles = () => [...shelf.querySelectorAll('.book-card h3')].map(node => node.textContent);
+    for (const [sort, first] of [['recent', 'Gamma'], ['title', 'Alpha'], ['author', 'Beta'], ['updated', 'Gamma'], ['finished', 'Gamma']]) {
+      select('#bookshelf-sort', sort); equal(titles()[0], first, 'Sort has the expected first book');
+    }
+    select('[data-book-filter="ownership"]', 'borrowed');
+    select('[data-book-filter="readingStatus"]', 'reading');
+    select('[data-book-filter="format"]', 'ebook');
+    equal(titles(), ['Beta'], 'Combined filters match a borrowed reading ebook');
+    select('[data-book-filter="genre"]', 'mystery');
+    assert(shelf.querySelector('#bookshelf-empty-reset'), 'Empty filter combination has reset action');
+    shelf.querySelector('#bookshelf-empty-reset').click(); equal(titles().length, 3, 'Reset restores books');
+    select('[data-book-filter="type"]', 'fiction'); equal(titles(), ['Gamma'], 'Type filter matches');
+    equal(w.eval('loadBookshelfFilters().type'), 'fiction', 'View preferences reload');
+    equal(w.Store.exportJSON(), before, 'Filtering/sorting cannot change books or sync timestamps');
+    w.eval("bookshelfFilters.genre = 'deleted-genre'"); w.renderBookshelf();
+    equal(w.eval('bookshelfFilters.genre'), '', 'Missing genre does not become a hidden filter');
+    w.localStorage.setItem('rack.bookshelf.filters', JSON.stringify({ ownership: 'wrong', sort: {}, type: null }));
+    equal(w.eval('loadBookshelfFilters()'), w.eval('DEFAULT_BOOKSHELF_FILTERS'), 'Malformed view preferences recover safely');
+  });
 }

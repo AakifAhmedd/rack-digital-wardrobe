@@ -1039,10 +1039,35 @@ function renderDashboard() {
    ================================================================ */
 let bookshelfSearch = '';
 let bookshelfArchiveFilter = 'active';
+const BOOKSHELF_FILTERS_KEY = 'rack.bookshelf.filters';
+const BOOK_SORTS = { recent: 'Recently added', title: 'Title A–Z', author: 'Author A–Z', updated: 'Recently updated', finished: 'Last finished' };
+const DEFAULT_BOOKSHELF_FILTERS = { readingStatus: '', type: '', format: '', ownership: '', genre: '', sort: 'recent' };
+function loadBookshelfFilters() {
+  const filters = { ...DEFAULT_BOOKSHELF_FILTERS };
+  try {
+    const saved = JSON.parse(localStorage.getItem(BOOKSHELF_FILTERS_KEY) || '{}');
+    Object.keys(filters).forEach(key => { if (typeof saved?.[key] === 'string') filters[key] = saved[key]; });
+    for (const [key, options] of Object.entries({ readingStatus: BOOK_READING_STATUSES, type: BOOK_TYPES, format: BOOK_FORMATS, ownership: BOOK_OWNERSHIP })) {
+      if (filters[key] && !Object.hasOwn(options, filters[key])) filters[key] = '';
+    }
+    if (!Object.hasOwn(BOOK_SORTS, filters.sort)) filters.sort = 'recent';
+  } catch (_) { /* device-local preferences only */ }
+  return filters;
+}
+let bookshelfFilters = loadBookshelfFilters();
+function saveBookshelfFilters() {
+  try { localStorage.setItem(BOOKSHELF_FILTERS_KEY, JSON.stringify(bookshelfFilters)); } catch (_) { /* view preference only */ }
+}
+function lastBookFinish(book) {
+  return (book.readingHistory || []).reduce((last, entry) => entry.finishedOn && entry.finishedOn > last ? entry.finishedOn : last, '');
+}
 function bookOptions(options, selected) {
   return Object.entries(options).map(([value, label]) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(label)}</option>`).join('');
 }
 function renderBookshelf() {
+  const genres = new Map();
+  Store.state.books.forEach(book => { if (book.genre.trim()) genres.set(book.genre.trim().toLocaleLowerCase(), book.genre.trim()); });
+  if (bookshelfFilters.genre && !genres.has(bookshelfFilters.genre)) { bookshelfFilters.genre = ''; saveBookshelfFilters(); }
   const active = Store.state.books.filter(book => !book.archived).length;
   const archived = Store.state.books.length - active;
   const wrap = el(`<section class="view-section bookshelf">
@@ -1054,7 +1079,19 @@ function renderBookshelf() {
       <label>Collection<select id="bookshelf-archive-filter">
         <option value="active">Bookshelf</option><option value="archived">Archived</option><option value="all">All books</option>
       </select></label>
+      <label>Sort<select id="bookshelf-sort">${bookOptions(BOOK_SORTS, bookshelfFilters.sort)}</select></label>
     </div>
+    <details class="advanced-details bookshelf-filter-details">
+      <summary>Filters <span id="bookshelf-filter-count"></span></summary>
+      <div class="bookshelf-filter-grid">
+        <label>Reading status<select data-book-filter="readingStatus"><option value="">All statuses</option>${bookOptions(BOOK_READING_STATUSES, bookshelfFilters.readingStatus)}</select></label>
+        <label>Type<select data-book-filter="type"><option value="">All types</option>${bookOptions(BOOK_TYPES, bookshelfFilters.type)}</select></label>
+        <label>Format<select data-book-filter="format"><option value="">All formats</option>${bookOptions(BOOK_FORMATS, bookshelfFilters.format)}</select></label>
+        <label>Ownership<select data-book-filter="ownership"><option value="">All ownership states</option>${bookOptions(BOOK_OWNERSHIP, bookshelfFilters.ownership)}</select></label>
+        <label>Genre<select data-book-filter="genre"><option value="">All genres</option>${bookOptions(Object.fromEntries([...genres].sort((a, b) => a[1].localeCompare(b[1]))), bookshelfFilters.genre)}</select></label>
+      </div>
+      <button type="button" class="btn btn--ghost btn--small" id="bookshelf-reset-filters">Reset filters</button>
+    </details>
     <p id="bookshelf-result-count" class="muted" aria-live="polite"></p>
     <div id="bookshelf-results" class="book-grid"></div>
   </section>`);
@@ -1063,30 +1100,57 @@ function renderBookshelf() {
   filter.value = bookshelfArchiveFilter;
   search.addEventListener('input', () => { bookshelfSearch = search.value; refresh(); });
   filter.addEventListener('change', () => { bookshelfArchiveFilter = filter.value; refresh(); });
+  qs('#bookshelf-sort', wrap).addEventListener('change', event => { bookshelfFilters.sort = event.target.value; saveBookshelfFilters(); refresh(); });
+  qsa('[data-book-filter]', wrap).forEach(select => select.addEventListener('change', () => {
+    bookshelfFilters[select.dataset.bookFilter] = select.value; saveBookshelfFilters(); refresh();
+  }));
+  function resetFilters() {
+    bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';
+    search.value = ''; filter.value = 'active'; qs('#bookshelf-sort', wrap).value = 'recent';
+    qsa('[data-book-filter]', wrap).forEach(select => { select.value = ''; });
+    saveBookshelfFilters(); refresh();
+  }
+  qs('#bookshelf-reset-filters', wrap).addEventListener('click', resetFilters);
   function refresh() {
     const query = bookshelfSearch.trim().toLocaleLowerCase();
+    const filterCount = ['readingStatus', 'type', 'format', 'ownership', 'genre'].filter(key => bookshelfFilters[key]).length + (bookshelfArchiveFilter !== 'active' ? 1 : 0);
+    qs('#bookshelf-filter-count', wrap).textContent = filterCount ? `(${filterCount})` : '';
+    qs('#bookshelf-reset-filters', wrap).disabled = !filterCount && !query && bookshelfFilters.sort === 'recent';
     const books = Store.state.books.filter(book => {
       if (bookshelfArchiveFilter === 'active' && book.archived) return false;
       if (bookshelfArchiveFilter === 'archived' && !book.archived) return false;
+      for (const key of ['readingStatus', 'type', 'format', 'ownership']) {
+        if (bookshelfFilters[key] && (book[key] || (key === 'ownership' ? 'owned' : '')) !== bookshelfFilters[key]) return false;
+      }
+      if (bookshelfFilters.genre && book.genre.trim().toLocaleLowerCase() !== bookshelfFilters.genre) return false;
       return `${book.title} ${book.author} ${book.genre}`.toLocaleLowerCase().includes(query);
-    }).sort((a, b) => b.createdAt - a.createdAt);
+    }).sort((a, b) => {
+      const title = a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+      if (bookshelfFilters.sort === 'title') return title || a.id.localeCompare(b.id);
+      if (bookshelfFilters.sort === 'author') return a.author.localeCompare(b.author, undefined, { sensitivity: 'base' }) || title;
+      if (bookshelfFilters.sort === 'updated') return b.updatedAt - a.updatedAt || title;
+      if (bookshelfFilters.sort === 'finished') return lastBookFinish(b).localeCompare(lastBookFinish(a)) || title;
+      return b.createdAt - a.createdAt || title;
+    });
     const host = qs('#bookshelf-results', wrap); host.innerHTML = '';
     qs('#bookshelf-result-count', wrap).textContent = `${books.length} book${books.length === 1 ? '' : 's'} shown`;
     if (!books.length) {
       const empty = el(`<div class="empty-state wardrobe-empty">
-        <h2>${query ? 'No matching books' : bookshelfArchiveFilter === 'archived' ? 'No archived books' : 'Your bookshelf is empty'}</h2>
-        <p>${query ? 'Try another title, author or genre.' : bookshelfArchiveFilter === 'archived' ? 'Archived books stay available here and can be restored.' : 'Add a book and keep track of what you want to read.'}</p>
+        <h2>${query || filterCount && bookshelfArchiveFilter !== 'archived' ? 'No matching books' : bookshelfArchiveFilter === 'archived' ? 'No archived books' : 'Your bookshelf is empty'}</h2>
+        <p>${query || filterCount ? 'Try another search or reset filters to see your books.' : 'Add a book and keep track of what you want to read.'}</p>
         ${query ? '<button type="button" class="btn btn--ghost" id="bookshelf-clear-search">Clear search</button>' : ''}
+        ${filterCount ? '<button type="button" class="btn btn--ghost" id="bookshelf-empty-reset">Reset filters</button>' : ''}
         <button type="button" class="btn btn--primary" id="bookshelf-empty-add">Add book</button>
       </div>`);
       qs('#bookshelf-clear-search', empty)?.addEventListener('click', () => { bookshelfSearch = ''; search.value = ''; refresh(); search.focus(); });
       qs('#bookshelf-empty-add', empty).addEventListener('click', () => openBookModal());
+      qs('#bookshelf-empty-reset', empty)?.addEventListener('click', resetFilters);
       host.appendChild(empty); return;
     }
     books.forEach(book => {
       const card = el(`<article class="panel book-card" data-book-id="${esc(book.id)}">
         <h3>${esc(book.title)}</h3><p class="book-author">${esc(book.author || 'Author not recorded')}</p>
-        <div class="chip-row"><span class="tag-chip">${esc(BOOK_TYPES[book.type])}</span><span class="tag-chip tag-chip--muted">${esc(BOOK_FORMATS[book.format])}</span></div>
+        <div class="chip-row"><span class="tag-chip">${esc(BOOK_TYPES[book.type])}</span><span class="tag-chip tag-chip--muted">${esc(BOOK_FORMATS[book.format])}</span><span class="tag-chip tag-chip--muted">${esc(BOOK_OWNERSHIP[book.ownership || 'owned'])}</span></div>
         ${book.genre ? `<p class="book-genre">${esc(book.genre)}</p>` : ''}
         <p><span class="tag-chip ${book.readingStatus === 'finished' ? 'tag-chip--good' : ''}">${esc(BOOK_READING_STATUSES[book.readingStatus])}</span>${book.archived ? ' <span class="tag-chip tag-chip--muted">Archived</span>' : ''}</p>
         <div class="book-actions">
@@ -1121,6 +1185,7 @@ function openBookModal(existing = null) {
     </div>
     <label>Genre<input type="text" name="genre" value="${esc(book.genre)}" placeholder="e.g. History, mystery" autocomplete="off"></label>
     <label>Reading status<select name="readingStatus">${bookOptions(BOOK_READING_STATUSES, book.readingStatus)}</select></label>
+    <label>Ownership<select name="ownership">${bookOptions(BOOK_OWNERSHIP, book.ownership || 'owned')}</select></label>
     <p class="muted">Use Reading history to record start and finish dates. Changing this status keeps recorded dates.</p>
     ${existing?.archived ? '<p class="muted">This book is archived. Editing keeps it archived.</p>' : ''}
     <div class="form-actions"><button type="button" class="btn btn--ghost" id="book-cancel">Cancel</button><button type="submit" class="btn btn--primary">${existing ? 'Save book' : 'Add book'}</button></div>

@@ -1332,6 +1332,11 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .book-reading-list { list-style: none; padding: 0; margin-top: 1rem; }
 .book-reading-list li { padding: .75rem 0; border-bottom: 1px solid var(--line); }
 .book-reading-list p { margin-bottom: .35rem; }
+.bookshelf-filter-details { margin: .75rem 0; }
+.bookshelf-filter-details summary { min-height: 44px; padding: .5rem 0; }
+.bookshelf-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: .75rem; margin: .5rem 0 .75rem; }
+.bookshelf-filter-grid label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; font-size: .85rem; }
+.bookshelf-filter-grid select { width: 100%; min-width: 0; }
 .collection-settings { display: grid; gap: 1rem; }
 .collection-option .bookshelf-option { display: flex; align-items: center; gap: .5rem; }
 .collection-option p { margin: .35rem 0 0; }

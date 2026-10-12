@@ -14,16 +14,53 @@ const BrandLogo = {
   },
   has(brand) { return !!brand && (!!brand.logo || this.hasBuiltin(brand)); },
   hasBuiltin(brand) { return !!BUILTIN_BRAND_LOGOS[String(brand?.name || '').trim().toLowerCase()]; },
-  /* Downscale an uploaded image file to a small PNG data URL so synced data stays tiny. */
+  // Share the perfume alpha-boundary scanner. Logos retain every visible
+  // alpha value and use a tight rectangle without the perfume card's padding.
+  _contentBox(img) { return RackPhotos._contentBox(img, { alphaThreshold: 0, scanEdge: 4096 }); },
+  _encodeCropped(img, box, max) {
+    const scale = Math.min(1, max / Math.max(box.w, box.h));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(box.w * scale));
+    canvas.height = Math.max(1, Math.round(box.h * scale));
+    canvas.getContext('2d').drawImage(img, box.x, box.y, box.w, box.h, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  },
+  /* Crop before downscaling, retaining transparency in the synced PNG. */
   async fromFile(file, max = 96) {
-    const url = URL.createObjectURL(file);
-    try {
-      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('bad image')); i.src = url; });
-      const r = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r));
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      return c.toDataURL('image/png');
-    } finally { URL.revokeObjectURL(url); }
+    const img = await RackPhotos._loadImage(file);
+    return this._encodeCropped(img, this._contentBox(img), max);
+  },
+  async trimStored(logo, max = 96) {
+    // Never fetch an arbitrary external URL while processing saved logos.
+    if (typeof logo !== 'string' || !/^data:image\/(?:png|webp|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(logo)) throw new Error('Unsupported stored logo');
+    const blob = await (await fetch(logo, { credentials: 'omit' })).blob();
+    const img = await RackPhotos._loadImage(blob), box = this._contentBox(img);
+    if (box.x === 0 && box.y === 0 && box.w === img.naturalWidth && box.h === img.naturalHeight) return logo;
+    return this._encodeCropped(img, box, max);
+  },
+  async trimExisting() {
+    const candidates = Store.state.brands.filter(brand => brand.logo).map(brand => ({ id: brand.id, logo: brand.logo }));
+    const changes = new Map(); let skipped = 0;
+    for (const brand of candidates) {
+      try {
+        const cropped = await this.trimStored(brand.logo);
+        if (cropped !== brand.logo) changes.set(brand.id, { original: brand.logo, cropped });
+      } catch (_) { skipped++; }
+    }
+    // Preserve newer edits or a cloud replacement that occurred during decoding.
+    const previous = Store.state.brands, previousUpdatedAt = Store.state.meta.updatedAt;
+    let trimmed = 0;
+    const next = previous.map(brand => {
+      const change = changes.get(brand.id);
+      if (!change) return brand;
+      if (brand.logo !== change.original) { skipped++; return brand; }
+      trimmed++; return { ...brand, logo: change.cropped };
+    });
+    if (trimmed) {
+      Store.state.brands = next;
+      try { Store.save(); }
+      catch (err) { Store.state.brands = previous; Store.state.meta.updatedAt = previousUpdatedAt; throw err; }
+    }
+    return { trimmed, skipped };
   },
 };

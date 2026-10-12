@@ -186,14 +186,14 @@ const RackPhotos = {
     return this._webp;
   },
 
-  /* Bounding box of the visible (alpha > TRIM_ALPHA) pixels, in source px.
+  /* Bounding box of visible pixels above the requested alpha threshold, in source px.
      Scanned on a downscaled copy so huge photos stay cheap. Opaque images
      and fully transparent ones come back as the whole image. */
-  _contentBox(img) {
+  _contentBox(img, { alphaThreshold = TRIM_ALPHA, scanEdge = TRIM_SCAN_EDGE } = {}) {
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const full = { x: 0, y: 0, w: iw, h: ih, hasAlpha: false };
     try {
-      const k = Math.min(1, TRIM_SCAN_EDGE / Math.max(iw, ih));
+      const k = Math.min(1, scanEdge / Math.max(iw, ih));
       const sw = Math.max(1, Math.round(iw * k));
       const sh = Math.max(1, Math.round(ih * k));
       const c = document.createElement('canvas');
@@ -207,7 +207,7 @@ const RackPhotos = {
         for (let x = 0; x < sw; x++) {
           const a = data[row + x * 4];
           if (a < 255) hasAlpha = true;
-          if (a > TRIM_ALPHA) {
+          if (a > alphaThreshold) {
             if (x < minX) minX = x;
             if (x > maxX) maxX = x;
             if (y < minY) minY = y;

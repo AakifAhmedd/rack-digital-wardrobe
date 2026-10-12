@@ -13,7 +13,7 @@ The wardrobe remains RACK's primary feature. Version 3 completes its date tracki
 - **3.0 — Consistent wardrobe date tracking — complete.** Quick wear, past-date wear, and outfit wear share dated per-item clothing history. Counts and last-worn dates remain consistent through Undo, count edits, retirement, backups/restores and sync. Old counts remain undated; known last-worn summaries are retained. Outfit logs remain independent, and perfumes stay outside clothing wear tracking.
 - **3.1 — Wardrobe history and time-based insights — complete.** Browse dated clothing wears by month, including retired items, with item-wear totals, days with wears, different items and most-worn items. Undated legacy wears remain separate; perfumes stay excluded.
 - **3.2 — Wardrobe polish and reliability — complete.** Keyboard-safe filters, labelled controls, category search, actionable empty states, clean retired-item navigation, and structural backup/cloud validation with recovery preservation.
-- **3.3 — Bookshelf foundation.** Add an optional Bookshelf alongside Wardrobe. Support adding, editing, searching, and archiving books, with title, author, fiction/non-fiction, genre, format, and reading status. Keep book records separate from wardrobe categories, activities, wear counts, outfits, and cost-per-wear.
+- **3.3 — Bookshelf foundation — complete.** Optional Bookshelf tab with adding, editing, title/author/genre search, archive/restore, and title, author, fiction/non-fiction, genre, format and reading status. Book records stay separate from wardrobe metrics and rules, and are included in ordinary data backups and Gist sync.
 - **3.4 — Reading history.** Record when books are started and finished and provide a per-book reading history.
 - **3.5 — Collection management.** Add useful bookshelf sorting and filters, and practical states such as owned, borrowed, or wishlist where they fit the collection.
 - **3.6 — Reading summaries.** Provide useful yearly or date-range reading summaries based on the recorded history. This completes the planned Bookshelf reading-history scope.
@@ -48,6 +48,8 @@ Books without cover images must remain fully usable. Keep image storage and back
 - **Cost-per-wear targets:** explore whether showing the additional wears needed to reach a target cost-per-wear is useful. This is an idea only, not a committed roadmap milestone.
 
 ### Completed
+
+- **Milestone 3.3:** optional separate Bookshelf collection, book editor/search/archive/restore, additive legacy migration, compatible backup/Gist snapshots, and safe handling of storage failures.
 
 - **Milestone 3.2:** polished search/filter/empty-state behavior and mobile filter accessibility; reject malformed backups or cloud data while keeping the current saved wardrobe.
 

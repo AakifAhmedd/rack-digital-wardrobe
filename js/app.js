@@ -166,6 +166,7 @@ function editDeleteIconBtns(name) {
 
 /* Bottom-nav icons (mobile). 'hanger' is reused from ICONS itself. */
 const NAV_ICONS = {
+  book: '<path d="M12 7v14M3 3h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5v17h-5a4 4 0 0 0-4 1 4 4 0 0 0-4-1H3z"/>',
   home: '<path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/>',
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   sparkles: '<path d="M12 3L14 10L21 12L14 14L12 21L10 14L3 12L10 10Z"/><path d="M19 2L19.5 3.5L21 4L19.5 4.5L19 6L18.5 4.5L17 4L18.5 3.5Z"/>',
@@ -532,8 +533,30 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------------- tab navigation ---------------- */
-const TABS = ['dashboard', 'wardrobe', 'outfit', 'settings'];
+const TABS = ['dashboard', 'wardrobe', 'bookshelf', 'outfit', 'settings'];
 let activeTab = 'dashboard';
+const BOOKSHELF_ENABLED_KEY = 'rack.bookshelf.enabled';
+let bookshelfPreference = (() => {
+  try {
+    const value = localStorage.getItem(BOOKSHELF_ENABLED_KEY);
+    return value === '1' ? true : value === '0' ? false : null;
+  } catch (_) { return null; }
+})();
+function bookshelfEnabled() { return bookshelfPreference ?? Store.state.books.length > 0; }
+function setBookshelfEnabled(enabled) {
+  bookshelfPreference = !!enabled;
+  try { localStorage.setItem(BOOKSHELF_ENABLED_KEY, enabled ? '1' : '0'); } catch (_) { /* view preference only */ }
+  updateCollectionNav();
+}
+function updateCollectionNav() {
+  const enabled = bookshelfEnabled();
+  qsa('[data-tab="bookshelf"]').forEach(button => { button.hidden = !enabled; });
+  if (!enabled && activeTab === 'bookshelf') {
+    activeTab = 'wardrobe';
+    qsa('.nav__link, .bottom-nav__link').forEach(button => button.classList.toggle('is-active', button.dataset.tab === activeTab));
+  }
+  animateNavLens();
+}
 const SETTINGS_PANEL_KEY = 'rack.settings.panel';
 const SETTINGS_OPEN_KEY = 'rack.settings.openSections';
 let activeSettingsPanel = (() => {
@@ -624,6 +647,7 @@ function saveCollapsedGroups() {
 }
 
 function switchTab(name) {
+  if (name === 'bookshelf' && !bookshelfEnabled()) name = 'wardrobe';
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
@@ -657,11 +681,13 @@ function initNavBehaviour() {
 }
 
 function render() {
+  updateCollectionNav();
   releaseItemCardPhotoUrls();
   const main = qs('#view');
   main.innerHTML = '';
   if (activeTab === 'dashboard') main.appendChild(renderDashboard());
   else if (activeTab === 'wardrobe') { main.appendChild(renderWardrobe()); renderItemGrid(); }
+  else if (activeTab === 'bookshelf') main.appendChild(renderBookshelf());
   else if (activeTab === 'outfit') main.appendChild(renderOutfitBuilder());
   else if (activeTab === 'settings') main.appendChild(renderSettings());
 }
@@ -998,6 +1024,106 @@ function renderDashboard() {
 /* ================================================================
    WARDROBE
    ================================================================ */
+let bookshelfSearch = '';
+let bookshelfArchiveFilter = 'active';
+function bookOptions(options, selected) {
+  return Object.entries(options).map(([value, label]) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(label)}</option>`).join('');
+}
+function renderBookshelf() {
+  const active = Store.state.books.filter(book => !book.archived).length;
+  const archived = Store.state.books.length - active;
+  const wrap = el(`<section class="view-section bookshelf">
+    <div class="bookshelf-heading"><div><h2>Bookshelf</h2><p class="muted">${active} book${active === 1 ? '' : 's'} · ${archived} archived</p></div>
+      <button type="button" class="btn btn--primary" id="add-book-btn">+ Add book</button>
+    </div>
+    <div class="toolbar bookshelf-toolbar">
+      <input type="search" id="bookshelf-search" class="search-input" aria-label="Search books" placeholder="Search title, author or genre…" value="${esc(bookshelfSearch)}">
+      <label>Collection<select id="bookshelf-archive-filter">
+        <option value="active">Bookshelf</option><option value="archived">Archived</option><option value="all">All books</option>
+      </select></label>
+    </div>
+    <p id="bookshelf-result-count" class="muted" aria-live="polite"></p>
+    <div id="bookshelf-results" class="book-grid"></div>
+  </section>`);
+  qs('#add-book-btn', wrap).addEventListener('click', () => openBookModal());
+  const search = qs('#bookshelf-search', wrap), filter = qs('#bookshelf-archive-filter', wrap);
+  filter.value = bookshelfArchiveFilter;
+  search.addEventListener('input', () => { bookshelfSearch = search.value; refresh(); });
+  filter.addEventListener('change', () => { bookshelfArchiveFilter = filter.value; refresh(); });
+  function refresh() {
+    const query = bookshelfSearch.trim().toLocaleLowerCase();
+    const books = Store.state.books.filter(book => {
+      if (bookshelfArchiveFilter === 'active' && book.archived) return false;
+      if (bookshelfArchiveFilter === 'archived' && !book.archived) return false;
+      return `${book.title} ${book.author} ${book.genre}`.toLocaleLowerCase().includes(query);
+    }).sort((a, b) => b.createdAt - a.createdAt);
+    const host = qs('#bookshelf-results', wrap); host.innerHTML = '';
+    qs('#bookshelf-result-count', wrap).textContent = `${books.length} book${books.length === 1 ? '' : 's'} shown`;
+    if (!books.length) {
+      const empty = el(`<div class="empty-state wardrobe-empty">
+        <h2>${query ? 'No matching books' : bookshelfArchiveFilter === 'archived' ? 'No archived books' : 'Your bookshelf is empty'}</h2>
+        <p>${query ? 'Try another title, author or genre.' : bookshelfArchiveFilter === 'archived' ? 'Archived books stay available here and can be restored.' : 'Add a book and keep track of what you want to read.'}</p>
+        ${query ? '<button type="button" class="btn btn--ghost" id="bookshelf-clear-search">Clear search</button>' : ''}
+        <button type="button" class="btn btn--primary" id="bookshelf-empty-add">Add book</button>
+      </div>`);
+      qs('#bookshelf-clear-search', empty)?.addEventListener('click', () => { bookshelfSearch = ''; search.value = ''; refresh(); search.focus(); });
+      qs('#bookshelf-empty-add', empty).addEventListener('click', () => openBookModal());
+      host.appendChild(empty); return;
+    }
+    books.forEach(book => {
+      const card = el(`<article class="panel book-card" data-book-id="${esc(book.id)}">
+        <h3>${esc(book.title)}</h3><p class="book-author">${esc(book.author || 'Author not recorded')}</p>
+        <div class="chip-row"><span class="tag-chip">${esc(BOOK_TYPES[book.type])}</span><span class="tag-chip tag-chip--muted">${esc(BOOK_FORMATS[book.format])}</span></div>
+        ${book.genre ? `<p class="book-genre">${esc(book.genre)}</p>` : ''}
+        <p><span class="tag-chip ${book.readingStatus === 'finished' ? 'tag-chip--good' : ''}">${esc(BOOK_READING_STATUSES[book.readingStatus])}</span>${book.archived ? ' <span class="tag-chip tag-chip--muted">Archived</span>' : ''}</p>
+        <div class="book-actions">
+          <button type="button" class="btn btn--small btn--ghost" data-book-act="edit" aria-label="Edit ${esc(book.title)}">Edit</button>
+          <button type="button" class="btn btn--small btn--ghost" data-book-act="archive" aria-label="${book.archived ? 'Restore' : 'Archive'} ${esc(book.title)}">${book.archived ? 'Restore' : 'Archive'}</button>
+        </div>
+      </article>`);
+      qs('[data-book-act="edit"]', card).addEventListener('click', () => openBookModal(book));
+      qs('[data-book-act="archive"]', card).addEventListener('click', () => {
+        const action = () => {
+          try { BookCollection.archive(book.id, !book.archived); render(); toast(book.archived ? 'Book restored to bookshelf' : 'Book archived'); }
+          catch (err) { toast(err.message, 'warn'); }
+        };
+        if (book.archived) action();
+        else Modal.confirm(`Archive “${book.title}”? You can restore it from Archived.`, action, { title: 'Archive book', yesLabel: 'Archive' });
+      });
+      host.appendChild(card);
+    });
+  }
+  refresh(); return wrap;
+}
+function openBookModal(existing = null) {
+  const book = existing || { title: '', author: '', genre: '', type: 'fiction', format: 'paperback', readingStatus: 'to-read' };
+  const body = el(`<form class="form" id="book-form">
+    <label>Title<input type="text" name="title" required value="${esc(book.title)}" autocomplete="off"></label>
+    <label>Author<input type="text" name="author" value="${esc(book.author)}" autocomplete="off"></label>
+    <div class="form-row">
+      <label>Type<select name="type">${bookOptions(BOOK_TYPES, book.type)}</select></label>
+      <label>Format<select name="format">${bookOptions(BOOK_FORMATS, book.format)}</select></label>
+    </div>
+    <label>Genre<input type="text" name="genre" value="${esc(book.genre)}" placeholder="e.g. History, mystery" autocomplete="off"></label>
+    <label>Reading status<select name="readingStatus">${bookOptions(BOOK_READING_STATUSES, book.readingStatus)}</select></label>
+    ${existing?.archived ? '<p class="muted">This book is archived. Editing keeps it archived.</p>' : ''}
+    <div class="form-actions"><button type="button" class="btn btn--ghost" id="book-cancel">Cancel</button><button type="submit" class="btn btn--primary">${existing ? 'Save book' : 'Add book'}</button></div>
+  </form>`);
+  qs('#book-cancel', body).addEventListener('click', () => Modal.close());
+  let saving = false;
+  body.addEventListener('submit', event => {
+    event.preventDefault(); if (saving) return;
+    const values = Object.fromEntries(new FormData(body));
+    if (!values.title.trim()) { toast('Enter a book title', 'warn'); body.elements.title.focus(); return; }
+    saving = true;
+    try {
+      BookCollection.save(values, existing?.id);
+      Modal.close(); render(); toast(existing ? 'Book updated' : 'Book added');
+    } catch (err) { saving = false; toast(err.message, 'warn'); }
+  });
+  Modal.open(existing ? 'Edit book' : 'Add book', body, { onMount: () => body.elements.title.focus() });
+}
+
 function renderWardrobe() {
   const wrap = el(`<section class="view-section"></section>`);
 
@@ -3361,7 +3487,7 @@ function renderSettings() {
 function renderGeneralSettings() {
   const s = Store.state;
   /* accordion: keep at most one real section open; drop saved state of sections that no longer exist */
-  const knownG = ['g:appearance', 'g:sync', 'g:backup', 'g:reset'];
+  const knownG = ['g:appearance', 'g:collections', 'g:sync', 'g:backup', 'g:reset'];
   Object.keys(settingsOpen).filter(k => k.startsWith('g:') && !knownG.includes(k)).forEach(k => setSettingsSectionOpen(k, false));
   knownG.filter(k => settingsOpen[k]).slice(1).forEach(k => setSettingsSectionOpen(k, false));
   const wrap = el(`<div class="item-groups settings-sections"></div>`);
@@ -3428,7 +3554,7 @@ function renderGeneralSettings() {
       try {
         const data = JSON.parse(reader.result);
         Store.validateSnapshot(data);
-        Modal.confirm(`Replace all current data with this backup (${(data.items || []).length} items)? Photos on this device are kept. Download your current data first if you need a copy.`, () => {
+        Modal.confirm(`Replace all current data with this backup (${(data.items || []).length} wardrobe items and ${(data.books || []).length} books)? Photos on this device are kept. Download your current data first if you need a copy.`, () => {
           try {
             Store.replaceAll(data);
           } catch (err) {
@@ -3498,7 +3624,7 @@ function renderGeneralSettings() {
       <button class="btn btn--danger" id="reset-btn">Reset app</button>
     </div>`);
   qs('#reset-btn', dangerPanel).addEventListener('click', () => {
-    Modal.confirm('This deletes every item, category edit, and setting on this device. Continue?', () => {
+    Modal.confirm('This deletes every wardrobe item, book, category edit, and setting on this device. Continue?', () => {
       localStorage.removeItem(STORAGE_KEY);
       Store._state = null;
       Store.load();
@@ -3520,6 +3646,14 @@ function renderGeneralSettings() {
     });
   };
   wrap.appendChild(settingsSection('g:appearance', 'Appearance', () => renderAppearanceSettings()));
+  wrap.appendChild(settingsSection('g:collections', 'Collections', () => {
+    const panel = el(`<div class="panel">
+      <label class="bookshelf-option"><input type="checkbox" id="bookshelf-enabled" ${bookshelfEnabled() ? 'checked' : ''}> Show Bookshelf on this device</label>
+      <p class="muted">Keep books in a separate collection alongside your wardrobe. Hiding Bookshelf keeps your books saved. Data backups and cloud sync include books.</p>
+    </div>`);
+    qs('#bookshelf-enabled', panel).addEventListener('change', event => { setBookshelfEnabled(event.target.checked); });
+    return panel;
+  }));
   wrap.appendChild(asSection('sync', syncPanel));
   wrap.appendChild(asSection('backup', backupPanel));
   wrap.appendChild(asSection('reset', dangerPanel));

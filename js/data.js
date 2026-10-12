@@ -197,6 +197,7 @@ function buildDefaultState() {
     activities,
     items: [],         // NEVER pre-populated
     outfitHistory: [], // { id, wornAt, itemIds }; photos stay in IndexedDB
+    books: [],         // separate optional collection; never wardrobe items
     appearance: {
       themeId: 'theme_canvas',
       fontId: 'font_fraunces_plex',
@@ -347,6 +348,50 @@ const WearInsights = {
   },
 };
 
+const BOOK_TYPES = { fiction: 'Fiction', 'non-fiction': 'Non-fiction' };
+const BOOK_FORMATS = { paperback: 'Paperback', hardcover: 'Hardcover', ebook: 'E-book', audiobook: 'Audiobook', other: 'Other' };
+const BOOK_READING_STATUSES = { 'to-read': 'To read', reading: 'Reading', finished: 'Finished', paused: 'Paused' };
+const BookCollection = {
+  validate(book) {
+    if (!book || typeof book !== 'object' || typeof book.id !== 'string' || !book.id
+        || typeof book.title !== 'string' || !book.title.trim()
+        || !['author', 'genre'].every(key => typeof book[key] === 'string')
+        || !Object.hasOwn(BOOK_TYPES, book.type) || !Object.hasOwn(BOOK_FORMATS, book.format)
+        || !Object.hasOwn(BOOK_READING_STATUSES, book.readingStatus) || typeof book.archived !== 'boolean'
+        || !['createdAt', 'updatedAt'].every(key => Number.isFinite(book[key]) && book[key] > 0)) {
+      throw new Error('Invalid book record');
+    }
+  },
+  save(values, id = null) {
+    const existing = id ? Store.state.books.find(book => book.id === id) : null;
+    if (id && !existing) throw new Error('This book is no longer available. Close and reopen the editor.');
+    const now = Date.now();
+    const book = { ...existing, id: id || uid('book'),
+      title: String(values.title || '').trim(), author: String(values.author || '').trim(),
+      genre: String(values.genre || '').trim(), type: values.type, format: values.format,
+      readingStatus: values.readingStatus, archived: existing?.archived || false,
+      createdAt: existing?.createdAt || now, updatedAt: now };
+    this.validate(book);
+    this._commit(existing ? Store.state.books.map(row => row.id === id ? book : row) : [...Store.state.books, book]);
+    return book;
+  },
+  archive(id, archived) {
+    const book = Store.state.books.find(row => row.id === id);
+    if (!book) throw new Error('This book is no longer available.');
+    this._commit(Store.state.books.map(row => row.id === id ? { ...row, archived, updatedAt: Date.now() } : row));
+  },
+  _commit(books) {
+    const previous = Store.state.books, updatedAt = Store.state.meta.updatedAt;
+    Store.state.books = books;
+    try { Store.save(); }
+    catch (err) {
+      Store.state.books = previous;
+      Store.state.meta.updatedAt = updatedAt;
+      throw new Error('Could not save the bookshelf. Your saved books were kept. Check available browser storage.');
+    }
+  },
+};
+
 const Store = {
   _state: null,
 
@@ -374,6 +419,7 @@ const Store = {
     this.validateSnapshot(s);
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
+    if (s.books === undefined) s.books = [];
     if (!Array.isArray(s.outfitHistory)) s.outfitHistory = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
     if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', popoverBlur: 'frosted', customThemes: [], customFonts: [] };
@@ -565,6 +611,15 @@ const Store = {
       for (const log of s.outfitHistory) {
         if (!object(log) || typeof log.id !== 'string' || !Number.isFinite(log.wornAt) || log.wornAt <= 0
             || !Array.isArray(log.itemIds) || log.itemIds.some(id => typeof id !== 'string')) fail();
+      }
+    }
+    if (s.books !== undefined) {
+      if (!Array.isArray(s.books)) fail();
+      const ids = new Set();
+      for (const book of s.books) {
+        BookCollection.validate(book);
+        if (ids.has(book.id)) fail();
+        ids.add(book.id);
       }
     }
   },

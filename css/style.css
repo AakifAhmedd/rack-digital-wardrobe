@@ -1328,6 +1328,7 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .book-genre { font-size: .9rem; margin-bottom: 0; }
 .book-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: auto; padding-top: .5rem; }
 .book-actions button { min-height: 44px; }
+#book-genre-preset { width: 100%; min-width: 0; }
 .book-reading-history, #book-reading-form { overflow-wrap: anywhere; }
 .book-reading-list { list-style: none; padding: 0; margin-top: 1rem; }
 .book-reading-list li { padding: .75rem 0; border-bottom: 1px solid var(--line); }

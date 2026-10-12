@@ -1064,8 +1064,16 @@ function lastBookFinish(book) {
 function bookOptions(options, selected) {
   return Object.entries(options).map(([value, label]) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(label)}</option>`).join('');
 }
+function bookGenreOptions(type) {
+  return Object.entries(BOOK_GENRES[type] || {}).map(([genre, children]) => children.length
+    ? `<optgroup label="${esc(genre)}"><option value="${esc(genre)}">${esc(genre)} (general)</option>${children.map(child => `<option value="${esc(genre + ' — ' + child)}">${esc(child)}</option>`).join('')}</optgroup>`
+    : `<option value="${esc(genre)}">${esc(genre)}</option>`).join('');
+}
 function renderBookshelf() {
   const genres = new Map();
+  Object.values(BOOK_GENRES).forEach(groups => Object.entries(groups).forEach(([genre, children]) => {
+    [genre, ...children.map(child => genre + ' — ' + child)].forEach(value => genres.set(value.toLocaleLowerCase(), value));
+  }));
   Store.state.books.forEach(book => { if (book.genre.trim()) genres.set(book.genre.trim().toLocaleLowerCase(), book.genre.trim()); });
   if (bookshelfFilters.genre && !genres.has(bookshelfFilters.genre)) { bookshelfFilters.genre = ''; saveBookshelfFilters(); }
   const active = Store.state.books.filter(book => !book.archived).length;
@@ -1123,7 +1131,11 @@ function renderBookshelf() {
       for (const key of ['readingStatus', 'type', 'format', 'ownership']) {
         if (bookshelfFilters[key] && (book[key] || (key === 'ownership' ? 'owned' : '')) !== bookshelfFilters[key]) return false;
       }
-      if (bookshelfFilters.genre && book.genre.trim().toLocaleLowerCase() !== bookshelfFilters.genre) return false;
+      if (bookshelfFilters.genre) {
+        const genre = book.genre.trim().toLocaleLowerCase();
+        const parent = Object.values(BOOK_GENRES).some(groups => Object.entries(groups).some(([name, children]) => children.length && name.toLocaleLowerCase() === bookshelfFilters.genre));
+        if (genre !== bookshelfFilters.genre && !(parent && genre.startsWith(bookshelfFilters.genre + ' — '))) return false;
+      }
       return `${book.title} ${book.author} ${book.genre}`.toLocaleLowerCase().includes(query);
     }).sort((a, b) => {
       const title = a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
@@ -1184,7 +1196,8 @@ function openBookModal(existing = null) {
       <label>Type<select name="type">${bookOptions(BOOK_TYPES, book.type)}</select></label>
       <label>Format<select name="format">${bookOptions(BOOK_FORMATS, book.format)}</select></label>
     </div>
-    <label>Genre<input type="text" name="genre" value="${esc(book.genre)}" placeholder="e.g. History, mystery" autocomplete="off"></label>
+    <label>Genre<select name="genrePreset" id="book-genre-preset"></select></label>
+    <label id="book-custom-genre-field">Custom genre<input type="text" name="genre" value="${esc(book.genre)}" placeholder="Enter a genre" autocomplete="off"></label>
     <label>Reading status<select name="readingStatus">${bookOptions(BOOK_READING_STATUSES, book.readingStatus)}</select></label>
     <label>Ownership<select name="ownership">${bookOptions(BOOK_OWNERSHIP, book.ownership || 'owned')}</select></label>
     <p class="muted">Use Reading history to record start and finish dates. Changing this status keeps recorded dates.</p>
@@ -1192,6 +1205,25 @@ function openBookModal(existing = null) {
     <div class="form-actions"><button type="button" class="btn btn--ghost" id="book-cancel">Cancel</button><button type="submit" class="btn btn--primary">${existing ? 'Save book' : 'Add book'}</button></div>
   </form>`);
   qs('#book-cancel', body).addEventListener('click', () => Modal.close());
+  const genrePreset = body.elements.genrePreset, genreInput = body.elements.genre;
+  let customGenre = book.genre || '';
+  function refreshGenreOptions() {
+    const current = genreInput.value;
+    genrePreset.innerHTML = '<option value="">No genre selected</option>' + bookGenreOptions(body.elements.type.value) + '<option value="__custom__">Custom genre…</option>';
+    const known = [...genrePreset.options].some(option => option.value !== '__custom__' && option.value === current);
+    genrePreset.value = known ? current : '__custom__';
+    qs('#book-custom-genre-field', body).hidden = known;
+    if (!known) customGenre = current;
+  }
+  genrePreset.addEventListener('change', () => {
+    const custom = genrePreset.value === '__custom__';
+    genreInput.value = custom ? customGenre : genrePreset.value;
+    qs('#book-custom-genre-field', body).hidden = !custom;
+    if (custom) genreInput.focus();
+  });
+  genreInput.addEventListener('input', () => { customGenre = genreInput.value; });
+  body.elements.type.addEventListener('change', refreshGenreOptions);
+  refreshGenreOptions();
   let saving = false;
   body.addEventListener('submit', event => {
     event.preventDefault(); if (saving) return;

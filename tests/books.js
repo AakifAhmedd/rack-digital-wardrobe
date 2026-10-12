@@ -167,4 +167,42 @@ async function runBooksChecks({ check, assert, equal, device }) {
     let failed = false; try { w.BookInsights.forRange(w.Store.state.books, '2026-02-30', '2026-03-01'); } catch (_) { failed = true; }
     assert(failed, 'Invalid calendar ranges rejected');
   });
+  await check('Baseline genres follow book type, support subgenres and preserve existing custom genres', async () => {
+    w.openBookModal();
+    let form = w.document.querySelector('#book-form'), preset = form.elements.genrePreset;
+    assert([...preset.options].some(option => option.value === 'Fantasy — Romantasy (Fantasy Romance)'), 'Fantasy subgenres available');
+    assert(![...preset.options].some(option => option.value === 'True Crime'), 'Fiction options exclude non-fiction baseline');
+    form.elements.title.value = 'Genre sample'; preset.value = 'Fantasy — Epic'; preset.dispatchEvent(new w.Event('change'));
+    equal(form.elements.genre.value, 'Fantasy — Epic', 'Subtype keeps its parent context');
+    submit(form);
+    const saved = w.Store.state.books.find(row => row.title === 'Genre sample');
+    equal(saved.genre, 'Fantasy — Epic', 'Genre saved in compatible string field');
+    w.openBookModal(saved); form = w.document.querySelector('#book-form');
+    form.elements.type.value = 'non-fiction'; form.elements.type.dispatchEvent(new w.Event('change'));
+    equal(form.elements.genre.value, saved.genre, 'Type change does not silently discard the genre');
+    preset = form.elements.genrePreset;
+    assert([...preset.options].some(option => option.value === 'True Crime'), 'Non-fiction baseline available');
+    assert(![...preset.options].some(option => option.value === 'Fantasy — Epic'), 'Fiction presets removed after type change');
+    preset.value = 'Science & Nature'; preset.dispatchEvent(new w.Event('change')); submit(form);
+    equal(w.Store.state.books.find(row => row.id === saved.id).genre, 'Science & Nature', 'Non-fiction selection saved');
+    const custom = w.BookCollection.save({ ...values, title: 'Custom sample', genre: 'Unlisted & unusual <genre>' });
+    w.openBookModal(custom); form = w.document.querySelector('#book-form');
+    equal(form.elements.genrePreset.value, '__custom__', 'Existing custom genre retained as custom');
+    assert(!form.querySelector('#book-custom-genre-field').hidden, 'Custom input visible');
+    submit(form); equal(w.Store.state.books.find(row => row.id === custom.id).genre, custom.genre, 'Editing preserves custom genre exactly');
+  });
+  await check('Parent genre filtering includes subgenres while custom filters keep their exact matches', async () => {
+    w.Store.replaceAll(w.buildDefaultState());
+    w.BookCollection.save({ ...values, title: 'Epic sample', type: 'fiction', genre: 'Fantasy — Epic' });
+    w.BookCollection.save({ ...values, title: 'Urban sample', type: 'fiction', genre: 'Fantasy — Urban' });
+    w.BookCollection.save({ ...values, title: 'Custom sample', genre: 'Personal genre' });
+    w.eval("bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';");
+    const shelf = w.renderBookshelf(), select = shelf.querySelector('[data-book-filter="genre"]');
+    select.value = 'fantasy'; select.dispatchEvent(new w.Event('change'));
+    equal(shelf.querySelectorAll('.book-card').length, 2, 'Parent filter matches both fantasy subgenres');
+    select.value = 'fantasy — epic'; select.dispatchEvent(new w.Event('change'));
+    equal(shelf.querySelectorAll('.book-card').length, 1, 'Subgenre filter narrows matches');
+    select.value = 'personal genre'; select.dispatchEvent(new w.Event('change'));
+    equal(shelf.querySelectorAll('.book-card').length, 1, 'Custom genre remains filterable');
+  });
 }

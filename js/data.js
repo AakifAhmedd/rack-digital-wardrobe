@@ -349,6 +349,19 @@ const WearInsights = {
 };
 
 const BOOK_TYPES = { fiction: 'Fiction', 'non-fiction': 'Non-fiction' };
+const BOOK_GENRES = {
+  fiction: {
+    Fantasy: ['Epic', 'Urban', 'Romantasy (Fantasy Romance)'],
+    'Science Fiction': ['Space & Tech', 'Dystopian'],
+    'Mystery & Thriller': ['Detective / Police', 'Psychological Suspense'],
+    Romance: ['Contemporary', 'Historical'],
+    'Historical Fiction': [], Horror: [], 'General Fiction': [],
+  },
+  'non-fiction': {
+    'Biography & Memoir': [], 'Self-Help & Business': [], 'History & Politics': [],
+    'Science & Nature': [], 'True Crime': [],
+  },
+};
 const BOOK_FORMATS = { paperback: 'Paperback', hardcover: 'Hardcover', ebook: 'E-book', audiobook: 'Audiobook', other: 'Other' };
 const BOOK_READING_STATUSES = { 'to-read': 'To read', reading: 'Reading', finished: 'Finished', paused: 'Paused' };
 const BOOK_OWNERSHIP = { owned: 'Owned', borrowed: 'Borrowed', wishlist: 'Wishlist' };

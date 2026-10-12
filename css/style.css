@@ -1009,9 +1009,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 }
 /* one glass recipe for both states (empty / items selected) so the card doesn't change look as you pick */
 [data-style="glass"] .outfit-summary.lg-on {
-  background: linear-gradient(145deg, rgba(255,255,255,.52), rgba(255,255,255,.28) 60%, rgba(255,255,255,.4));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--surface-raised) 62%, transparent), color-mix(in srgb, var(--surface-raised) 34%, transparent) 60%, color-mix(in srgb, var(--surface-raised) 48%, transparent));
   backdrop-filter: var(--lg) blur(8px); -webkit-backdrop-filter: var(--lg) blur(8px);  /* no saturate/brightness: they leave a visible inset rectangle on this wide shape */
-  border-color: rgba(255,255,255,.5);
+  border-color: color-mix(in srgb, var(--surface-raised) 60%, transparent);
   box-shadow: var(--lg-rim), 0 8px 22px rgba(20,30,50,.14);
 }
 [data-style="glass"] .toast { border: 1px solid rgba(255,255,255,.22); box-shadow: var(--lg-rim), 0 4px 12px rgba(10,15,30,.22); }

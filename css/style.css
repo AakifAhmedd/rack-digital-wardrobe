@@ -1328,6 +1328,10 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .book-genre { font-size: .9rem; margin-bottom: 0; }
 .book-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: auto; padding-top: .5rem; }
 .book-actions button { min-height: 44px; }
+.book-reading-history, #book-reading-form { overflow-wrap: anywhere; }
+.book-reading-list { list-style: none; padding: 0; margin-top: 1rem; }
+.book-reading-list li { padding: .75rem 0; border-bottom: 1px solid var(--line); }
+.book-reading-list p { margin-bottom: .35rem; }
 .collection-settings { display: grid; gap: 1rem; }
 .collection-option .bookshelf-option { display: flex; align-items: center; gap: .5rem; }
 .collection-option p { margin: .35rem 0 0; }

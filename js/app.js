@@ -1069,7 +1069,24 @@ function bookGenreOptions(type) {
     ? `<optgroup label="${esc(genre)}"><option value="${esc(genre)}">${esc(genre)} (general)</option>${children.map(child => `<option value="${esc(genre + ' — ' + child)}">${esc(child)}</option>`).join('')}</optgroup>`
     : `<option value="${esc(genre)}">${esc(genre)}</option>`).join('');
 }
+function closeBookMenus(except = null) {
+  qsa('.book-card__overflow.is-open').forEach(wrap => {
+    if (wrap === except) return;
+    wrap.classList.remove('is-open');
+    qs('[data-book-act="overflow"]', wrap).setAttribute('aria-expanded', 'false');
+    qs('.item-row__menu', wrap).hidden = true;
+  });
+}
+let bookMenuDismissalBound = false;
+function ensureBookMenuDismissal() {
+  if (bookMenuDismissalBound) return;
+  bookMenuDismissalBound = true;
+  document.addEventListener('click', event => {
+    closeBookMenus(event.target.closest('.book-card__overflow'));
+  });
+}
 function renderBookshelf() {
+  ensureBookMenuDismissal();
   const genres = new Map();
   Object.values(BOOK_GENRES).forEach(groups => Object.entries(groups).forEach(([genre, children]) => {
     [genre, ...children.map(child => genre + ' — ' + child)].forEach(value => genres.set(value.toLocaleLowerCase(), value));
@@ -1162,19 +1179,42 @@ function renderBookshelf() {
     }
     books.forEach(book => {
       const card = el(`<article class="panel book-card" data-book-id="${esc(book.id)}">
-        <h3>${esc(book.title)}</h3><p class="book-author">${esc(book.author || 'Author not recorded')}</p>
-        <div class="chip-row"><span class="tag-chip">${esc(BOOK_TYPES[book.type])}</span><span class="tag-chip tag-chip--muted">${esc(BOOK_FORMATS[book.format])}</span><span class="tag-chip tag-chip--muted">${esc(BOOK_OWNERSHIP[book.ownership || 'owned'])}</span></div>
+        <h3><button type="button" class="book-card__open" data-book-act="history" aria-haspopup="dialog" aria-label="Reading history for ${esc(book.title)}">${esc(book.title)}</button></h3>
+        <p class="book-author">${esc(book.author || 'Author not recorded')}</p>
+        <p class="book-metadata">${esc(BOOK_TYPES[book.type])} · ${esc(BOOK_FORMATS[book.format])} · ${esc(BOOK_OWNERSHIP[book.ownership || 'owned'])}</p>
         ${book.genre ? `<p class="book-genre">${esc(book.genre)}</p>` : ''}
-        <p><span class="tag-chip ${book.readingStatus === 'finished' ? 'tag-chip--good' : ''}">${esc(BOOK_READING_STATUSES[book.readingStatus])}</span>${book.archived ? ' <span class="tag-chip tag-chip--muted">Archived</span>' : ''}</p>
-        <div class="book-actions">
-          <button type="button" class="btn btn--small btn--ghost" data-book-act="history" aria-label="Reading history for ${esc(book.title)}">Reading history</button>
-          <button type="button" class="btn btn--small btn--ghost" data-book-act="edit" aria-label="Edit ${esc(book.title)}">Edit</button>
-          <button type="button" class="btn btn--small btn--ghost" data-book-act="archive" aria-label="${book.archived ? 'Restore' : 'Archive'} ${esc(book.title)}">${book.archived ? 'Restore' : 'Archive'}</button>
+        <div class="book-card__footer">
+          <div class="book-card__status"><span class="book-status book-status--${esc(book.readingStatus)}">${esc(BOOK_READING_STATUSES[book.readingStatus])}</span>${book.archived ? ' <span class="book-card__archived">Archived</span>' : ''}</div>
+          <div class="book-card__overflow item-row__overflow">
+            <button type="button" class="item-card__hole-btn" data-book-act="overflow" aria-expanded="false" aria-controls="book-menu-${esc(book.id)}" aria-label="More actions for ${esc(book.title)}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+            <div class="item-row__menu" id="book-menu-${esc(book.id)}" role="group" aria-label="Actions for ${esc(book.title)}" hidden>
+              <button type="button" data-book-act="edit">Edit</button>
+              <button type="button" data-book-act="archive">${book.archived ? 'Restore' : 'Archive'}</button>
+            </div>
+          </div>
         </div>
       </article>`);
-      qs('[data-book-act="edit"]', card).addEventListener('click', () => openBookModal(book));
-      qs('[data-book-act="history"]', card).addEventListener('click', () => openBookReadingHistory(book.id));
+      const overflow = qs('.book-card__overflow', card), toggle = qs('[data-book-act="overflow"]', card), menu = qs('.item-row__menu', card);
+      const openMenu = () => {
+        closeBookMenus(overflow); overflow.classList.add('is-open');
+        toggle.setAttribute('aria-expanded', 'true'); menu.hidden = false;
+      };
+      const closeMenu = () => {
+        overflow.classList.remove('is-open'); toggle.setAttribute('aria-expanded', 'false'); menu.hidden = true;
+      };
+      toggle.addEventListener('click', () => { if (menu.hidden) openMenu(); else closeMenu(); });
+      overflow.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !menu.hidden) {
+          event.preventDefault(); closeMenu(); toggle.focus();
+        } else if (event.key === 'ArrowDown' && event.target === toggle) {
+          event.preventDefault(); openMenu(); qs('button', menu).focus();
+        }
+      });
+      overflow.addEventListener('focusout', event => { if (!overflow.contains(event.relatedTarget)) closeMenu(); });
+      qs('[data-book-act="edit"]', card).addEventListener('click', () => { closeMenu(); toggle.focus(); openBookModal(book); });
+      qs('[data-book-act="history"]', card).addEventListener('click', () => { closeBookMenus(); openBookReadingHistory(book.id); });
       qs('[data-book-act="archive"]', card).addEventListener('click', () => {
+        closeMenu(); toggle.focus();
         const action = () => {
           try { BookCollection.archive(book.id, !book.archived); render(); toast(book.archived ? 'Book restored to bookshelf' : 'Book archived'); }
           catch (err) { toast(err.message, 'warn'); }
@@ -1332,25 +1372,31 @@ function openReadingSummary() {
     readingSummaryView = { mode: mode.value, year: Number(year.value), from: from.value, to: to.value };
     const period = mode.value === 'year' ? String(Number(year.value)) : `${fmtReadingDate(first)} – ${fmtReadingDate(last)}`;
     results.innerHTML = `<h3>${esc(period)}</h3>
-      <div class="wear-month-stats reading-summary-stats">
-        <div><strong>${summary.completions.length}</strong><span>Finished readings</span></div>
-        <div><strong>${summary.uniqueBooks}</strong><span>Different books</span></div>
-        <div><strong>${summary.rereads}</strong><span>Recorded rereads</span></div>
-        <div><strong>${summary.started}</strong><span>Started readings</span></div>
-        <div><strong>${summary.averageDays === null ? '—' : summary.averageDays.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong><span>Avg. calendar span (days)</span></div>
+      <div class="reading-summary-overview">
+        <div class="reading-summary-hero"><strong>${summary.completions.length}</strong><span>Finished readings</span><p class="muted">Includes rereads</p></div>
+        <dl class="reading-summary-stats">
+          <div><dt>Different books</dt><dd>${summary.uniqueBooks}</dd></div>
+          <div><dt>Rereads</dt><dd>${summary.rereads}</dd></div>
+          <div><dt>Started</dt><dd>${summary.started}</dd></div>
+          <div><dt>Avg. days</dt><dd>${summary.averageDays === null ? '—' : summary.averageDays.toLocaleString(undefined, { maximumFractionDigits: 1 })}</dd></div>
+        </dl>
       </div>
-      <p class="muted">Finished readings use recorded finish dates across all books, including archived books. Browsing filters do not change this summary.</p>
-      <p class="muted">Rereads follow a book’s first recorded finish. Calendar span includes start and finish days${summary.spanCount ? `, based on ${summary.spanCount} dated pair${summary.spanCount === 1 ? '' : 's'}` : ''}. Finish-only records count as completed readings.</p>
-      ${summary.monthly.length ? `<table class="reading-summary-months"><caption>Finished by month</caption><thead><tr><th scope="col">Month</th><th scope="col">Readings</th></tr></thead><tbody>${summary.monthly.map(([month, count]) => `<tr><th scope="row">${esc(new Date(`${month}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</th><td>${count}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No recorded finish dates in this period. Add dates from a book’s Reading history.</p>'}
+      <p class="reading-summary-note muted">Based on recorded finish dates, including archived books.</p>
+      ${summary.monthly.length ? `<table class="reading-summary-months"><caption>Finished by month</caption><thead><tr><th scope="col">Month</th><th scope="col">Readings</th></tr></thead><tbody>${summary.monthly.map(([month, count]) => `<tr><th scope="row">${esc(new Date(`${month}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', ...(mode.value === 'range' ? { year: 'numeric' } : {}) }))}</th><td>${count}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No recorded finishes in this period. Add dates from a book’s reading history.</p>'}
       <div id="book-summary-completions"></div>
-      <button type="button" class="btn btn--ghost" id="book-summary-more" hidden>Show more readings</button>`;
+      <button type="button" class="btn btn--ghost" id="book-summary-more" hidden>Show more readings</button>
+      <details class="reading-summary-help"><summary>How these totals are counted</summary>
+        <p>Each recorded finish counts once. Different books counts each book once, and a reread is a finish after that book’s first recorded finish.</p>
+        <p>Started counts recorded start dates in this period. Average days uses known start and finish dates, includes both days and any pauses${summary.spanCount ? `, and is based on ${summary.spanCount} reading${summary.spanCount === 1 ? '' : 's'}` : ''}. A finish without a start date counts toward finishes, but not the average.</p>
+        <p>Archived books are included. Bookshelf filters do not affect these totals. A Finished status without a recorded date does not count toward this period.</p>
+      </details>`;
     let shown = 50;
     function showCompletions() {
       const host = qs('#book-summary-completions', results); host.innerHTML = '';
       if (summary.completions.length) host.appendChild(el('<h4>Finished readings</h4>'));
       const list = el('<ul class="reading-summary-list"></ul>'); host.appendChild(list);
       summary.completions.slice(0, shown).forEach(({ book, entry, reread }) => {
-        const row = el(`<li><button type="button" class="btn btn--ghost btn--small">${esc(book.title)}</button>
+        const row = el(`<li><button type="button" class="reading-summary-book" aria-label="Reading history for ${esc(book.title)}">${esc(book.title)}</button>
           <span><time datetime="${esc(entry.finishedOn)}">${esc(fmtReadingDate(entry.finishedOn))}</time>${reread ? ' · Reread' : ''}${book.archived ? ' · Archived' : ''}</span></li>`);
         qs('button', row).addEventListener('click', () => openBookReadingHistory(book.id)); list.appendChild(row);
       });

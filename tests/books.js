@@ -127,6 +127,70 @@ async function runBooksChecks({ check, assert, equal, device }) {
     w.localStorage.setItem('rack.bookshelf.filters', JSON.stringify({ ownership: 'wrong', sort: {}, type: null }));
     equal(w.eval('loadBookshelfFilters()'), w.eval('DEFAULT_BOOKSHELF_FILTERS'), 'Malformed view preferences recover safely');
   });
+  await check('Book action menus dismiss cleanly and keep keyboard focus separate from reading history', async () => {
+    w.Modal.close(); w.Store.replaceAll(w.buildDefaultState());
+    w.BookCollection.save({ ...values, title: 'Alpha menu sample' });
+    w.BookCollection.save({ ...values, title: 'Beta menu sample' });
+    w.eval("bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS, sort: 'title' }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';");
+    const before = w.Store.exportJSON(), shelf = w.renderBookshelf(), wasHidden = w.frameElement.hidden;
+    w.frameElement.hidden = false; w.document.body.append(shelf);
+    try {
+      const cards = [...shelf.querySelectorAll('.book-card')];
+      const [first, second] = cards.map(card => card.querySelector('[data-book-act="overflow"]'));
+      const menus = cards.map(card => card.querySelector('.item-row__menu'));
+      assert(menus.every(menu => menu.hidden), 'Administrative actions start hidden');
+      first.focus(); first.click();
+      assert(!menus[0].hidden && first.getAttribute('aria-expanded') === 'true', 'Toggle exposes its actions');
+      equal(first.getAttribute('aria-controls'), menus[0].id, 'Toggle identifies its controlled actions');
+      assert(!w.document.querySelector('#modal-overlay').classList.contains('is-open'), 'Overflow does not open reading history');
+      second.click();
+      assert(menus[0].hidden && !menus[1].hidden && first.getAttribute('aria-expanded') === 'false', 'Only one book menu stays open');
+      shelf.querySelector('#bookshelf-search').click();
+      assert(menus[1].hidden && second.getAttribute('aria-expanded') === 'false', 'Outside click dismisses the menu');
+      first.focus(); first.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      const edit = cards[0].querySelector('[data-book-act="edit"]');
+      assert(!menus[0].hidden && w.document.activeElement === edit, 'ArrowDown opens actions and focuses the first action');
+      edit.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      assert(menus[0].hidden && w.document.activeElement === first, 'Escape dismisses and returns focus to the trigger');
+      first.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      shelf.querySelector('#bookshelf-search').focus();
+      await new Promise(resolve => w.setTimeout(resolve, 0));
+      assert(menus[0].hidden, 'Leaving the actions by keyboard dismisses them');
+      first.focus(); first.click(); edit.click();
+      assert(w.document.querySelector('#book-form') && !w.document.querySelector('.book-reading-history'), 'Edit opens only the book editor');
+      assert(menus[0].hidden, 'Launching an administrative action closes the menu');
+      w.document.querySelector('#book-cancel').click();
+      assert(w.document.activeElement === first, 'Cancelling the editor returns focus to the visible action trigger');
+      cards[0].querySelector('[data-book-act="history"]').click();
+      equal(w.document.querySelector('.book-reading-history h4').textContent, 'Alpha menu sample', 'Primary card control opens the selected reading history');
+      w.Modal.close(); equal(w.Store.exportJSON(), before, 'Browsing menus and cancelling the editor do not change data');
+    } finally { w.Modal.close(); shelf.remove(); w.frameElement.hidden = wasHidden; }
+  });
+  await check('Book menu archive needs confirmation and restore retains reading history', async () => {
+    w.Store.replaceAll(w.buildDefaultState());
+    const saved = w.BookCollection.save({ ...values, title: 'Archive menu sample' });
+    w.BookReading.save(saved.id, { startedOn: '2026-01-01', finishedOn: '2026-01-03' });
+    w.eval("bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';");
+    const before = w.Store.exportJSON(), history = JSON.stringify(book().readingHistory), wasHidden = w.frameElement.hidden;
+    let shelf = w.renderBookshelf(); w.frameElement.hidden = false; w.document.body.append(shelf);
+    try {
+      const trigger = shelf.querySelector('[data-book-act="overflow"]');
+      trigger.focus(); trigger.click(); shelf.querySelector('[data-book-act="archive"]').click();
+      assert(w.document.querySelector('#confirm-yes') && !w.document.querySelector('.book-reading-history'), 'Archive opens confirmation without opening history');
+      equal(w.Store.exportJSON(), before, 'Archive has not changed data before confirmation');
+      w.document.querySelector('#confirm-no').click();
+      equal(w.Store.exportJSON(), before, 'Cancelled archive keeps the book and dates');
+      assert(w.document.activeElement === trigger, 'Cancelled archive returns focus to its trigger');
+      trigger.click(); shelf.querySelector('[data-book-act="archive"]').click(); w.document.querySelector('#confirm-yes').click();
+      assert(book().archived, 'Confirmed archive marks the selected book archived');
+      equal(JSON.stringify(book().readingHistory), history, 'Archive keeps reading dates');
+      shelf.remove(); w.eval("bookshelfArchiveFilter = 'archived'");
+      shelf = w.renderBookshelf(); w.document.body.append(shelf);
+      shelf.querySelector('[data-book-act="overflow"]').click(); shelf.querySelector('[data-book-act="archive"]').click();
+      assert(!book().archived && !w.document.querySelector('#modal-overlay').classList.contains('is-open'), 'Restore returns the book directly without opening history');
+      equal(JSON.stringify(book().readingHistory), history, 'Restore retains all readings');
+    } finally { w.Modal.close(); shelf.remove(); w.frameElement.hidden = wasHidden; }
+  });
   await check('Reading summaries count dated finishes, lifetime recorded rereads and archived books across year boundaries', async () => {
     w.Store.replaceAll(w.buildDefaultState());
     const a = w.BookCollection.save({ ...values, title: 'A sample' });
@@ -154,10 +218,16 @@ async function runBooksChecks({ check, assert, equal, device }) {
     w.openReadingSummary();
     const root = w.document.querySelector('#modal-box');
     assert(root.querySelectorAll('.reading-summary-list li').length === 3, 'Browsing filters do not hide summary history');
+    equal(root.querySelector('.reading-summary-hero strong').textContent, '3', 'Primary metric counts finished readings, including rereads');
+    const stats = [...root.querySelectorAll('.reading-summary-stats > div')];
+    const distinct = stats.find(node => node.querySelector('dt')?.textContent === 'Different books');
+    equal(distinct?.querySelector('dd')?.textContent, '2', 'Distinct books stay separate from the finished-reading total');
+    assert(root.querySelector('.reading-summary-help') instanceof w.HTMLDetailsElement && !root.querySelector('.reading-summary-help').open, 'Calculation explanations start collapsed and remain available');
     const mode = root.querySelector('#book-summary-mode'); mode.value = 'range'; mode.dispatchEvent(new w.Event('change'));
     const from = root.querySelector('#book-summary-from'), to = root.querySelector('#book-summary-to');
     from.value = '2026-01-01'; to.value = '2026-01-01'; to.dispatchEvent(new w.Event('change'));
     equal(root.querySelectorAll('.reading-summary-list li').length, 2, 'Custom range filters completions');
+    equal(root.querySelector('.reading-summary-hero strong').textContent, '2', 'Primary metric refreshes for the selected range');
     from.value = '2026-02-01'; from.dispatchEvent(new w.Event('change'));
     assert(!root.querySelector('#book-summary-error').hidden && !root.querySelector('.reading-summary-list'), 'Reversed range shows an error instead of stale totals');
     from.value = '2026-01-01'; from.dispatchEvent(new w.Event('change'));

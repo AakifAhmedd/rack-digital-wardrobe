@@ -54,7 +54,7 @@
     w.document.body.innerHTML = '<div id="modal-overlay"><div id="modal-box"></div></div>';
     for (const [name, source] of sources) {
       const script = w.document.createElement('script');
-      const exports = name === 'data' ? 'Store, buildDefaultState, WearHistory' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : name === 'brand-logos' ? 'BrandLogo' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, wireItemActions, openBackfillModal, openWearHistoryModal, openItemModal, openRetireModal, costPerWear, renderDashboard, itemCard, itemListRow, Modal, openActivityModal, renderActivitiesPanel, renderWardrobe, matchActivity';
+      const exports = name === 'data' ? 'Store, buildDefaultState, WearHistory, WearInsights' : name === 'sync' ? 'Sync, SyncEngine, saveSyncMeta' : name === 'photos' ? 'RackPhotos' : name === 'brand-logos' ? 'BrandLogo' : 'renderOutfitBuilder, renderOutfitHistory, renderOutfitSummary, wireItemActions, openBackfillModal, openWearHistoryModal, openItemModal, openRetireModal, costPerWear, renderDashboard, itemCard, itemListRow, Modal, openActivityModal, renderActivitiesPanel, renderWardrobe, matchActivity, openWardrobeHistoryModal';
       script.textContent = `${source.replace("document.addEventListener('DOMContentLoaded', init);", '')}\nObject.assign(window, { ${exports} });`;
       w.document.body.append(script);
     }
@@ -518,6 +518,7 @@
       equal(b.Store.state.items[0].wearHistory.events, [], 'Old Gist migrates without duplicates');
     });
     await runReviewChecks({ check, assert, equal, device, image });
+    await runMilestoneChecks({ check, assert, equal, device });
     window.testResult = { passed: lines.length, failed: 0 };
     lines.push(`\nAll ${lines.length} checks passed.`);
   } catch (err) {

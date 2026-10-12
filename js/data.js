@@ -322,6 +322,31 @@ const WearHistory = {
 
 /* ---------- persistence ---------- */
 
+// Read-only summaries of recorded clothing events; outfit logs and legacy
+// last-worn summaries cannot supply missing dates. Retired items still count.
+const WearInsights = {
+  forMonth(items, year, month) {
+    const start = new Date(year, month, 1).getTime();
+    const end = new Date(year, month + 1, 1).getTime();
+    const events = [], days = new Set(), counts = new Map();
+    let undatedCount = 0;
+    items.filter(item => WearHistory.isClothing(item)).forEach(item => {
+      undatedCount += item.wearHistory?.undatedCount ?? Math.max(0, Math.trunc(Number(item.wearCount) || 0));
+      (item.wearHistory?.events || []).forEach(event => {
+        if (event.wornAt < start || event.wornAt >= end) return;
+        const date = new Date(event.wornAt);
+        const day = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+        events.push({ item, wornAt: event.wornAt, day });
+        days.add(day);
+        counts.set(item, (counts.get(item) || 0) + 1);
+      });
+    });
+    events.sort((a, b) => b.wornAt - a.wornAt);
+    return { events, days: days.size, uniqueItems: counts.size, undatedCount,
+      topItems: [...counts].map(([item, count]) => ({ item, count })).sort((a, b) => b.count - a.count) };
+  },
+};
+
 const Store = {
   _state: null,
 

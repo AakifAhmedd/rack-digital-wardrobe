@@ -542,7 +542,7 @@ let bookshelfPreference = (() => {
     return value === '1' ? true : value === '0' ? false : null;
   } catch (_) { return null; }
 })();
-function bookshelfEnabled() { return bookshelfPreference ?? Store.state.books.length > 0; }
+function bookshelfEnabled() { return bookshelfPreference ?? true; }
 function setBookshelfEnabled(enabled) {
   bookshelfPreference = !!enabled;
   try { localStorage.setItem(BOOKSHELF_ENABLED_KEY, enabled ? '1' : '0'); } catch (_) { /* view preference only */ }
@@ -556,6 +556,19 @@ function updateCollectionNav() {
     qsa('.nav__link, .bottom-nav__link').forEach(button => button.classList.toggle('is-active', button.dataset.tab === activeTab));
   }
   animateNavLens();
+}
+const PERFUMES_ENABLED_KEY = 'rack.perfumes.enabled';
+let perfumesPreference = (() => {
+  try {
+    const value = localStorage.getItem(PERFUMES_ENABLED_KEY);
+    return value === '1' ? true : value === '0' ? false : null;
+  } catch (_) { return null; }
+})();
+function perfumesEnabled() { return perfumesPreference ?? true; }
+function setPerfumesEnabled(enabled) {
+  perfumesPreference = !!enabled;
+  try { localStorage.setItem(PERFUMES_ENABLED_KEY, enabled ? '1' : '0'); } catch (_) { /* view preference only */ }
+  if (!enabled && wardrobeSegment === 'perfumes') wardrobeSegment = 'clothing';
 }
 const SETTINGS_PANEL_KEY = 'rack.settings.panel';
 const SETTINGS_OPEN_KEY = 'rack.settings.openSections';
@@ -609,11 +622,11 @@ let wardrobeFilters = loadWardrobeFilters();
 /* Wardrobe is split into Clothing and Perfumes; the choice is remembered. */
 const WARDROBE_SEGMENT_KEY = 'rack.wardrobe.segment';
 let wardrobeSegment = (() => {
-  try { return localStorage.getItem(WARDROBE_SEGMENT_KEY) === 'perfumes' ? 'perfumes' : 'clothing'; }
+  try { return localStorage.getItem(WARDROBE_SEGMENT_KEY) === 'perfumes' && perfumesEnabled() ? 'perfumes' : 'clothing'; }
   catch (e) { return 'clothing'; }
 })();
 function setWardrobeSegment(seg) {
-  wardrobeSegment = seg === 'perfumes' ? 'perfumes' : 'clothing';
+  wardrobeSegment = seg === 'perfumes' && perfumesEnabled() ? 'perfumes' : 'clothing';
   try { localStorage.setItem(WARDROBE_SEGMENT_KEY, wardrobeSegment); } catch (e) { /* ignore */ }
 }
 const inWardrobeSegment = i => (i.categoryId === 'cat_perfumes') === (wardrobeSegment === 'perfumes');
@@ -1126,6 +1139,7 @@ function openBookModal(existing = null) {
 
 function renderWardrobe() {
   const wrap = el(`<section class="view-section"></section>`);
+  const showPerfumes = perfumesEnabled();
 
   const segCounts = {
     clothing: activeItems().filter(i => i.categoryId !== 'cat_perfumes').length,
@@ -1133,9 +1147,9 @@ function renderWardrobe() {
   };
   const toolbar = el(`
     <div class="wardrobe-block">
-      <div class="view-toggle segment-toggle" id="segment-toggle">
+      <div class="view-toggle segment-toggle" id="segment-toggle" ${showPerfumes ? '' : 'hidden'}>
         <button type="button" class="view-toggle__btn ${wardrobeSegment === 'clothing' ? 'is-active' : ''}" data-seg="clothing">Clothing (${segCounts.clothing})</button>
-        <button type="button" class="view-toggle__btn ${wardrobeSegment === 'perfumes' ? 'is-active' : ''}" data-seg="perfumes">Perfumes (${segCounts.perfumes})</button>
+        ${showPerfumes ? `<button type="button" class="view-toggle__btn ${wardrobeSegment === 'perfumes' ? 'is-active' : ''}" data-seg="perfumes">Perfumes (${segCounts.perfumes})</button>` : ''}
       </div>
       <div class="toolbar">
         <input type="search" class="search-input" id="wardrobe-search" aria-label="Search wardrobe" placeholder="Search wardrobe…" autocomplete="off" value="${esc(wardrobeFilters.search || '')}">
@@ -1818,23 +1832,25 @@ function openWardrobeHistoryModal(initial = new Date()) {
   let month = new Date(initial.getFullYear(), initial.getMonth(), 1);
   const body = el(`<div class="wear-history">
     <h3 id="wear-month-title" class="wear-month-title" aria-live="polite"></h3>
-    <div class="wear-month-controls">
-      <button type="button" class="btn btn--ghost" id="wear-prev" aria-label="Previous month">←</button>
-      <div class="wear-month-field"><span id="wear-month-label">Month</span>
-        <button type="button" class="btn btn--ghost wear-month-trigger" id="wear-month" aria-expanded="false" aria-controls="wear-month-picker" aria-labelledby="wear-month-label wear-month-value">
-          <span id="wear-month-value"></span>${statIconSvg('calendar')}
-        </button>
-      </div>
-      <button type="button" class="btn btn--ghost" id="wear-next" aria-label="Next month">→</button>
-    </div>
-    <div class="panel wear-month-picker" id="wear-month-picker" hidden>
+    <div class="wear-month-select">
       <div class="wear-month-controls">
-        <button type="button" class="btn btn--ghost" id="wear-year-prev" aria-label="Previous year">←</button>
-        <label class="wear-month-field" for="wear-year">Year<input type="number" id="wear-year" min="1" step="1" inputmode="numeric"></label>
-        <button type="button" class="btn btn--ghost" id="wear-year-next" aria-label="Next year">→</button>
+        <button type="button" class="btn btn--ghost" id="wear-prev" aria-label="Previous month">←</button>
+        <div class="wear-month-field"><span id="wear-month-label">Month</span>
+          <button type="button" class="btn btn--ghost wear-month-trigger" id="wear-month" aria-expanded="false" aria-controls="wear-month-picker" aria-labelledby="wear-month-label wear-month-value">
+            <span id="wear-month-value"></span>${statIconSvg('calendar')}
+          </button>
+        </div>
+        <button type="button" class="btn btn--ghost" id="wear-next" aria-label="Next month">→</button>
       </div>
-      <div class="wear-month-grid" id="wear-month-grid" role="group" aria-label="Choose month"></div>
-      <button type="button" class="btn btn--ghost btn--small" id="wear-this-month">This month</button>
+      <div class="panel wear-month-picker" id="wear-month-picker" hidden>
+        <div class="wear-month-controls">
+          <button type="button" class="btn btn--ghost" id="wear-year-prev" aria-label="Previous year">←</button>
+          <label class="wear-month-field" for="wear-year">Year<input type="number" id="wear-year" min="1" step="1" inputmode="numeric"></label>
+          <button type="button" class="btn btn--ghost" id="wear-year-next" aria-label="Next year">→</button>
+        </div>
+        <div class="wear-month-grid" id="wear-month-grid" role="group" aria-label="Choose month"></div>
+        <button type="button" class="btn btn--ghost btn--small" id="wear-this-month">This month</button>
+      </div>
     </div>
     <div id="wear-month-summary" aria-live="polite"></div>
     <div id="wear-month-events"></div>
@@ -1847,7 +1863,7 @@ function openWardrobeHistoryModal(initial = new Date()) {
   }
   function selectMonth(year, index) {
     month.setFullYear(year, index, 1); month.setHours(0, 0, 0, 0);
-    closePicker(); refresh(); trigger.focus();
+    closePicker(); refresh(); trigger.focus({ preventScroll: true });
   }
   function renderPicker() {
     const now = new Date(), yearInput = qs('#wear-year', body);
@@ -1902,10 +1918,13 @@ function openWardrobeHistoryModal(initial = new Date()) {
     if (!picker.hidden) { closePicker(); return; }
     pickerYear = month.getFullYear(); renderPicker(); picker.hidden = false;
     trigger.setAttribute('aria-expanded', 'true');
-    qs('[aria-pressed="true"]', picker)?.focus();
+    qs('[aria-pressed="true"]', picker)?.focus({ preventScroll: true });
+  });
+  body.addEventListener('click', event => {
+    if (!picker.hidden && !picker.contains(event.target) && !trigger.contains(event.target)) closePicker();
   });
   picker.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closePicker(); trigger.focus(); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closePicker(); trigger.focus({ preventScroll: true }); }
   });
   qs('#wear-year-prev', body).addEventListener('click', () => { pickerYear--; renderPicker(); });
   qs('#wear-year-next', body).addEventListener('click', () => { pickerYear++; renderPicker(); });
@@ -3698,9 +3717,18 @@ function renderGeneralSettings() {
   wrap.appendChild(settingsSection('g:appearance', 'Appearance', () => renderAppearanceSettings()));
   wrap.appendChild(settingsSection('g:collections', 'Collections', () => {
     const panel = el(`<div class="panel">
-      <label class="bookshelf-option"><input type="checkbox" id="bookshelf-enabled" ${bookshelfEnabled() ? 'checked' : ''}> Show Bookshelf on this device</label>
-      <p class="muted">Keep books in a separate collection alongside your wardrobe. Hiding Bookshelf keeps your books saved. Data backups and cloud sync include books.</p>
+      <div class="collection-settings">
+        <div class="collection-option">
+          <label class="bookshelf-option"><input type="checkbox" id="perfumes-enabled" ${perfumesEnabled() ? 'checked' : ''}> Show Perfumes on this device</label>
+          <p class="muted">Hiding Perfumes removes its view from Wardrobe. Perfume records and photos stay saved.</p>
+        </div>
+        <div class="collection-option">
+          <label class="bookshelf-option"><input type="checkbox" id="bookshelf-enabled" ${bookshelfEnabled() ? 'checked' : ''}> Show Bookshelf on this device</label>
+          <p class="muted">Keep books in a separate collection alongside your wardrobe. Hiding Bookshelf keeps your books saved. Data backups and cloud sync include books.</p>
+        </div>
+      </div>
     </div>`);
+    qs('#perfumes-enabled', panel).addEventListener('change', event => { setPerfumesEnabled(event.target.checked); });
     qs('#bookshelf-enabled', panel).addEventListener('change', event => { setBookshelfEnabled(event.target.checked); });
     return panel;
   }));

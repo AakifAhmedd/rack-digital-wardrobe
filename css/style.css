@@ -1290,12 +1290,17 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-month-stats span { color: var(--ink-soft); font-size: .8rem; }
 .wear-month-controls { display: flex; align-items: end; gap: .5rem; }
 .wear-month-title { margin-bottom: 1.25rem; }
+.wear-month-select { position: relative; z-index: 1; }
 .wear-month-field { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: .35rem; font-size: .85rem; font-weight: 500; }
 .wear-month-controls > button { min-height: 44px; flex-shrink: 0; }
 .wear-month-field input { width: 100%; min-width: 0; min-height: 44px; }
 .wear-month-trigger { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; min-height: 44px; text-align: left; }
 .wear-month-trigger svg { flex-shrink: 0; }
-.wear-month-picker { margin: .75rem 0 1rem; padding: 1rem; }
+.wear-month-picker {
+  position: absolute; inset: calc(100% + .5rem) 0 auto; z-index: 20;
+  margin: 0; padding: 1rem; max-height: calc(100vh - 8rem); max-height: calc(100dvh - 8rem);
+  overflow-y: auto; box-shadow: 0 12px 32px rgba(0, 0, 0, .2);
+}
 .wear-month-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; margin: .75rem 0; }
 .wear-month-grid .btn { min-height: 44px; padding: .4rem .25rem; }
 .wear-month-list { list-style: none; padding: 0; }
@@ -1323,7 +1328,9 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .book-genre { font-size: .9rem; margin-bottom: 0; }
 .book-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: auto; padding-top: .5rem; }
 .book-actions button { min-height: 44px; }
-.bookshelf-option { display: flex; align-items: center; gap: .5rem; }
+.collection-settings { display: grid; gap: 1rem; }
+.collection-option .bookshelf-option { display: flex; align-items: center; gap: .5rem; }
+.collection-option p { margin: .35rem 0 0; }
 
 /* Honor reduced motion, including the mobile glass navigation and sync glyph. */
 @media (prefers-reduced-motion: reduce) {

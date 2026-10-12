@@ -158,6 +158,11 @@ const STAT_ICONS = {
 function statIconSvg(key, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
 }
+/* Pencil + solid trash pair used on master rows and cards. */
+function editDeleteIconBtns(name) {
+  return `<button class="btn btn--tiny btn--ghost btn--icon" data-act="edit" aria-label="Edit ${esc(name)}" title="Edit">${statIconSvg('pencil', 17)}</button>
+            <button class="btn btn--tiny btn--danger btn--icon" data-act="delete" aria-label="Delete ${esc(name)}" title="Delete">${statIconSvg('trash', 17)}</button>`;
+}
 
 /* Bottom-nav icons (mobile). 'hanger' is reused from ICONS itself. */
 const NAV_ICONS = {
@@ -2517,8 +2522,7 @@ function renderCategoriesPanel() {
           <strong>${esc(cat.name)}</strong>
           <span class="muted">${itemCount} item${itemCount === 1 ? '' : 's'}</span>
           <div class="master-card__actions">
-            <button class="btn btn--tiny btn--ghost" data-act="edit">Edit</button>
-            <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
+            ${editDeleteIconBtns(cat.name)}
           </div>
         </div>
         <div class="sub-list">
@@ -2627,8 +2631,7 @@ function renderTagsPanel() {
         <span class="tag-chip">${esc(t.name)}</span>
         <span class="muted">${esc(cats)}</span>
         <div class="master-card__actions">
-          <button class="btn btn--tiny btn--ghost" data-act="edit">Edit</button>
-          <button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>
+          ${editDeleteIconBtns(t.name)}
         </div>
       </div>`);
     qs('[data-act="edit"]', row).addEventListener('click', () => openTagModal(t));
@@ -3497,7 +3500,7 @@ function renderAppearanceSettings() {
         <p style="color:${theme.text};">${esc(theme.name)}</p>
         <div class="theme-card__actions">
           <button class="btn btn--tiny" data-act="apply" style="${isActive ? `background:${theme.ink};color:${theme.accentInk};border-color:${theme.ink};` : `background:transparent;color:${theme.text};border:1px solid ${theme.accent};`}">${isActive ? 'Active' : 'Apply'}</button>
-          ${theme.custom ? `<button class="btn btn--tiny" data-act="delete" style="background:transparent;color:${theme.thread};border:1px solid ${theme.thread};">Delete</button>` : ''}
+          ${theme.custom ? `<button class="btn btn--tiny btn--icon" data-act="delete" aria-label="Delete ${esc(theme.name)}" title="Delete" style="background:${theme.thread};color:#fff;border:1px solid ${theme.thread};">${statIconSvg('trash', 17)}</button>` : ''}
         </div>
       </div>`);
     qs('[data-act="apply"]', card).addEventListener('click', () => {
@@ -3542,7 +3545,7 @@ function renderAppearanceSettings() {
         <p class="font-card__name">${esc(font.name)}</p>
         <div class="theme-card__actions">
           <button class="btn btn--tiny ${isActive ? 'btn--primary' : 'btn--ghost'}" data-act="apply">${isActive ? 'Active' : 'Apply'}</button>
-          ${font.custom ? '<button class="btn btn--tiny btn--danger-ghost" data-act="delete">Delete</button>' : ''}
+          ${font.custom ? `<button class="btn btn--tiny btn--danger btn--icon" data-act="delete" aria-label="Delete ${esc(font.name)}" title="Delete">${statIconSvg('trash', 17)}</button>` : ''}
         </div>
       </div>`);
     qs('[data-act="apply"]', card).addEventListener('click', () => {

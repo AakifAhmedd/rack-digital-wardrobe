@@ -568,11 +568,12 @@ input[type="date"] {
 .sub-pill button:hover { color: var(--thread); }
 
 .tag-table__row {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem;
+  display: grid; grid-template-columns: 6.4rem minmax(0, 1fr) auto; align-items: center; gap: .6rem;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
   padding: .55rem .9rem;
 }
 .tag-table { display: flex; flex-direction: column; gap: .4rem; }
+.tag-table__row .tag-chip { justify-self: start; max-width: 100%; overflow-wrap: anywhere; }
 
 .chip-grid { display: flex; flex-wrap: wrap; gap: .6rem; }
 .chip-card {

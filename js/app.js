@@ -3268,7 +3268,7 @@ function renderSimpleListPanel(stateKey, label) {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
-    <div class="panel-list__header">
+    <div class="panel-list__header ${stateKey === 'brands' ? 'panel-list__header--brand-actions' : ''}">
       <button class="btn btn--primary btn--small" id="add-simple">+ Add ${label.toLowerCase()}</button>
       ${stateKey === 'brands' ? `<button type="button" class="btn btn--ghost btn--small" id="trim-brand-logos" ${brandLogoTrimBusy || !s.brands.some(brand => brand.logo) ? 'disabled' : ''}>${brandLogoTrimBusy ? 'Trimming logos…' : 'Trim uploaded logos'}</button>` : ''}
     </div>`));

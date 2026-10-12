@@ -539,6 +539,8 @@ input[type="date"] {
 
 .panel-list { display: flex; flex-direction: column; gap: .8rem; }
 .panel-list__header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.panel-list__header--brand-actions { justify-content: flex-end; gap: .5rem; }
+.panel-list__header--brand-actions .btn { margin-left: 0; }
 .master-card { background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 1rem 1.1rem; }
 .master-card__row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .master-card__row strong { font-size: 1.02rem; flex: 1; min-width: 100px; }

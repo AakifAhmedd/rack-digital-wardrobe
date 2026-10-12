@@ -797,6 +797,7 @@ function renderDashboard() {
   const items = activeItems();
   const retired = retiredItems();
   const wrap = el(`<section class="view-section"></section>`);
+  if (allItems.some(WearHistory.isClothing)) wrap.appendChild(renderWearMonthPanel());
 
   if (allItems.length === 0) {
     wrap.appendChild(el(`
@@ -1038,6 +1039,7 @@ function renderWardrobe() {
           <button type="button" class="view-toggle__btn ${wardrobeViewMode === 'list' ? 'is-active' : ''}" data-mode="list">List</button>
         </div>
         <button class="btn btn--primary" id="add-item-btn">+ Add item</button>
+        ${wardrobeSegment === 'clothing' ? '<button type="button" class="btn btn--ghost" id="wardrobe-history-btn">Wear history</button>' : ''}
       </div>
       <div class="filters-backdrop" id="filters-backdrop"></div>
       <div class="item-grid" id="item-grid"></div>
@@ -1139,6 +1141,7 @@ function renderWardrobe() {
   actSel.addEventListener('change', () => { wardrobeFilters.activity = actSel.value; onFilterChanged(); });
   qs('#f-sort', toolbar).addEventListener('change', (e) => { wardrobeFilters.sort = e.target.value; onFilterChanged(); });
   qs('#add-item-btn', toolbar).addEventListener('click', openAddItemModal);
+  qs('#wardrobe-history-btn', toolbar)?.addEventListener('click', () => openWardrobeHistoryModal());
 
   const searchInput = qs('#wardrobe-search', toolbar);
   let searchDebounce = null;
@@ -1635,6 +1638,86 @@ function openWearHistoryModal(item) {
     <p class="muted">Undo last wear removes the most recently logged wear. Outfit logs remain separate.</p>
   </div>`);
   Modal.open('Wear history', body);
+}
+
+function wearMonthLabel(date) {
+  return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+function wearMonthStats(summary) {
+  return `<div class="wear-month-stats">
+    <div><strong>${summary.events.length}</strong><span>Item wears</span></div>
+    <div><strong>${summary.days}</strong><span>Days with wears</span></div>
+    <div><strong>${summary.uniqueItems}</strong><span>Different items</span></div>
+  </div>`;
+}
+function renderWearMonthPanel() {
+  const now = new Date();
+  const summary = WearInsights.forMonth(Store.state.items, now.getFullYear(), now.getMonth());
+  const panel = el(`<div class="panel wear-month-panel">
+    <h3>Clothing · ${esc(wearMonthLabel(now))}</h3>
+    ${wearMonthStats(summary)}
+    <p class="muted">Dated clothing wears, including retired items. Each item in an outfit counts as one wear.</p>
+    <button type="button" class="btn btn--ghost btn--small">Browse wear history</button>
+  </div>`);
+  qs('button', panel).addEventListener('click', () => openWardrobeHistoryModal());
+  return panel;
+}
+function openWardrobeHistoryModal(initial = new Date()) {
+  let month = new Date(initial.getFullYear(), initial.getMonth(), 1);
+  const body = el(`<div class="wear-history">
+    <div class="wear-month-controls">
+      <button type="button" class="btn btn--ghost" id="wear-prev" aria-label="Previous month">←</button>
+      <label>Month<input type="month" id="wear-month"></label>
+      <button type="button" class="btn btn--ghost" id="wear-next" aria-label="Next month">→</button>
+    </div>
+    <div id="wear-month-summary" aria-live="polite"></div>
+    <div id="wear-month-events"></div>
+    <button type="button" class="btn btn--ghost" id="wear-show-more" hidden>Show more wears</button>
+  </div>`);
+  let summary, shown;
+  function showEvents() {
+    const host = qs('#wear-month-events', body);
+    host.innerHTML = '';
+    if (!summary.events.length) {
+      host.appendChild(el('<p class="muted">No dated clothing wears in this month. Log a wear or use Log past on an item.</p>'));
+    }
+    let lastDay, list;
+    summary.events.slice(0, shown).forEach(event => {
+      if (event.day !== lastDay) {
+        host.appendChild(el(`<h4><time datetime="${todayDateStr(event.wornAt)}">${esc(fmtDate(event.wornAt))}</time></h4>`));
+        list = el('<ul class="wear-month-list"></ul>'); host.appendChild(list);
+        lastDay = event.day;
+      }
+      const row = el(`<li><button type="button" class="btn btn--ghost btn--small">${esc(itemTitle(event.item))}</button>${event.item.status === 'retired' ? '<span class="tag-chip tag-chip--muted">Retired</span>' : ''}</li>`);
+      qs('button', row).addEventListener('click', () => openWearHistoryModal(event.item));
+      list.appendChild(row);
+    });
+    qs('#wear-show-more', body).hidden = shown >= summary.events.length;
+  }
+  function refresh() {
+    const current = new Date();
+    const currentMonth = new Date(current.getFullYear(), current.getMonth(), 1);
+    const input = qs('#wear-month', body);
+    input.value = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+    input.max = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    qs('#wear-next', body).disabled = month >= currentMonth;
+    summary = WearInsights.forMonth(Store.state.items, month.getFullYear(), month.getMonth());
+    qs('#wear-month-summary', body).innerHTML = `<h3>${esc(wearMonthLabel(month))}</h3>${wearMonthStats(summary)}
+      <p class="muted">Each clothing item counts once per recorded wear. Includes retired items; excludes perfumes and deleted items.</p>
+      ${summary.undatedCount ? `<p class="muted">${summary.undatedCount} undated wears across your wardrobe are excluded from monthly totals.</p>` : ''}
+      ${summary.topItems.length ? `<h4>Most worn this month</h4><ul class="wear-month-list">${summary.topItems.slice(0, 5).map(({ item, count }) => `<li><span>${esc(itemTitle(item))}</span><span class="tag-chip">${count}×</span></li>`).join('')}</ul>` : ''}`;
+    shown = 50; showEvents();
+  }
+  qs('#wear-prev', body).addEventListener('click', () => { month.setMonth(month.getMonth() - 1); refresh(); });
+  qs('#wear-next', body).addEventListener('click', () => { month.setMonth(month.getMonth() + 1); refresh(); });
+  qs('#wear-month', body).addEventListener('change', e => {
+    if (!e.target.validity.valid || !/^\d{4}-\d{2}$/.test(e.target.value)) { refresh(); return; }
+    const [year, value] = e.target.value.split('-').map(Number);
+    month = new Date(year, value - 1, 1); refresh();
+  });
+  qs('#wear-show-more', body).addEventListener('click', () => { shown += 50; showEvents(); });
+  refresh();
+  Modal.open('Wardrobe wear history', body);
 }
 
 function openRetireModal(item) {

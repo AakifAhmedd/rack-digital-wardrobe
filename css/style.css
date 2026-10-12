@@ -1284,6 +1284,17 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-history__list { padding-left: 1.4rem; }
 .wear-history__list li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
 
+.wear-month-panel { margin-bottom: 1rem; }
+.wear-month-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
+.wear-month-stats strong { display: block; font: 1.6rem var(--font-display); }
+.wear-month-stats span { color: var(--ink-soft); font-size: .8rem; }
+.wear-month-controls { display: flex; align-items: end; gap: .5rem; }
+.wear-month-controls label { flex: 1; min-width: 0; }
+.wear-month-controls input { width: 100%; min-width: 0; }
+.wear-month-list { list-style: none; padding: 0; }
+.wear-month-list li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem 0; border-bottom: 1px solid var(--line); }
+.wear-month-list li > :first-child { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+
 /* Honor reduced motion, including the mobile glass navigation and sync glyph. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

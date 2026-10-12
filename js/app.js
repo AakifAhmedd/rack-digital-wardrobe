@@ -1090,11 +1090,13 @@ function renderBookshelf() {
         ${book.genre ? `<p class="book-genre">${esc(book.genre)}</p>` : ''}
         <p><span class="tag-chip ${book.readingStatus === 'finished' ? 'tag-chip--good' : ''}">${esc(BOOK_READING_STATUSES[book.readingStatus])}</span>${book.archived ? ' <span class="tag-chip tag-chip--muted">Archived</span>' : ''}</p>
         <div class="book-actions">
+          <button type="button" class="btn btn--small btn--ghost" data-book-act="history" aria-label="Reading history for ${esc(book.title)}">Reading history</button>
           <button type="button" class="btn btn--small btn--ghost" data-book-act="edit" aria-label="Edit ${esc(book.title)}">Edit</button>
           <button type="button" class="btn btn--small btn--ghost" data-book-act="archive" aria-label="${book.archived ? 'Restore' : 'Archive'} ${esc(book.title)}">${book.archived ? 'Restore' : 'Archive'}</button>
         </div>
       </article>`);
       qs('[data-book-act="edit"]', card).addEventListener('click', () => openBookModal(book));
+      qs('[data-book-act="history"]', card).addEventListener('click', () => openBookReadingHistory(book.id));
       qs('[data-book-act="archive"]', card).addEventListener('click', () => {
         const action = () => {
           try { BookCollection.archive(book.id, !book.archived); render(); toast(book.archived ? 'Book restored to bookshelf' : 'Book archived'); }
@@ -1119,6 +1121,7 @@ function openBookModal(existing = null) {
     </div>
     <label>Genre<input type="text" name="genre" value="${esc(book.genre)}" placeholder="e.g. History, mystery" autocomplete="off"></label>
     <label>Reading status<select name="readingStatus">${bookOptions(BOOK_READING_STATUSES, book.readingStatus)}</select></label>
+    <p class="muted">Use Reading history to record start and finish dates. Changing this status keeps recorded dates.</p>
     ${existing?.archived ? '<p class="muted">This book is archived. Editing keeps it archived.</p>' : ''}
     <div class="form-actions"><button type="button" class="btn btn--ghost" id="book-cancel">Cancel</button><button type="submit" class="btn btn--primary">${existing ? 'Save book' : 'Add book'}</button></div>
   </form>`);
@@ -1135,6 +1138,65 @@ function openBookModal(existing = null) {
     } catch (err) { saving = false; toast(err.message, 'warn'); }
   });
   Modal.open(existing ? 'Edit book' : 'Add book', body, { onMount: () => body.elements.title.focus() });
+}
+
+function fmtReadingDate(value) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function openBookReadingHistory(bookId) {
+  const book = Store.state.books.find(row => row.id === bookId);
+  if (!book) { Modal.close(); toast('This book is no longer available.', 'warn'); return; }
+  const entries = [...(book.readingHistory || [])].sort((a, b) => (b.finishedOn || b.startedOn).localeCompare(a.finishedOn || a.startedOn));
+  const body = el(`<div class="book-reading-history">
+    <h4>${esc(book.title)}</h4>
+    <p class="muted">Record each reading, including rereads. Start dates can be left blank when only a finish date is known.</p>
+    <button type="button" class="btn btn--primary" id="book-log-reading">+ Log reading</button>
+    <ul class="book-reading-list"></ul>
+    ${!entries.length ? '<p class="muted">No dated reading history yet. Your reading status has been kept.</p>' : ''}
+  </div>`);
+  qs('#book-log-reading', body).addEventListener('click', () => openBookReadingModal(bookId));
+  entries.forEach(entry => {
+    const row = el(`<li>
+      <div><p>${entry.startedOn ? `Started <time datetime="${esc(entry.startedOn)}">${esc(fmtReadingDate(entry.startedOn))}</time>` : 'Start date not recorded'}</p>
+      <p>${entry.finishedOn ? `Finished <time datetime="${esc(entry.finishedOn)}">${esc(fmtReadingDate(entry.finishedOn))}</time>` : 'In progress'}</p></div>
+      <div class="book-actions">
+        ${!entry.finishedOn ? '<button type="button" class="btn btn--small btn--primary" data-reading-act="finish">Finish reading</button>' : ''}
+        <button type="button" class="btn btn--small btn--ghost" data-reading-act="edit">Edit dates</button>
+        <button type="button" class="btn btn--small btn--danger-ghost" data-reading-act="remove">Remove</button>
+      </div>
+    </li>`);
+    qs('[data-reading-act="finish"]', row)?.addEventListener('click', () => openBookReadingModal(bookId, entry, true));
+    qs('[data-reading-act="edit"]', row).addEventListener('click', () => openBookReadingModal(bookId, entry));
+    qs('[data-reading-act="remove"]', row).addEventListener('click', () => {
+      Modal.confirm('Remove these reading dates? The book and its reading status are kept.', () => {
+        try { BookReading.remove(bookId, entry.id); render(); toast('Reading entry removed'); }
+        catch (err) { toast(err.message, 'warn'); }
+      }, { danger: true, title: 'Remove reading entry', yesLabel: 'Remove' });
+    });
+    qs('.book-reading-list', body).appendChild(row);
+  });
+  Modal.open('Reading history', body);
+}
+function openBookReadingModal(bookId, existing = null, finishNow = false) {
+  const book = Store.state.books.find(row => row.id === bookId);
+  if (!book) { Modal.close(); toast('This book is no longer available.', 'warn'); return; }
+  const body = el(`<form class="form" id="book-reading-form">
+    <p>${esc(book.title)}</p>
+    <label>Started on <span class="muted">Optional if unknown</span><input type="date" name="startedOn" max="${ReadingDates.today()}" value="${esc(existing?.startedOn || (existing ? '' : ReadingDates.today()))}"></label>
+    <label>Finished on <span class="muted">Leave blank for a reading in progress</span><input type="date" name="finishedOn" max="${ReadingDates.today()}" value="${esc(finishNow ? ReadingDates.today() : existing?.finishedOn || '')}"></label>
+    <div class="form-actions"><button type="button" class="btn btn--ghost" id="reading-cancel">Cancel</button><button type="submit" class="btn btn--primary">Save dates</button></div>
+  </form>`);
+  qs('#reading-cancel', body).addEventListener('click', () => openBookReadingHistory(bookId));
+  let saving = false;
+  body.addEventListener('submit', event => {
+    event.preventDefault(); if (saving) return;
+    saving = true;
+    try {
+      BookReading.save(bookId, Object.fromEntries(new FormData(body)), existing?.id);
+      render(); openBookReadingHistory(bookId); toast('Reading dates saved');
+    } catch (err) { saving = false; toast(err.message, 'warn'); }
+  });
+  Modal.open(existing ? 'Edit reading dates' : 'Log reading', body, { onMount: () => body.elements[finishNow ? 'finishedOn' : 'startedOn'].focus() });
 }
 
 function renderWardrobe() {

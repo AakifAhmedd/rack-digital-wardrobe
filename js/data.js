@@ -351,6 +351,59 @@ const WearInsights = {
 const BOOK_TYPES = { fiction: 'Fiction', 'non-fiction': 'Non-fiction' };
 const BOOK_FORMATS = { paperback: 'Paperback', hardcover: 'Hardcover', ebook: 'E-book', audiobook: 'Audiobook', other: 'Other' };
 const BOOK_READING_STATUSES = { 'to-read': 'To read', reading: 'Reading', finished: 'Finished', paused: 'Paused' };
+const ReadingDates = {
+  today() {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+  valid(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000')) return false;
+    const date = new Date(`${value}T12:00:00`);
+    return Number.isFinite(date.getTime()) && date.getFullYear() === Number(value.slice(0, 4))
+      && date.getMonth() + 1 === Number(value.slice(5, 7)) && date.getDate() === Number(value.slice(8));
+  },
+};
+const BookReading = {
+  validate(history) {
+    if (!Array.isArray(history)) throw new Error('Invalid reading history');
+    const ids = new Set(); let open = 0;
+    for (const entry of history) {
+      if (!entry || typeof entry.id !== 'string' || !entry.id || ids.has(entry.id)
+          || (!entry.startedOn && !entry.finishedOn)
+          || (entry.startedOn !== null && !ReadingDates.valid(entry.startedOn))
+          || (entry.finishedOn !== null && !ReadingDates.valid(entry.finishedOn))
+          || (entry.startedOn && entry.finishedOn && entry.finishedOn < entry.startedOn)) {
+        throw new Error('Invalid reading history');
+      }
+      ids.add(entry.id); if (!entry.finishedOn) open++;
+    }
+    if (open > 1) throw new Error('Finish or update the existing reading before starting another.');
+  },
+  save(bookId, values, entryId = null) {
+    const book = Store.state.books.find(row => row.id === bookId);
+    if (!book) throw new Error('This book is no longer available.');
+    const history = book.readingHistory || [];
+    if (entryId && !history.some(entry => entry.id === entryId)) throw new Error('This reading entry is no longer available.');
+    const entry = { id: entryId || uid('read'), startedOn: values.startedOn || null, finishedOn: values.finishedOn || null };
+    if (!entry.startedOn && !entry.finishedOn) throw new Error('Enter a start date or a finish date.');
+    if ([entry.startedOn, entry.finishedOn].some(date => date && (!ReadingDates.valid(date) || date > ReadingDates.today()))) {
+      throw new Error('Use a valid date on or before today.');
+    }
+    if (entry.startedOn && entry.finishedOn && entry.finishedOn < entry.startedOn) throw new Error('Finish date cannot be before start date.');
+    const next = entryId ? history.map(row => row.id === entryId ? entry : row) : [...history, entry];
+    this.validate(next);
+    const readingStatus = next.some(row => !row.finishedOn) ? (book.readingStatus === 'paused' ? 'paused' : 'reading') : 'finished';
+    BookCollection._commit(Store.state.books.map(row => row.id === bookId ? { ...row, readingHistory: next, readingStatus, updatedAt: Date.now() } : row));
+    return entry;
+  },
+  remove(bookId, entryId) {
+    const book = Store.state.books.find(row => row.id === bookId);
+    if (!book || !book.readingHistory?.some(entry => entry.id === entryId)) throw new Error('This reading entry is no longer available.');
+    // Removing a date record does not invent a replacement status or date.
+    BookCollection._commit(Store.state.books.map(row => row.id === bookId ? { ...row,
+      readingHistory: row.readingHistory.filter(entry => entry.id !== entryId), updatedAt: Date.now() } : row));
+  },
+};
 const BookCollection = {
   validate(book) {
     if (!book || typeof book !== 'object' || typeof book.id !== 'string' || !book.id
@@ -361,6 +414,7 @@ const BookCollection = {
         || !['createdAt', 'updatedAt'].every(key => Number.isFinite(book[key]) && book[key] > 0)) {
       throw new Error('Invalid book record');
     }
+    if (book.readingHistory !== undefined) BookReading.validate(book.readingHistory);
   },
   save(values, id = null) {
     const existing = id ? Store.state.books.find(book => book.id === id) : null;
@@ -370,6 +424,7 @@ const BookCollection = {
       title: String(values.title || '').trim(), author: String(values.author || '').trim(),
       genre: String(values.genre || '').trim(), type: values.type, format: values.format,
       readingStatus: values.readingStatus, archived: existing?.archived || false,
+      readingHistory: existing?.readingHistory || [],
       createdAt: existing?.createdAt || now, updatedAt: now };
     this.validate(book);
     this._commit(existing ? Store.state.books.map(row => row.id === id ? book : row) : [...Store.state.books, book]);
@@ -420,6 +475,7 @@ const Store = {
     if (!s.brands) s.brands = [];
     if (!s.items) s.items = [];
     if (s.books === undefined) s.books = [];
+    s.books.forEach(book => { if (book.readingHistory === undefined) book.readingHistory = []; });
     if (!Array.isArray(s.outfitHistory)) s.outfitHistory = [];
     if (!s.meta) s.meta = { createdAt: Date.now(), updatedAt: Date.now() };
     if (!s.appearance) s.appearance = { themeId: 'theme_canvas', fontId: 'font_fraunces_plex', styleId: 'classic', popoverBlur: 'frosted', customThemes: [], customFonts: [] };

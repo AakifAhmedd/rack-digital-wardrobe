@@ -20,7 +20,7 @@ async function runMilestoneChecks({ check, assert, equal, device }) {
     equal(w.Store.exportJSON(), before, 'Browsing never changes wardrobe data or sync timestamp');
     w.openWardrobeHistoryModal(new Date(2026, 8, 1));
     const body = w.document.querySelector('#modal-box');
-    assert(body.textContent.includes('8 undated wears') && body.textContent.includes('Retired'), 'UI explains legacy and retired history');
+    assert(!body.textContent.includes('undated wears') && body.textContent.includes('Retired'), 'Undated notice removed while retired history remains');
     body.querySelector('#wear-prev').click();
     assert(body.textContent.includes('No dated clothing wears'), 'Older empty month is clear');
     body.querySelector('#wear-next').click();
@@ -28,6 +28,36 @@ async function runMilestoneChecks({ check, assert, equal, device }) {
     w.Modal.close();
     w.WearHistory.undo(a);
     equal(w.WearInsights.forMonth(w.Store.state.items, 2026, 9).events.length, 0, 'Undo updates insights without duplicating outfit logs');
+  });
+  await check('The themed month picker selects older dates, blocks future dates and closes before the modal', async () => {
+    w.frameElement.hidden = false;
+    const before = w.Store.exportJSON(), now = new Date();
+    w.openWardrobeHistoryModal(now);
+    const body = w.document.querySelector('#modal-box'), trigger = body.querySelector('#wear-month');
+    assert(!body.querySelector('input[type="month"]'), 'Browser-native month popup replaced');
+    assert(body.textContent.includes('Each clothing item counts once per recorded wear.'), 'Primary explanation retained');
+    trigger.click();
+    const picker = body.querySelector('#wear-month-picker');
+    assert(!picker.hidden && trigger.getAttribute('aria-expanded') === 'true', 'Picker expands accessibly');
+    const months = [...picker.querySelectorAll('[data-month]')];
+    assert(months.length === 12 && months[now.getMonth()].getAttribute('aria-pressed') === 'true', 'Current month selected');
+    assert(months.every((button, index) => button.disabled === (index > now.getMonth())), 'Future months unavailable');
+    picker.querySelector('#wear-year-prev').click();
+    equal(Number(picker.querySelector('#wear-year').value), now.getFullYear() - 1, 'Earlier year can be browsed');
+    picker.querySelector('[data-month="0"]').click();
+    assert(picker.hidden && body.querySelector('#wear-month-title').textContent.includes(String(now.getFullYear() - 1)), 'Month selection updates heading and closes picker');
+    trigger.click();
+    const year = picker.querySelector('#wear-year');
+    year.value = String(now.getFullYear() + 1); year.dispatchEvent(new w.Event('change'));
+    equal(Number(year.value), now.getFullYear() - 1, 'Invalid future year rejected');
+    picker.querySelector('#wear-this-month').click();
+    assert(body.querySelector('#wear-next').disabled, 'This month returns to the latest allowed month');
+    trigger.click();
+    picker.querySelector('[aria-pressed="true"]').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert(picker.hidden && w.document.querySelector('#modal-overlay').classList.contains('is-open'), 'First Escape closes just the picker');
+    assert(w.document.activeElement === trigger, 'Closing picker returns focus to its trigger');
+    equal(w.Store.exportJSON(), before, 'Month selection leaves all stored wear data unchanged');
+    w.Modal.close(); w.frameElement.hidden = true;
   });
   await check('Damaged backups cannot replace saved data, while optional legacy fields still migrate', async () => {
     w.Store.save();

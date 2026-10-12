@@ -1817,16 +1817,53 @@ function renderWearMonthPanel() {
 function openWardrobeHistoryModal(initial = new Date()) {
   let month = new Date(initial.getFullYear(), initial.getMonth(), 1);
   const body = el(`<div class="wear-history">
+    <h3 id="wear-month-title" class="wear-month-title" aria-live="polite"></h3>
     <div class="wear-month-controls">
       <button type="button" class="btn btn--ghost" id="wear-prev" aria-label="Previous month">←</button>
-      <label>Month<input type="month" id="wear-month"></label>
+      <div class="wear-month-field"><span id="wear-month-label">Month</span>
+        <button type="button" class="btn btn--ghost wear-month-trigger" id="wear-month" aria-expanded="false" aria-controls="wear-month-picker" aria-labelledby="wear-month-label wear-month-value">
+          <span id="wear-month-value"></span>${statIconSvg('calendar')}
+        </button>
+      </div>
       <button type="button" class="btn btn--ghost" id="wear-next" aria-label="Next month">→</button>
+    </div>
+    <div class="panel wear-month-picker" id="wear-month-picker" hidden>
+      <div class="wear-month-controls">
+        <button type="button" class="btn btn--ghost" id="wear-year-prev" aria-label="Previous year">←</button>
+        <label class="wear-month-field" for="wear-year">Year<input type="number" id="wear-year" min="1" step="1" inputmode="numeric"></label>
+        <button type="button" class="btn btn--ghost" id="wear-year-next" aria-label="Next year">→</button>
+      </div>
+      <div class="wear-month-grid" id="wear-month-grid" role="group" aria-label="Choose month"></div>
+      <button type="button" class="btn btn--ghost btn--small" id="wear-this-month">This month</button>
     </div>
     <div id="wear-month-summary" aria-live="polite"></div>
     <div id="wear-month-events"></div>
     <button type="button" class="btn btn--ghost" id="wear-show-more" hidden>Show more wears</button>
   </div>`);
-  let summary, shown;
+  let summary, shown, pickerYear = month.getFullYear();
+  const picker = qs('#wear-month-picker', body), trigger = qs('#wear-month', body);
+  function closePicker() {
+    picker.hidden = true; trigger.setAttribute('aria-expanded', 'false');
+  }
+  function selectMonth(year, index) {
+    month.setFullYear(year, index, 1); month.setHours(0, 0, 0, 0);
+    closePicker(); refresh(); trigger.focus();
+  }
+  function renderPicker() {
+    const now = new Date(), yearInput = qs('#wear-year', body);
+    yearInput.value = pickerYear; yearInput.max = now.getFullYear();
+    qs('#wear-year-prev', body).disabled = pickerYear <= 1;
+    qs('#wear-year-next', body).disabled = pickerYear >= now.getFullYear();
+    const grid = qs('#wear-month-grid', body); grid.innerHTML = '';
+    for (let index = 0; index < 12; index++) {
+      const selected = pickerYear === month.getFullYear() && index === month.getMonth();
+      const future = pickerYear === now.getFullYear() && index > now.getMonth();
+      const date = new Date(2000, index, 1); date.setFullYear(pickerYear);
+      const button = el(`<button type="button" class="btn ${selected ? 'btn--primary' : 'btn--ghost'}" data-month="${index}" aria-pressed="${selected}" aria-label="${esc(wearMonthLabel(date))}" ${future ? 'disabled' : ''}>${esc(date.toLocaleDateString(undefined, { month: 'short' }))}</button>`);
+      button.addEventListener('click', () => selectMonth(pickerYear, index));
+      grid.appendChild(button);
+    }
+  }
   function showEvents() {
     const host = qs('#wear-month-events', body);
     host.innerHTML = '';
@@ -1849,23 +1886,36 @@ function openWardrobeHistoryModal(initial = new Date()) {
   function refresh() {
     const current = new Date();
     const currentMonth = new Date(current.getFullYear(), current.getMonth(), 1);
-    const input = qs('#wear-month', body);
-    input.value = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
-    input.max = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    qs('#wear-month-title', body).textContent = wearMonthLabel(month);
+    qs('#wear-month-value', body).textContent = wearMonthLabel(month);
+    qs('#wear-prev', body).disabled = month.getFullYear() <= 1 && month.getMonth() === 0;
     qs('#wear-next', body).disabled = month >= currentMonth;
     summary = WearInsights.forMonth(Store.state.items, month.getFullYear(), month.getMonth());
-    qs('#wear-month-summary', body).innerHTML = `<h3>${esc(wearMonthLabel(month))}</h3>${wearMonthStats(summary)}
+    qs('#wear-month-summary', body).innerHTML = `${wearMonthStats(summary)}
       <p class="muted">Each clothing item counts once per recorded wear. Includes retired items; excludes perfumes and deleted items.</p>
-      ${summary.undatedCount ? `<p class="muted">${summary.undatedCount} undated wears across your wardrobe are excluded from monthly totals.</p>` : ''}
       ${summary.topItems.length ? `<h4>Most worn this month</h4><ul class="wear-month-list">${summary.topItems.slice(0, 5).map(({ item, count }) => `<li><span>${esc(itemTitle(item))}</span><span class="tag-chip">${count}×</span></li>`).join('')}</ul>` : ''}`;
     shown = 50; showEvents();
   }
-  qs('#wear-prev', body).addEventListener('click', () => { month.setMonth(month.getMonth() - 1); refresh(); });
-  qs('#wear-next', body).addEventListener('click', () => { month.setMonth(month.getMonth() + 1); refresh(); });
-  qs('#wear-month', body).addEventListener('change', e => {
-    if (!e.target.validity.valid || !/^\d{4}-\d{2}$/.test(e.target.value)) { refresh(); return; }
-    const [year, value] = e.target.value.split('-').map(Number);
-    month = new Date(year, value - 1, 1); refresh();
+  qs('#wear-prev', body).addEventListener('click', () => { closePicker(); month.setMonth(month.getMonth() - 1); refresh(); });
+  qs('#wear-next', body).addEventListener('click', () => { closePicker(); month.setMonth(month.getMonth() + 1); refresh(); });
+  trigger.addEventListener('click', () => {
+    if (!picker.hidden) { closePicker(); return; }
+    pickerYear = month.getFullYear(); renderPicker(); picker.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    qs('[aria-pressed="true"]', picker)?.focus();
+  });
+  picker.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closePicker(); trigger.focus(); }
+  });
+  qs('#wear-year-prev', body).addEventListener('click', () => { pickerYear--; renderPicker(); });
+  qs('#wear-year-next', body).addEventListener('click', () => { pickerYear++; renderPicker(); });
+  qs('#wear-year', body).addEventListener('change', event => {
+    const value = Number(event.target.value);
+    if (event.target.validity.valid && Number.isSafeInteger(value) && value >= 1 && value <= new Date().getFullYear()) pickerYear = value;
+    renderPicker();
+  });
+  qs('#wear-this-month', body).addEventListener('click', () => {
+    const now = new Date(); selectMonth(now.getFullYear(), now.getMonth());
   });
   qs('#wear-show-more', body).addEventListener('click', () => { shown += 50; showEvents(); });
   refresh();

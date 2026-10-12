@@ -7,6 +7,7 @@ RACK catalogs your clothes, shoes, accessories, and perfumes, tracks how often y
 ## What it does
 
 - **Categories & subcategories** — Pants, Shirts, Shoes, Outerwear, Accessories, and Perfumes ship with sensible subcategories out of the box. Add your own at any time; user-created categories work identically to the built-in ones.
+- **Search and filters** — search item descriptions, categories and tags. Filters open in a keyboard-accessible dialog with labelled controls, Escape-to-close and focus return. Empty results offer Clear filters and Add item; retired-item links clear stale filters.
 - **Brands & colors** as first-class masters — an item's identity is built from Brand + Color + Subcategory (e.g. "Nike Black Running Shoes"), with everything else (model name, etc.) treated as secondary description.
 - **Perfumes as a first-class category** — fragrance houses are brands, market tier (Designer / Niche / Middle Eastern / Local) is the subcategory, and scent family + concentration (EDT/EDP/Parfum/EDC/Oil) are tags scoped to Perfumes — so they match in activities exactly like clothing tags do. A perfume's card reads as *Brand + Perfume name* (e.g. "Tom Ford Black Orchid"), colour is optional, and the dashboard reports a separate **fragrance collection value** alongside your wardrobe value.
 - **Duplicate bottle detection** — adding a perfume whose brand + name is already on your rack asks "Add another bottle" and carries over brand, name, scent family and concentration, instead of quietly creating a near-identical item. Retired bottles count too, so finishing a scent you love and buying it again months later is recognised as a re-buy and the new bottle inherits the old one's details.
@@ -68,7 +69,7 @@ Large Gist files are retrieved from their revision-specific raw URL when [GitHub
 
 If saved wardrobe data cannot be read or migrated, RACK keeps the original data
 and offers a recovery download instead of replacing it with an empty wardrobe.
-A failed JSON/cloud replacement keeps the previous in-memory wardrobe. Download
+A structurally invalid JSON backup or cloud snapshot is rejected before replacement; duplicate IDs, malformed wear histories and invalid collection arrays cannot replace saved data. Older optional fields still migrate normally. A failed JSON/cloud replacement keeps the previous in-memory wardrobe. Download
 a recovery copy before choosing to reset a damaged local wardrobe.
 
 Manual photo Restore validates the same raster image formats and snapshot version

@@ -1295,6 +1295,16 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-month-list li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem 0; border-bottom: 1px solid var(--line); }
 .wear-month-list li > :first-child { min-width: 0; overflow-wrap: anywhere; text-align: left; }
 
+.wardrobe-empty { grid-column: 1 / -1; }
+.wardrobe-filter-field { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; min-width: 0; }
+.modal__body .toolbar__filters.is-open {
+  display: flex; position: static; flex-direction: column; margin: 0; padding: 0;
+  border: 0; border-radius: 0; box-shadow: none; background: transparent; max-height: none; overflow: visible;
+}
+.modal__body .toolbar__filters select { width: 100%; }
+.modal__body .filters-done-btn { display: block; }
+.wardrobe-filter-field[hidden] { display: none; }
+
 /* Honor reduced motion, including the mobile glass navigation and sync glyph. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

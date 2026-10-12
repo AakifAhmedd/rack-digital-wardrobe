@@ -450,6 +450,31 @@ const BookCollection = {
   },
 };
 
+const BookInsights = {
+  forRange(books, from, to) {
+    if (!ReadingDates.valid(from) || !ReadingDates.valid(to) || from > to) throw new Error('Enter valid dates with the start on or before the end.');
+    const completions = [], uniqueBooks = new Set(), monthly = new Map(), spans = [];
+    let started = 0, rereads = 0;
+    books.forEach(book => {
+      const history = book.readingHistory || [];
+      started += history.filter(entry => entry.startedOn && entry.startedOn >= from && entry.startedOn <= to).length;
+      const finished = history.filter(entry => entry.finishedOn).sort((a, b) => a.finishedOn.localeCompare(b.finishedOn));
+      finished.forEach((entry, index) => {
+        if (entry.finishedOn < from || entry.finishedOn > to) return;
+        const reread = index > 0;
+        completions.push({ book, entry, reread }); uniqueBooks.add(book.id);
+        if (reread) rereads++;
+        const month = entry.finishedOn.slice(0, 7); monthly.set(month, (monthly.get(month) || 0) + 1);
+        if (entry.startedOn) spans.push((Date.parse(`${entry.finishedOn}T00:00:00Z`) - Date.parse(`${entry.startedOn}T00:00:00Z`)) / 86400000 + 1);
+      });
+    });
+    completions.sort((a, b) => b.entry.finishedOn.localeCompare(a.entry.finishedOn) || a.book.title.localeCompare(b.book.title));
+    return { completions, uniqueBooks: uniqueBooks.size, started, rereads,
+      averageDays: spans.length ? spans.reduce((sum, value) => sum + value, 0) / spans.length : null,
+      spanCount: spans.length, monthly: [...monthly].sort((a, b) => a[0].localeCompare(b[0])) };
+  },
+};
+
 const Store = {
   _state: null,
 

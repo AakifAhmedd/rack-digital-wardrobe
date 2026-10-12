@@ -1337,6 +1337,21 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .bookshelf-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: .75rem; margin: .5rem 0 .75rem; }
 .bookshelf-filter-grid label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; font-size: .85rem; }
 .bookshelf-filter-grid select { width: 100%; min-width: 0; }
+.reading-summary { overflow-wrap: anywhere; }
+.reading-summary-controls { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1.25rem; }
+.reading-summary-controls label { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 0; font-size: .85rem; }
+.reading-summary-controls input, .reading-summary-controls select { width: 100%; min-width: 0; }
+.reading-summary-controls .form-row { flex: 1 1 100%; }
+.reading-summary-stats { grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); }
+.reading-summary-error { color: var(--thread); }
+.reading-summary-months { border-collapse: collapse; width: 100%; margin: 1rem 0; text-align: left; }
+.reading-summary-months caption { text-align: left; font-family: var(--font-display); font-weight: 600; margin-bottom: .4rem; }
+.reading-summary-months th, .reading-summary-months td { padding: .4rem; border-bottom: 1px solid var(--line); }
+.reading-summary-months td { text-align: right; }
+.reading-summary-list { list-style: none; padding: 0; }
+.reading-summary-list li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; padding: .5rem 0; border-bottom: 1px solid var(--line); }
+.reading-summary-list button { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.reading-summary-list span { color: var(--ink-soft); font-size: .85rem; }
 .collection-settings { display: grid; gap: 1rem; }
 .collection-option .bookshelf-option { display: flex; align-items: center; gap: .5rem; }
 .collection-option p { margin: .35rem 0 0; }

@@ -3225,7 +3225,7 @@ function openBrandLogoModal(brand) {
   const body = el(`
     <div class="brand-logo-editor">
       <div class="brand-logo-editor__preview">${BrandLogo.html(brand, 56) || '<span class="muted">No logo</span>'}</div>
-      <p class="muted">${brand.logo ? 'Custom logo.' : (BrandLogo.hasBuiltin(brand) ? 'Built-in logo.' : 'No logo set.')} It is shrunk to a small icon.</p>
+      <p class="muted">${brand.logo ? 'Custom logo.' : (BrandLogo.hasBuiltin(brand) ? 'Built-in logo.' : 'No logo set.')} Uploaded logos are cropped to remove transparent borders, then shrunk to a small icon.</p>
       <input type="file" accept="image/*" id="brand-logo-file" hidden>
       <div class="confirm__actions">
         ${brand.logo ? '<button type="button" class="btn btn--ghost" id="brand-logo-remove">Remove</button>' : ''}
@@ -3234,24 +3234,43 @@ function openBrandLogoModal(brand) {
     </div>`);
   const fileInput = qs('#brand-logo-file', body);
   qs('#brand-logo-pick', body).addEventListener('click', () => fileInput.click());
+  let processing = false;
   fileInput.addEventListener('change', async () => {
     const f = fileInput.files && fileInput.files[0];
-    if (!f) return;
-    try { brand.logo = await BrandLogo.fromFile(f); }
-    catch (e) { alert('Could not read that image.'); return; }
-    Store.save(); Modal.close(); render();
+    fileInput.value = '';
+    if (!f || processing) return;
+    processing = true;
+    qsa('button', body).forEach(button => { button.disabled = true; });
+    const original = brand.logo;
+    try {
+      const logo = await BrandLogo.fromFile(f);
+      const current = Store.state.brands.find(row => row.id === brand.id);
+      if (!body.isConnected) return;
+      if (!current || current.logo !== original) { toast('This brand changed while the logo was processing. Please try again.', 'warn'); return; }
+      const updatedAt = Store.state.meta.updatedAt;
+      current.logo = logo;
+      try { Store.save(); }
+      catch (err) {
+        if (original === undefined) delete current.logo; else current.logo = original;
+        Store.state.meta.updatedAt = updatedAt; throw err;
+      }
+      Modal.close(); render(); toast('Logo saved');
+    } catch (err) { toast('Could not save that logo. Your previous logo was kept.', 'warn'); }
+    finally { processing = false; qsa('button', body).forEach(button => { button.disabled = false; }); }
   });
   const rm = qs('#brand-logo-remove', body);
   if (rm) rm.addEventListener('click', () => { delete brand.logo; Store.save(); Modal.close(); render(); });
   Modal.open(`${brand.name} logo`, body);
 }
 
+let brandLogoTrimBusy = false;
 function renderSimpleListPanel(stateKey, label) {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
   box.appendChild(el(`
     <div class="panel-list__header">
       <button class="btn btn--primary btn--small" id="add-simple">+ Add ${label.toLowerCase()}</button>
+      ${stateKey === 'brands' ? `<button type="button" class="btn btn--ghost btn--small" id="trim-brand-logos" ${brandLogoTrimBusy || !s.brands.some(brand => brand.logo) ? 'disabled' : ''}>${brandLogoTrimBusy ? 'Trimming logos…' : 'Trim uploaded logos'}</button>` : ''}
     </div>`));
   qs('#add-simple', box).addEventListener('click', () => {
     Modal.prompt(`New ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', required: true }], ({ name }) => {
@@ -3259,6 +3278,16 @@ function renderSimpleListPanel(stateKey, label) {
       s[stateKey].push({ id: uid(stateKey.slice(0, 3)), name, custom: true });
       Store.save(); render();
     }, { okLabel: 'Add' });
+  });
+  qs('#trim-brand-logos', box)?.addEventListener('click', async () => {
+    if (brandLogoTrimBusy) return;
+    brandLogoTrimBusy = true;
+    const button = qs('#trim-brand-logos', box); button.disabled = true; button.textContent = 'Trimming logos…';
+    try {
+      const { trimmed, skipped } = await BrandLogo.trimExisting();
+      toast(`${trimmed} logo${trimmed === 1 ? '' : 's'} cropped${skipped ? `; ${skipped} kept unchanged (unreadable or edited during processing)` : ''}`);
+    } catch (_) { toast('Could not save cropped logos. Your existing logos were kept.', 'warn'); }
+    finally { brandLogoTrimBusy = false; render(); }
   });
   const grid = el(`<div class="chip-grid"></div>`);
   s[stateKey].forEach(x => {

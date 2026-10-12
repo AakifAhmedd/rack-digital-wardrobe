@@ -127,4 +127,44 @@ async function runBooksChecks({ check, assert, equal, device }) {
     w.localStorage.setItem('rack.bookshelf.filters', JSON.stringify({ ownership: 'wrong', sort: {}, type: null }));
     equal(w.eval('loadBookshelfFilters()'), w.eval('DEFAULT_BOOKSHELF_FILTERS'), 'Malformed view preferences recover safely');
   });
+  await check('Reading summaries count dated finishes, lifetime recorded rereads and archived books across year boundaries', async () => {
+    w.Store.replaceAll(w.buildDefaultState());
+    const a = w.BookCollection.save({ ...values, title: 'A sample' });
+    const b = w.BookCollection.save({ ...values, title: 'B sample' });
+    const legacy = w.BookCollection.save({ ...values, title: 'Undated finished book', readingStatus: 'finished' });
+    w.BookReading.save(a.id, { startedOn: '2024-12-31', finishedOn: '2025-01-01' });
+    w.BookReading.save(a.id, { startedOn: '2025-12-31', finishedOn: '2026-01-01' });
+    w.BookReading.save(a.id, { startedOn: '2026-01-04', finishedOn: '2026-01-04' });
+    w.BookReading.save(b.id, { startedOn: '', finishedOn: '2026-01-01' });
+    w.BookReading.save(b.id, { startedOn: '2026-02-01', finishedOn: '' });
+    w.BookCollection.archive(a.id, true);
+    const before = w.Store.exportJSON();
+    const summary = w.BookInsights.forRange(w.Store.state.books, '2026-01-01', '2026-12-31');
+    equal([summary.completions.length, summary.uniqueBooks, summary.rereads, summary.started, summary.averageDays, summary.spanCount], [3, 2, 2, 2, 1.5, 2], 'Year counts and inclusive calendar spans are correct');
+    equal(summary.monthly, [['2026-01', 3]], 'Monthly totals use finish dates');
+    equal(w.BookInsights.forRange(w.Store.state.books, '2026-01-01', '2026-01-01').completions.length, 2, 'Date range includes both endpoints');
+    assert(!summary.completions.some(row => row.book.id === legacy.id), 'Undated finish statuses do not invent completions');
+    const empty = w.BookInsights.forRange(w.Store.state.books, '2023-01-01', '2023-12-31');
+    equal([empty.completions.length, empty.averageDays], [0, null], 'Empty years have no invented average');
+    equal(w.Store.exportJSON(), before, 'Summaries cannot mutate history or sync state');
+  });
+  await check('Reading summary controls support year, range, invalid dates and history links without changing data', async () => {
+    const before = w.Store.exportJSON();
+    w.eval("bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS, ownership: 'wishlist' }; readingSummaryView = { mode: 'year', year: 2026, from: '', to: '' };");
+    w.openReadingSummary();
+    const root = w.document.querySelector('#modal-box');
+    assert(root.querySelectorAll('.reading-summary-list li').length === 3, 'Browsing filters do not hide summary history');
+    const mode = root.querySelector('#book-summary-mode'); mode.value = 'range'; mode.dispatchEvent(new w.Event('change'));
+    const from = root.querySelector('#book-summary-from'), to = root.querySelector('#book-summary-to');
+    from.value = '2026-01-01'; to.value = '2026-01-01'; to.dispatchEvent(new w.Event('change'));
+    equal(root.querySelectorAll('.reading-summary-list li').length, 2, 'Custom range filters completions');
+    from.value = '2026-02-01'; from.dispatchEvent(new w.Event('change'));
+    assert(!root.querySelector('#book-summary-error').hidden && !root.querySelector('.reading-summary-list'), 'Reversed range shows an error instead of stale totals');
+    from.value = '2026-01-01'; from.dispatchEvent(new w.Event('change'));
+    root.querySelector('.reading-summary-list button').click();
+    assert(w.document.querySelector('.book-reading-history'), 'Completion opens the related book history');
+    w.Modal.close(); equal(w.Store.exportJSON(), before, 'Summary UI does not edit data');
+    let failed = false; try { w.BookInsights.forRange(w.Store.state.books, '2026-02-30', '2026-03-01'); } catch (_) { failed = true; }
+    assert(failed, 'Invalid calendar ranges rejected');
+  });
 }

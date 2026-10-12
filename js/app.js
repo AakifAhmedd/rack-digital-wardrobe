@@ -1072,7 +1072,7 @@ function renderBookshelf() {
   const archived = Store.state.books.length - active;
   const wrap = el(`<section class="view-section bookshelf">
     <div class="bookshelf-heading"><div><h2>Bookshelf</h2><p class="muted">${active} book${active === 1 ? '' : 's'} · ${archived} archived</p></div>
-      <button type="button" class="btn btn--primary" id="add-book-btn">+ Add book</button>
+      <div class="book-actions"><button type="button" class="btn btn--ghost" id="book-summaries-btn">Reading summaries</button><button type="button" class="btn btn--primary" id="add-book-btn">+ Add book</button></div>
     </div>
     <div class="toolbar bookshelf-toolbar">
       <input type="search" id="bookshelf-search" class="search-input" aria-label="Search books" placeholder="Search title, author or genre…" value="${esc(bookshelfSearch)}">
@@ -1096,6 +1096,7 @@ function renderBookshelf() {
     <div id="bookshelf-results" class="book-grid"></div>
   </section>`);
   qs('#add-book-btn', wrap).addEventListener('click', () => openBookModal());
+  qs('#book-summaries-btn', wrap).addEventListener('click', openReadingSummary);
   const search = qs('#bookshelf-search', wrap), filter = qs('#bookshelf-archive-filter', wrap);
   filter.value = bookshelfArchiveFilter;
   search.addEventListener('input', () => { bookshelfSearch = search.value; refresh(); });
@@ -1262,6 +1263,72 @@ function openBookReadingModal(bookId, existing = null, finishNow = false) {
     } catch (err) { saving = false; toast(err.message, 'warn'); }
   });
   Modal.open(existing ? 'Edit reading dates' : 'Log reading', body, { onMount: () => body.elements[finishNow ? 'finishedOn' : 'startedOn'].focus() });
+}
+
+let readingSummaryView = { mode: 'year', year: new Date().getFullYear(), from: '', to: '' };
+function openReadingSummary() {
+  const body = el(`<div class="reading-summary">
+    <div class="reading-summary-controls">
+      <label>Period<select id="book-summary-mode"><option value="year">Year</option><option value="range">Date range</option></select></label>
+      <label id="book-summary-year-field">Year<input type="number" id="book-summary-year" min="1" max="9999" step="1" inputmode="numeric"></label>
+      <div class="form-row" id="book-summary-range-fields" hidden>
+        <label>From<input type="date" id="book-summary-from"></label><label>To<input type="date" id="book-summary-to"></label>
+      </div>
+    </div>
+    <p id="book-summary-error" class="reading-summary-error" role="alert" hidden></p>
+    <div id="book-summary-results" aria-live="polite"></div>
+  </div>`);
+  const mode = qs('#book-summary-mode', body), year = qs('#book-summary-year', body);
+  const from = qs('#book-summary-from', body), to = qs('#book-summary-to', body);
+  mode.value = readingSummaryView.mode; year.value = readingSummaryView.year;
+  from.value = readingSummaryView.from || `${new Date().getFullYear()}-01-01`;
+  to.value = readingSummaryView.to || ReadingDates.today();
+  function refresh() {
+    qs('#book-summary-year-field', body).hidden = mode.value !== 'year';
+    qs('#book-summary-range-fields', body).hidden = mode.value !== 'range';
+    const results = qs('#book-summary-results', body), error = qs('#book-summary-error', body);
+    results.innerHTML = ''; error.hidden = true;
+    let summary, first, last;
+    try {
+      if (mode.value === 'year') {
+        const value = Number(year.value);
+        if (!year.validity.valid || !Number.isSafeInteger(value) || value < 1 || value > 9999) throw new Error('Enter a valid year.');
+        const prefix = String(value).padStart(4, '0'); first = `${prefix}-01-01`; last = `${prefix}-12-31`;
+      } else { first = from.value; last = to.value; }
+      summary = BookInsights.forRange(Store.state.books, first, last);
+    } catch (err) { error.textContent = err.message; error.hidden = false; return; }
+    readingSummaryView = { mode: mode.value, year: Number(year.value), from: from.value, to: to.value };
+    const period = mode.value === 'year' ? String(Number(year.value)) : `${fmtReadingDate(first)} – ${fmtReadingDate(last)}`;
+    results.innerHTML = `<h3>${esc(period)}</h3>
+      <div class="wear-month-stats reading-summary-stats">
+        <div><strong>${summary.completions.length}</strong><span>Finished readings</span></div>
+        <div><strong>${summary.uniqueBooks}</strong><span>Different books</span></div>
+        <div><strong>${summary.rereads}</strong><span>Recorded rereads</span></div>
+        <div><strong>${summary.started}</strong><span>Started readings</span></div>
+        <div><strong>${summary.averageDays === null ? '—' : summary.averageDays.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong><span>Avg. calendar span (days)</span></div>
+      </div>
+      <p class="muted">Finished readings use recorded finish dates across all books, including archived books. Browsing filters do not change this summary.</p>
+      <p class="muted">Rereads follow a book’s first recorded finish. Calendar span includes start and finish days${summary.spanCount ? `, based on ${summary.spanCount} dated pair${summary.spanCount === 1 ? '' : 's'}` : ''}. Finish-only records count as completed readings.</p>
+      ${summary.monthly.length ? `<table class="reading-summary-months"><caption>Finished by month</caption><thead><tr><th scope="col">Month</th><th scope="col">Readings</th></tr></thead><tbody>${summary.monthly.map(([month, count]) => `<tr><th scope="row">${esc(new Date(`${month}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</th><td>${count}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">No recorded finish dates in this period. Add dates from a book’s Reading history.</p>'}
+      <div id="book-summary-completions"></div>
+      <button type="button" class="btn btn--ghost" id="book-summary-more" hidden>Show more readings</button>`;
+    let shown = 50;
+    function showCompletions() {
+      const host = qs('#book-summary-completions', results); host.innerHTML = '';
+      if (summary.completions.length) host.appendChild(el('<h4>Finished readings</h4>'));
+      const list = el('<ul class="reading-summary-list"></ul>'); host.appendChild(list);
+      summary.completions.slice(0, shown).forEach(({ book, entry, reread }) => {
+        const row = el(`<li><button type="button" class="btn btn--ghost btn--small">${esc(book.title)}</button>
+          <span><time datetime="${esc(entry.finishedOn)}">${esc(fmtReadingDate(entry.finishedOn))}</time>${reread ? ' · Reread' : ''}${book.archived ? ' · Archived' : ''}</span></li>`);
+        qs('button', row).addEventListener('click', () => openBookReadingHistory(book.id)); list.appendChild(row);
+      });
+      qs('#book-summary-more', results).hidden = shown >= summary.completions.length;
+    }
+    qs('#book-summary-more', results).addEventListener('click', () => { shown += 50; showCompletions(); });
+    showCompletions();
+  }
+  [mode, year, from, to].forEach(input => input.addEventListener('change', refresh));
+  refresh(); Modal.open('Reading summaries', body);
 }
 
 function renderWardrobe() {

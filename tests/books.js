@@ -127,6 +127,48 @@ async function runBooksChecks({ check, assert, equal, device }) {
     w.localStorage.setItem('rack.bookshelf.filters', JSON.stringify({ ownership: 'wrong', sort: {}, type: null }));
     equal(w.eval('loadBookshelfFilters()'), w.eval('DEFAULT_BOOKSHELF_FILTERS'), 'Malformed view preferences recover safely');
   });
+  await check('Bookshelf filters reuse the modal pattern, keep selections on Done and fully reset without changing books', async () => {
+    w.Modal.close(); w.Store.replaceAll(w.buildDefaultState());
+    w.BookCollection.save({ ...values, title: 'Owned filter sample', ownership: 'owned' });
+    w.BookCollection.save({ ...values, title: 'Borrowed filter sample', ownership: 'borrowed' });
+    w.eval("bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';");
+    const before = w.Store.exportJSON(), shelf = w.renderBookshelf(), wasHidden = w.frameElement.hidden;
+    w.frameElement.hidden = false; w.document.body.append(shelf);
+    try {
+      const toggle = shelf.querySelector('#bookshelf-filters-toggle'), panel = shelf.querySelector('#bookshelf-filters');
+      const badge = shelf.querySelector('#bookshelf-filter-count');
+      const change = (selector, value) => { const select = panel.querySelector(selector); select.value = value; select.dispatchEvent(new w.Event('change')); };
+      toggle.focus(); toggle.click();
+      equal(w.document.querySelector('#modal-title').textContent, 'Bookshelf filters', 'Filters open the shared dialog');
+      assert(w.document.querySelector('.modal__body').contains(panel) && shelf.inert, 'Panel moves into the dialog and isolates background controls');
+      equal(toggle.getAttribute('aria-expanded'), 'true', 'Toggle announces the open dialog');
+      change('[data-book-filter="ownership"]', 'borrowed'); change('#bookshelf-sort', 'title');
+      equal(shelf.querySelectorAll('.book-card').length, 1, 'Selection applies while controls are outside the shelf');
+      equal(badge.textContent, '1', 'Badge counts active filters, excluding sort');
+      assert(!badge.hidden, 'Active badge is visible');
+      panel.querySelector('#bookshelf-filters-done').click();
+      assert(shelf.contains(panel) && !panel.classList.contains('is-open') && !shelf.inert, 'Done restores the hidden panel and background');
+      assert(w.document.activeElement === toggle, 'Done returns focus to Filters');
+      equal(w.eval('loadBookshelfFilters().ownership'), 'borrowed', 'Done keeps saved filter preferences');
+      toggle.click();
+      w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      assert(shelf.contains(panel) && w.document.activeElement === toggle, 'Escape restores the panel and opener');
+      toggle.click(); w.document.querySelector('#modal-overlay').click();
+      assert(shelf.contains(panel) && toggle.getAttribute('aria-expanded') === 'false', 'Backdrop close restores the panel');
+      const search = shelf.querySelector('#bookshelf-search'); search.value = 'Borrowed'; search.dispatchEvent(new w.Event('input'));
+      equal(badge.textContent, '2', 'Search is counted like Wardrobe search');
+      toggle.click(); change('#bookshelf-archive-filter', 'all');
+      equal(badge.textContent, '3', 'Collection restriction is included');
+      panel.querySelector('#bookshelf-reset-filters').click();
+      assert(shelf.contains(panel) && !w.document.querySelector('#modal-overlay').classList.contains('is-open'), 'Reset closes the dialog');
+      equal(shelf.querySelectorAll('.book-card').length, 2, 'Reset restores all active books');
+      equal(search.value, '', 'Reset clears search');
+      equal(panel.querySelector('#bookshelf-sort').value, 'recent', 'Reset restores default sorting');
+      assert(badge.hidden && panel.querySelector('#bookshelf-reset-filters').disabled, 'Default filters have no badge and cannot be reset again');
+      assert(w.document.activeElement === toggle, 'Reset returns focus to Filters');
+      equal(w.Store.exportJSON(), before, 'Filter interaction never changes book data or sync timestamps');
+    } finally { w.Modal.close(); shelf.remove(); w.frameElement.hidden = wasHidden; }
+  });
   await check('Book action menus dismiss cleanly and keep keyboard focus separate from reading history', async () => {
     w.Modal.close(); w.Store.replaceAll(w.buildDefaultState());
     w.BookCollection.save({ ...values, title: 'Alpha menu sample' });

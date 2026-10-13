@@ -1101,47 +1101,66 @@ function renderBookshelf() {
     </div>
     <div class="toolbar bookshelf-toolbar">
       <input type="search" id="bookshelf-search" class="search-input" aria-label="Search books" placeholder="Search title, author or genre…" value="${esc(bookshelfSearch)}">
-      <label>Collection<select id="bookshelf-archive-filter">
-        <option value="active">Bookshelf</option><option value="archived">Archived</option><option value="all">All books</option>
-      </select></label>
-      <label>Sort<select id="bookshelf-sort">${bookOptions(BOOK_SORTS, bookshelfFilters.sort)}</select></label>
-    </div>
-    <details class="advanced-details bookshelf-filter-details">
-      <summary>Filters <span id="bookshelf-filter-count"></span></summary>
-      <div class="bookshelf-filter-grid">
-        <label>Reading status<select data-book-filter="readingStatus"><option value="">All statuses</option>${bookOptions(BOOK_READING_STATUSES, bookshelfFilters.readingStatus)}</select></label>
-        <label>Type<select data-book-filter="type"><option value="">All types</option>${bookOptions(BOOK_TYPES, bookshelfFilters.type)}</select></label>
-        <label>Format<select data-book-filter="format"><option value="">All formats</option>${bookOptions(BOOK_FORMATS, bookshelfFilters.format)}</select></label>
-        <label>Ownership<select data-book-filter="ownership"><option value="">All ownership states</option>${bookOptions(BOOK_OWNERSHIP, bookshelfFilters.ownership)}</select></label>
-        <label>Genre<select data-book-filter="genre"><option value="">All genres</option>${bookOptions(Object.fromEntries([...genres].sort((a, b) => a[1].localeCompare(b[1]))), bookshelfFilters.genre)}</select></label>
+      <button type="button" class="btn btn--ghost filters-toggle-btn" id="bookshelf-filters-toggle" aria-expanded="false" aria-controls="bookshelf-filters">
+        Filters<span class="filter-count-badge" id="bookshelf-filter-count" hidden></span>
+      </button>
+      <div class="toolbar__filters" id="bookshelf-filters">
+        <label class="wardrobe-filter-field">Collection<select id="bookshelf-archive-filter">
+          <option value="active">Bookshelf</option><option value="archived">Archived</option><option value="all">All books</option>
+        </select></label>
+        <label class="wardrobe-filter-field">Reading status<select data-book-filter="readingStatus"><option value="">All statuses</option>${bookOptions(BOOK_READING_STATUSES, bookshelfFilters.readingStatus)}</select></label>
+        <label class="wardrobe-filter-field">Type<select data-book-filter="type"><option value="">All types</option>${bookOptions(BOOK_TYPES, bookshelfFilters.type)}</select></label>
+        <label class="wardrobe-filter-field">Format<select data-book-filter="format"><option value="">All formats</option>${bookOptions(BOOK_FORMATS, bookshelfFilters.format)}</select></label>
+        <label class="wardrobe-filter-field">Ownership<select data-book-filter="ownership"><option value="">All ownership states</option>${bookOptions(BOOK_OWNERSHIP, bookshelfFilters.ownership)}</select></label>
+        <label class="wardrobe-filter-field">Genre<select data-book-filter="genre"><option value="">All genres</option>${bookOptions(Object.fromEntries([...genres].sort((a, b) => a[1].localeCompare(b[1]))), bookshelfFilters.genre)}</select></label>
+        <label class="wardrobe-filter-field">Sort<select id="bookshelf-sort">${bookOptions(BOOK_SORTS, bookshelfFilters.sort)}</select></label>
+        <button type="button" class="btn btn--ghost btn--small" id="bookshelf-reset-filters">Reset filters</button>
+        <button type="button" class="btn btn--ghost filters-done-btn" id="bookshelf-filters-done">Done</button>
       </div>
-      <button type="button" class="btn btn--ghost btn--small" id="bookshelf-reset-filters">Reset filters</button>
-    </details>
+    </div>
     <p id="bookshelf-result-count" class="muted" aria-live="polite"></p>
     <div id="bookshelf-results" class="book-grid"></div>
   </section>`);
   qs('#add-book-btn', wrap).addEventListener('click', () => openBookModal());
   qs('#book-summaries-btn', wrap).addEventListener('click', openReadingSummary);
   const search = qs('#bookshelf-search', wrap), filter = qs('#bookshelf-archive-filter', wrap);
+  const toolbar = qs('.bookshelf-toolbar', wrap), filtersPanel = qs('#bookshelf-filters', wrap);
+  const toggle = qs('#bookshelf-filters-toggle', wrap), badge = qs('#bookshelf-filter-count', wrap);
+  const sort = qs('#bookshelf-sort', wrap), reset = qs('#bookshelf-reset-filters', wrap);
+  const filterSelects = qsa('[data-book-filter]', filtersPanel);
+  toggle.addEventListener('click', () => {
+    filtersPanel.classList.add('is-open'); toggle.setAttribute('aria-expanded', 'true');
+    Modal.open('Bookshelf filters', filtersPanel, {
+      onClose: () => {
+        filtersPanel.classList.remove('is-open'); toggle.setAttribute('aria-expanded', 'false');
+        toolbar.appendChild(filtersPanel);
+      },
+    });
+  });
+  qs('#bookshelf-filters-done', filtersPanel).addEventListener('click', () => Modal.close());
   filter.value = bookshelfArchiveFilter;
   search.addEventListener('input', () => { bookshelfSearch = search.value; refresh(); });
   filter.addEventListener('change', () => { bookshelfArchiveFilter = filter.value; refresh(); });
-  qs('#bookshelf-sort', wrap).addEventListener('change', event => { bookshelfFilters.sort = event.target.value; saveBookshelfFilters(); refresh(); });
-  qsa('[data-book-filter]', wrap).forEach(select => select.addEventListener('change', () => {
+  sort.addEventListener('change', event => { bookshelfFilters.sort = event.target.value; saveBookshelfFilters(); refresh(); });
+  filterSelects.forEach(select => select.addEventListener('change', () => {
     bookshelfFilters[select.dataset.bookFilter] = select.value; saveBookshelfFilters(); refresh();
   }));
   function resetFilters() {
+    Modal.close();
     bookshelfFilters = { ...DEFAULT_BOOKSHELF_FILTERS }; bookshelfArchiveFilter = 'active'; bookshelfSearch = '';
-    search.value = ''; filter.value = 'active'; qs('#bookshelf-sort', wrap).value = 'recent';
-    qsa('[data-book-filter]', wrap).forEach(select => { select.value = ''; });
+    search.value = ''; filter.value = 'active'; sort.value = 'recent';
+    filterSelects.forEach(select => { select.value = ''; });
     saveBookshelfFilters(); refresh();
+    toggle.focus();
   }
-  qs('#bookshelf-reset-filters', wrap).addEventListener('click', resetFilters);
+  reset.addEventListener('click', resetFilters);
   function refresh() {
     const query = bookshelfSearch.trim().toLocaleLowerCase();
     const filterCount = ['readingStatus', 'type', 'format', 'ownership', 'genre'].filter(key => bookshelfFilters[key]).length + (bookshelfArchiveFilter !== 'active' ? 1 : 0);
-    qs('#bookshelf-filter-count', wrap).textContent = filterCount ? `(${filterCount})` : '';
-    qs('#bookshelf-reset-filters', wrap).disabled = !filterCount && !query && bookshelfFilters.sort === 'recent';
+    const indicatorCount = filterCount + (query ? 1 : 0);
+    badge.textContent = String(indicatorCount); badge.hidden = indicatorCount === 0;
+    reset.textContent = indicatorCount ? `Reset filters (${indicatorCount})` : 'Reset filters';
+    reset.disabled = !indicatorCount && bookshelfFilters.sort === 'recent';
     const books = Store.state.books.filter(book => {
       if (bookshelfArchiveFilter === 'active' && book.archived) return false;
       if (bookshelfArchiveFilter === 'archived' && !book.archived) return false;

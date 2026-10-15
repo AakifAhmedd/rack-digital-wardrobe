@@ -1,147 +1,36 @@
 # RACK — a digital wardrobe
 
-RACK catalogs your clothes, shoes, accessories, and perfumes, tracks how often you actually wear each one, and works out what each item has really cost you per wear — so you know what's worth buying more of, and what's worth donating.
+RACK is a personal wardrobe and collections tracker. It helps you keep track of what you own, what you wear, and how your collection changes over time.
 
 **Live app:** https://aakifahmedd.github.io/rack-digital-wardrobe/
 
 ## What it does
 
-- **Categories & subcategories** — Pants, Shirts, Shoes, Outerwear, Accessories, and Perfumes ship with sensible subcategories out of the box. Add your own at any time; user-created categories work identically to the built-in ones.
-- **Search and filters** — search item descriptions, categories and tags. Filters open in a keyboard-accessible dialog with labelled controls, Escape-to-close and focus return. Empty results offer Clear filters and Add item; retired-item links clear stale filters.
-- **Brands & colors** as first-class masters — an item's identity is built from Brand + Color + Subcategory (e.g. "Nike Black Running Shoes"), with everything else (model name, etc.) treated as secondary description.
-- **Perfumes as a first-class category** — fragrance houses are brands, market tier (Designer / Niche / Middle Eastern / Local) is the subcategory, and scent family + concentration (EDT/EDP/Parfum/EDC/Oil) are tags scoped to Perfumes — so they match in activities exactly like clothing tags do. A perfume's card reads as *Brand + Perfume name* (e.g. "Tom Ford Black Orchid"), colour is optional, and the dashboard reports a separate **fragrance collection value** alongside your wardrobe value.
-- **Duplicate bottle detection** — adding a perfume whose brand + name is already on your rack asks "Add another bottle" and carries over brand, name, scent family and concentration, instead of quietly creating a near-identical item. Retired bottles count too, so finishing a scent you love and buying it again months later is recognised as a re-buy and the new bottle inherits the old one's details.
-- **Tags scoped to categories** — a tag like *Cargo* only shows up when tagging Pants; *Collared* only shows up for Shirts. You manage the tag list yourself in Settings › Masters.
-- **Activities with a real rule engine** — instead of manually assigning every item to every activity, an activity like "Office Smart Casual" is defined as a set of category/subcategory/tag rules (with always-exclude rules for things like Shorts). Items are matched automatically. Two worked examples from the spec — *Office Smart Casual* and *Badminton* — ship configured out of the box.
-- **Outfit history** — “Wear this outfit” logs the exact selected items and date/time while marking selected clothing items worn. Review newest-first history in Outfit; a previously worn combination shows its last wear in the builder. Removing a log requires confirmation and leaves item wear counts unchanged. Retired items remain labelled; deleted items show their stable ID.
-- **Dated clothing wear history** — quick **+1 Worn**, **Log past**, and **Wear this outfit** retain each clothing wear date. Open an item’s **More actions → Wear history**, including for retired items. Monthly history groups each day’s wears into compact chips and shows a brand logo where one is available. **Undo last wear** removes the most recently logged wear and recalculates the count and latest date; logging an older date never moves last worn backward. Perfumes have no clothing wear controls or cost-per-wear figures.
-- **Monthly clothing insights** — the dashboard summarizes this month's dated item wears, days with wears, and different items. Wardrobe → **Wear history** browses any earlier month and lists its most-worn items and dated wears. Each item in an outfit counts separately; retired items remain included, deleted items and perfumes are excluded. Legacy undated counts never enter monthly totals.
-- **Collections** — Perfumes and Bookshelf are enabled by default. Use **Settings → General → Collections** to hide either on this device; the choice is saved in that browser. Hiding a collection keeps its records saved. The Bookshelf holds books with title, author, fiction/non-fiction, genre, format and reading status; search title/author/genre, archive books and restore them later. Books never enter wardrobe categories, activities, outfits, wear counts or cost-per-wear.
-- **Reading history** — click a book card to open its reading history and log start/finish dates, finish a reading, record rereads, edit dates or remove an entry after confirmation. Cards show plain metadata and a distinct reading-status badge; **More actions** holds Edit and Archive/Restore. Unknown start dates may be left blank. Old reading statuses keep their meaning without invented dates.
-- **Bookshelf management** — mark books Owned, Borrowed or Wishlist; use the same Filters button and dialog pattern as Wardrobe to choose collection, reading status, type, format, ownership, genre and sort order. Filters apply immediately; Done keeps the selection, while Reset clears it and returns to the bookshelf. Sort by title, author, recently added/updated or last finished. Sort/filter preferences stay on this device and do not change synced data. Existing books default to Owned.
-- **Reading summaries** — Bookshelf → **Reading summaries** emphasizes finished readings, with different books, rereads, starts and average calendar span alongside, plus monthly totals and completion lists. Choose a year or custom date range; expand **How these totals are counted** for the details. All recorded books, including archived books, contribute regardless of browsing filters. A reread is a finish after that book's first recorded finish; status-only completions cannot supply dates. Calendar spans use known start/finish pairs and include both endpoint days and pauses.
-- **Baseline book genres** — Fiction includes Fantasy (Epic, Urban, Romantasy), Science Fiction (Space & Tech, Dystopian), Mystery & Thriller (Detective / Police, Psychological Suspense), Romance (Contemporary, Historical), Historical Fiction, Horror and General Fiction. Non-Fiction includes Biography & Memoir, Self-Help & Business, History & Politics, Science & Nature and True Crime. The editor offers genres for the selected type plus a Custom genre option; existing genres are preserved. Subgenres use the existing genre string, such as `Fantasy — Epic`, and parent-genre filters include their subgenres.
-- **Brand logo cropping** — PNG/WebP logo uploads automatically remove fully transparent outer borders before resizing to a small PNG. The shared perfume boundary scanner is reused with tight logo framing, preserving faint visible pixels and internal transparency. Use **Settings → Masters → Brands → Trim uploaded logos** to recrop existing embedded raster logos. The action preserves unreadable logos and newer edits; saved logos continue to travel with ordinary wardrobe data.
-- **Donation prompts** — items with zero wears are surfaced on the dashboard with a nudge toward donating rather than reselling.
-- **Cost per wear** — record what an item cost you; RACK divides by wear count and colour-codes it against your wardrobe average, so you can see which purchases earned their keep.
-- **Perfume photos** — attach a photo to a perfume. On upload, transparent borders are trimmed and the image is centred on a 4:3 transparent frame so the whole bottle shows on the card; a zoom slider in the item form fine-tunes it. Photos live in the browser's IndexedDB (`js/photos.js`), never in `Store.state`, localStorage, `rack-wardrobe.json`, or the ordinary JSON backup. Explicit cloud Push/Pull transfers them in a separate `rack-photos.json` file. Settings → Backup → *Download photos* / *Restore photos* still provides an independent, additive photo backup.
-- **Installable (PWA)** — a web manifest and a network-first service worker (`sw.js`) let you add RACK to your home screen; the cache is only an offline fallback, so updates always win when online. Home-screen shortcuts open Outfit and Wardrobe directly.
-- **Finished vs. donated** — perfumes retire as *Finished* rather than *Donated*, since a used-up bottle isn't a donation. Bottles are collected, so "used up" and "empty" are the same event and only one option is offered.
+- Catalog clothes, shoes, accessories, and perfumes with custom categories, brands, colors, tags, and notes.
+- Log clothing wears and outfits, review dated wear history, and see cost per wear and monthly wardrobe insights.
+- Build activities from item rules and use them to find outfit options.
+- Keep a separate Bookshelf for books, reading history, and summaries. Perfumes and Bookshelf can be hidden on a device without deleting their records.
+- Add photos and brand logos. Photos stay in that browser unless included in an explicit sync or photo backup.
+- Install RACK as a progressive web app and use it offline after the app has loaded.
 
-## Architecture & why
+## Getting started
 
-This is a plain HTML/CSS/JS app — no build step, no framework — which keeps it easy to host on GitHub Pages and easy to modify.
+Open the live app, add any brands or categories you need under **Settings → Masters**, then add items from **Wardrobe**. Clothing wears can be logged from an item or while recording an outfit. Use **Settings → Backup** to download or restore your data.
 
-**Storage.** The spec calls for access "from multiple devices, whenever and wherever." A static site can't run its own database, and standing up a hosted backend was out of scope for "very basic and practical." So RACK uses:
-- **`localStorage`** as the fast, always-available local store (works offline, zero setup).
-- **Optional sync via a private GitHub Gist**, using a personal access token *you* generate and paste into Settings. It's stored only in that browser's `localStorage` and calls the GitHub API directly from the client — RACK's own source code never contains or receives your token. Add the same token + Gist ID on a second device and it pulls the same data. This is genuinely cross-device, adds no server for anyone to run, and costs nothing.
-- **Export/Import JSON** is always available as a manual backup path, independent of the Gist sync.
+RACK starts with an empty collection. Your data is stored in the browser, so it stays under your control and is available on that device.
 
-**Outfit logs.** `Store.state.outfitHistory` is an additive array of `{ id, wornAt, itemIds }`: a generated log ID, wear timestamp in milliseconds, and stable item IDs only. Older local data, backups and Gists default to an empty history on load/restore. JSON backup/restore and wardrobe Gist Push/Pull include the array naturally; photos remain separate. History reflects current item names, not historical name snapshots. Update all devices before logging outfits: older app versions do not understand this field and can omit it when replacing data.
+### Optional device sync
 
-**Individual wear history.** Each clothing item adds `wearHistory: { events: [{ id, wornAt }], undatedCount, legacyLastWornAt }`. Events have a generated stable ID and a timestamp in milliseconds; quick/outfit wears use the action time, while the existing past-wear form stores the chosen local calendar date at noon and history displays calendar dates. Events retain recording order for Undo and display newest wear dates first. `wearCount` equals event count plus undated wears; `lastWornAt` is the latest dated event or preserved legacy timestamp while undated wears remain.
+RACK can sync between your devices through a private GitHub Gist. Set it up in **Settings** with a GitHub token that has only the `gist` permission. Push and Pull transfer wardrobe data and the photo snapshot; automatic background sync transfers wardrobe data only. Your token is kept in that browser and is not part of the app or repository. JSON data backups and photo backups are also available.
 
-Existing wardrobes and old JSON backups/Gists migrate automatically and idempotently: old counts become undated wears, the old last-worn timestamp is retained as a legacy summary, and no individual dates are invented or reconstructed from outfit logs. Earlier wears cannot be dated retrospectively from a total count alone. Editing “Times worn” adds/removes undated wears; it cannot reduce the total below the number of dated events. Removing the final undated wear clears its legacy last-worn summary. Retiring/reactivating or changing an item’s description keeps its history. Existing stored perfume counts/dates are retained for compatibility but excluded from clothing wear tracking, history and cost-per-wear; any retained clothing history on an item reclassified as a perfume stays inactive.
+## Development
 
-Wear history travels in ordinary JSON backup/restore and `rack-wardrobe.json`, with the same whole-wardrobe conflict choice as outfit history. Removing an outfit log leaves individual wear events unchanged; individual Undo leaves the outfit log unchanged. Update RACK on all devices before recording wears, because older app versions do not maintain the new history when changing counts. A normal wardrobe JSON download is an optional safety backup; no separate history backup is needed. Photo backup/storage remains separate.
-
-**Bookshelf data.** `Store.state.books` is a separate array of book records with stable IDs, title, author, type, genre, format, reading status, archive flag, ownership (`owned`, `borrowed`, `wishlist`) and creation/update timestamps. Old wardrobes, backups and Gists default to an empty array without changing clothing or perfume records. Books travel in ordinary JSON backups and `rack-wardrobe.json`, using the existing whole-data conflict choice. Each book adds `readingHistory: [{ id, startedOn, finishedOn }]`, using local calendar dates (`YYYY-MM-DD`) or `null` for unknown dates; old books default to an empty history. A reading needs at least one date, finish cannot precede start, and only one unfinished reading is allowed per book. Logging dates updates the reading status; editing the general status keeps dates, and removing a history entry keeps the status. Summaries count each dated finish as a reading and keep distinct-book counts separate. A finish-only record contributes to completion totals but not average calendar span. Images remain separate from this scope. The visibility preference is device-local and defaults to on, including when no books have been added yet. Update every device before adding books: older versions do not maintain the Bookshelf collection. Before rolling back to a release without Bookshelf support, download a data backup containing your books.
-
-**Master data vs. item data.** Categories, subcategories, tags, brands, colors, and activity rules are stored separately from individual items, so editing a master (renaming a tag, adjusting an activity's rules) doesn't require touching every item that uses it.
-
-**No pre-populated items.** Only the master lists ship with defaults. Your wardrobe starts empty, as it should.
-
-## Using it
-
-1. **Settings › Masters** → check the default categories/tags/activities, add your own brands and any categories you're missing.
-2. **Wardrobe** → *Add item*, pick category → subcategory → brand → color → tags, optionally record cost.
-3. Tap **+1 Worn** for clothing worn now, or **Log past** for a previous date. Use **More actions → Wear history** to review dates and **Undo last wear** to correct the most recently logged wear.
-4. **Dashboard** shows what's earning its keep and what's been sitting unused.
-5. **Settings › General** → appearance, optional cloud sync, JSON backup/restore (plus a separate photo backup), currency symbol.
-
-## Setting up cloud sync (optional)
-
-1. On GitHub, go to Settings → Developer settings → Personal access tokens → generate one with the **`gist`** scope only.
-2. In RACK's Settings tab, paste it into "GitHub personal access token" and click **Push to cloud** — this creates a private Gist containing both `rack-wardrobe.json` and `rack-photos.json` and remembers its ID.
-3. On another device, open RACK, paste the *same* token and Gist ID into Settings, and click **Pull from cloud**.
-
-Explicit **Push** uploads the current wardrobe and the complete photo snapshot together in one Gist create/update request. Explicit **Pull** reads both files from the same Gist revision, uses the existing wardrobe replacement path, then replaces IndexedDB photos in one transaction. Only photos for items in the pulled wardrobe are restored. Photos absent from the snapshot are deleted locally, including when the snapshot is empty; items without photos remain valid. The latest successful Push/Pull snapshot wins, with the existing wardrobe conflict choice when both devices have wardrobe changes. Individual wear history and outfit history are part of that whole-wardrobe snapshot: Pull replaces local history, Push replaces remote history, and logging/undoing wears, editing counts or removing an outfit log are local wardrobe edits. Conflicting histories are not merged. The conflict dialog explains this choice. There is no per-photo merge or conflict dialog.
-
-Background checks on app open/resume continue to auto-pull **wardrobe data only**. They never export, restore, or delete photos. Failed manual actions require another explicit Push/Pull; they do not retry photo transfers on a timer.
-
-Older Gists containing only `rack-wardrobe.json` still pull successfully, keep local photos, and show a warning that no remote photos were available. Unreadable or unsupported photo snapshots also keep local photos and report a warning while allowing the wardrobe pull. Photo payloads must use `format: "rack-photos"`, `version: 1`, and an object of item IDs to base64 WebP/PNG/JPEG data URLs. Entries for unknown items or invalid images are skipped and reported; skipped entries are absent from the applied snapshot. Storage failures roll back the entire photo transaction, leaving previous photos intact; the pulled wardrobe remains usable. Wardrobe and photo storage use different browser storage systems, so they cannot share one atomic transaction.
-
-Large Gist files are retrieved from their revision-specific raw URL when [GitHub truncates API content](https://docs.github.com/en/rest/gists/gists#truncation). Raw file requests never include the token. Your token never leaves your browser except to call `api.github.com` directly, and it's never committed to this repository.
-
-## Reliability and recovery
-
-If saved wardrobe data cannot be read or migrated, RACK keeps the original data
-and offers a recovery download instead of replacing it with an empty wardrobe.
-A structurally invalid JSON backup or cloud snapshot is rejected before replacement; duplicate IDs, malformed wear histories and invalid collection arrays cannot replace saved data. Older optional fields still migrate normally. A failed JSON/cloud replacement keeps the previous in-memory wardrobe. Download
-a recovery copy before choosing to reset a damaged local wardrobe.
-
-Manual photo Restore validates the same raster image formats and snapshot version
-as cloud Pull, but remains additive. It commits valid entries in one transaction;
-a storage failure rolls them all back. Item photo saves and deletes report success
-only after the IndexedDB transaction commits.
-
-The activity editor preserves advanced rules when opening or renaming an activity.
-When its conditions cannot be represented by the simple category builder, use the
-existing advanced editor. This does not change rule matching or the synced format.
-
-## Versioning
-
-The live version shows in the header next to the RACK wordmark. It's read at load time from the plain-text `VERSION` file at the repo root (one line, no build step) and rendered as `v<number>`.
-
-Every commit bumps `VERSION`. The full rules (what to bump, the step-by-step procedure, and the separate `?v=` cache-busting token) are in [`VERSIONING.md`](VERSIONING.md), written so that any developer or AI tool can follow them.
-
-`.nojekyll` is present so GitHub Pages serves the site as-is (no Jekyll processing).
-
-## Local development
-
-No build step. Serve the folder with any static server and open `index.html`:
+RACK is a static HTML, CSS, and JavaScript app with no build step or package dependencies. To serve it locally:
 
 ```bash
 python3 -m http.server 8000
-# visit http://localhost:8000
 ```
 
-Open `http://localhost:8000/tests/sync.html` for the zero-dependency browser
-regression checks. These use a mocked Gist API, isolated localStorage and
-temporary IndexedDB databases, exercising photo transfer/deletion, old Gists,
-malformed payloads, rollback, wardrobe conflicts and additive manual Restore, plus outfit logging, repeated combinations, history removal, quick/past/outfit wear dates, Undo, count editing and cancellation, retirement, perfume exclusions, idempotent migration and old/new JSON/Gist history round trips.
-They never read your real wardrobe, use credentials or contact GitHub.
-The additional cases in `tests/review.js` cover advanced-rule preservation,
-failed replacements and startup recovery, aborted photo writes, additive photo
-validation, escaped rendering, deleted filters, form selections, modal focus,
-concurrent Pull edits, retry backoff, photo processing and service-worker cache
-isolation. All checks run from the same page.
+Then open `http://localhost:8000`. The browser regression checks are at `http://localhost:8000/tests/sync.html` and use mock data and storage.
 
-For UI/offline changes, also check the app in a fresh browser profile:
-
-- At desktop, 390px and 320px widths, try all four styles and visit each tab.
-  Open Appearance, the filter sheet and a perfume editor; check for horizontal
-  overflow and confirm clothing wear fields stay hidden for perfumes.
-- Open a modal by keyboard, cycle forward/backward with Tab, and close it with
-  Escape. Background controls should be unavailable while it is open, and focus
-  should return to its opener. Repeat with reduced motion enabled.
-- Load online and wait for the service worker to activate, then reload offline
-  and visit `?tab=outfit`. Verify the shell still loads. Other apps' caches on the
-  same origin must remain intact.
-
-## Structure
-
-```
-index.html        entry point
-VERSION            displayed app version (plain text, one line)
-VERSIONING.md      rules for bumping the version
-css/style.css      design system
-js/data.js         default master data + localStorage persistence
-js/sync.js         optional GitHub Gist cloud sync
-js/photos.js       local item photos (IndexedDB), trim/pad/zoom, backup and snapshot sync
-js/brand-logos.js  brand logo registry
-sw.js              service worker (offline fallback)
-manifest.webmanifest  PWA manifest
-icons/             app icons
-js/app.js          rule engine, rendering, all app logic
-```
+The app version is stored in [`VERSION`](VERSION). See [`VERSIONING.md`](VERSIONING.md) for version and asset cache-busting rules. The main files are `index.html`, `css/style.css`, and `js/`; `sw.js` and `manifest.webmanifest` provide offline and install support.

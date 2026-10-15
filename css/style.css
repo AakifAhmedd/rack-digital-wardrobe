@@ -639,6 +639,11 @@ input[type="date"] {
   border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: .45rem;
 }
 .activity-preview__list { display: flex; flex-wrap: wrap; gap: .35rem; }
+.form-actions--sticky {
+  position: sticky; bottom: -1.3rem; z-index: 5;
+  background: var(--surface); margin: .3rem -1.3rem -1.3rem; padding: .7rem 1.3rem;
+  border-top: 1px solid var(--line);
+}
 .small-label { font-size: .78rem; color: var(--ink-soft); font-weight: 500; margin: .3rem 0 -.2rem; }
 
 .cat-rule { border-bottom: 1px solid var(--line); padding: .7rem 0; }
@@ -998,6 +1003,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="glass"] .item-row__menu button { border-bottom-color: var(--glass-border); }
 [data-style="glass"] .item-row__menu button:hover { background: var(--glass-bg); }
 [data-style="glass"] .activity-preview { background: var(--glass-strong); }
+[data-style="glass"] .form-actions--sticky { background: color-mix(in srgb, var(--surface-raised) 97%, transparent); border-top-color: var(--glass-border); }
 [data-style="glass"] .toast { background: color-mix(in srgb, var(--ink) 85%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 
 /* ---- liquid glass surfaces (glass style) ----
@@ -1184,6 +1190,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="brutalist"] .item-row__menu { border: 2px solid var(--text); box-shadow: var(--bru-shadow-s); }
 [data-style="brutalist"] .toast { border: 2px solid var(--text); box-shadow: var(--bru-shadow-s); font-weight: 600; }
 [data-style="brutalist"] .activity-preview { background: var(--surface-raised); border-bottom: 2px solid var(--text); }
+[data-style="brutalist"] .form-actions--sticky { background: var(--surface-raised); border-top: 2px solid var(--text); }
 @media (max-width: 640px) {
   [data-style="brutalist"] .toolbar__filters.is-open { border-top: 3px solid var(--text); border-radius: 0; box-shadow: none; background: var(--surface-raised); }
 }

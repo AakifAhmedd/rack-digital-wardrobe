@@ -3560,7 +3560,7 @@ function openActivityModal(existing) {
         <div class="chip-row" id="excl-tags"></div>
       </fieldset>
 
-      <div class="form-actions">
+      <div class="form-actions form-actions--sticky">
         <button type="button" class="btn btn--ghost" id="act-cancel">Cancel</button>
         <button type="submit" class="btn btn--primary">${isEdit ? 'Save activity' : 'Create activity'}</button>
       </div>

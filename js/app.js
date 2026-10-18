@@ -2047,11 +2047,14 @@ function todayDateStr(ts = Date.now()) {
 function openBackfillModal(item) {
   if (!WearHistory.isClothing(item) || item.status === 'retired') return;
   const maxDate = todayDateStr();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const defaultDate = todayDateStr(yesterday.getTime());
   const body = el(`
     <form class="form" id="backfill-form">
       <p class="muted">Log a wear for "${esc(itemTitle(item))}" on a past date. This adds to the wear count; "Last worn" only moves forward if this date is more recent than what's already stored.</p>
       <label>Date worn
-        <input type="date" name="date" max="${maxDate}" value="${maxDate}" required>
+        <input type="date" name="date" max="${maxDate}" value="${defaultDate}" required>
       </label>
       <div class="form-actions">
         <button type="button" class="btn btn--ghost" id="backfill-cancel">Cancel</button>

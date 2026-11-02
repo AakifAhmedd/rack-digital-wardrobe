@@ -1297,6 +1297,7 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-month-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
 .wear-month-stats strong { display: block; font: 1.6rem var(--font-display); }
 .wear-month-stats span { color: var(--ink-soft); font-size: .8rem; }
+.wear-export { margin: 1rem 0; }
 .wear-month-controls { display: flex; align-items: end; gap: .5rem; }
 .wear-month-title { margin-bottom: 1.25rem; }
 .wear-month-select { position: relative; z-index: 1; }

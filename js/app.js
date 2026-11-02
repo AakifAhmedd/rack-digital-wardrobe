@@ -2122,6 +2122,121 @@ function renderWearMonthPanel() {
   qs('button', panel).addEventListener('click', () => openWardrobeHistoryModal());
   return panel;
 }
+/* Plain-text (Markdown) month export written for an LLM that knows nothing
+   about RACK: it explains its own terms, then lists the month's dated wears
+   and the item details (cost, tags, lifetime wears, cost per wear). */
+function buildWearExport(year, monthIndex) {
+  const s = Store.state, cur = s.meta.currency || 'LKR';
+  const cell = v => String(v ?? '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
+  const num = n => Number.isFinite(n) ? String(Math.round(n * 100) / 100) : '';
+  const day = ts => ts ? todayDateStr(ts) : '';
+  const weekday = ts => new Date(ts).toLocaleDateString('en-US', { weekday: 'short' });
+  const table = (head, rows) => [`| ${head.join(' | ')} |`, `|${head.map(() => '---').join('|')}|`, ...rows.map(r => `| ${r.map(cell).join(' | ')} |`)].join('\n');
+  const start = new Date(year, monthIndex, 1).getTime(), end = new Date(year, monthIndex + 1, 1).getTime();
+  const label = wearMonthLabel(new Date(year, monthIndex, 1));
+  const summary = WearInsights.forMonth(s.items, year, monthIndex);
+  const monthCounts = new Map(summary.topItems.map(r => [r.item.id, r.count]));
+  const retiredText = i => {
+    if (i.status !== 'retired') return 'active';
+    const reason = RETIRE_REASONS.find(r => r.id === i.retiredReason)?.label;
+    return `retired${reason ? ` (${reason}${i.retiredAt ? `, ${day(i.retiredAt)}` : ''})` : ''}`;
+  };
+  const tagNames = (i, skip = []) => (i.tags || []).map(t => G.tag(t).name).filter(n => !skip.includes(n));
+
+  const allClothing = s.items.filter(i => WearHistory.isClothing(i));
+  const clothing = allClothing.filter(i => i.status !== 'retired' || monthCounts.has(i.id))
+    .sort((a, b) => (monthCounts.get(b.id) || 0) - (monthCounts.get(a.id) || 0) || (b.wearCount || 0) - (a.wearCount || 0));
+  const omittedRetired = allClothing.length - clothing.length;
+  const perfumes = s.items.filter(i => !WearHistory.isClothing(i));
+  const refs = new Map();
+  clothing.forEach((i, n) => refs.set(i.id, `C${n + 1}`));
+  perfumes.forEach((i, n) => refs.set(i.id, `P${n + 1}`));
+  const named = id => {
+    const item = G.item(id);
+    return item ? `${refs.get(id) ? refs.get(id) + ' ' : ''}${itemTitle(item)}` : '(deleted item)';
+  };
+
+  const activeClothing = allClothing.filter(i => i.status !== 'retired');
+  const worn = activeClothing.filter(i => monthCounts.has(i.id)).length;
+  const now = new Date();
+  const isCurrent = now.getFullYear() === year && now.getMonth() === monthIndex;
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const added = allClothing.filter(i => i.createdAt >= start && i.createdAt < end);
+  const avg = avgCostPerWear();
+  const out = [];
+
+  out.push(`# RACK wardrobe export: ${label}`, '',
+    `Exported ${todayDateStr()} (local time). Currency: ${cur}.`, '',
+    '## How to read this',
+    '- RACK is one person\'s private wardrobe tracker. This file is a snapshot of his clothing and perfumes plus every dated clothing wear in the month named above. It is meant to be understood without any other context.',
+    '- A "wear" is one clothing item worn on one day. An outfit of 4 items is 4 wears. Perfumes are not tracked as dated wears.',
+    `- Cost is the original price paid, in ${cur}, typed in by hand. Blank means unknown. Cost per wear (CPW) = cost / lifetime wears (all-time, not just this month), so it falls the more an item is worn.`,
+    '- Lifetime wears = dated wears + undated wears. Undated wears are older or manually entered counts with no date, so they cannot be placed in any month. Months before date tracking began can look empty even though items were worn.',
+    '- Item tables show the wardrobe as it is at export time, not as it was at the end of the month. If this is an older month, lifetime wears, last worn and CPW include wears after it.',
+    '- "Added" is the date the item was added to RACK, not a purchase date. No purchase dates are recorded.',
+    '- Retired items are no longer in rotation (donated, sold, disposed, finished). A retired clothing item is listed only if it was worn in this month.',
+    '- C1, C2... and P1, P2... are labels used only inside this file to link rows.', '');
+
+  out.push('## Month summary', table(['Metric', 'Value'], [
+    ['Month', `${label} (${day(start)} to ${day(end - 86400000)})${isCurrent ? ` - still in progress, ${now.getDate()} of ${daysInMonth} days elapsed` : ''}`],
+    ['Dated clothing wears', summary.events.length],
+    ['Days with at least one wear', `${summary.days} of ${isCurrent ? now.getDate() : daysInMonth}`],
+    ['Different items worn', summary.uniqueItems],
+    ['Active clothing items now', activeClothing.length],
+    ['Active items worn this month', `${worn} (${activeClothing.length ? Math.round(worn / activeClothing.length * 100) : 0}%)`],
+    ['Active items not worn this month', activeClothing.length - worn],
+    ['Clothing items added to RACK this month', `${added.length}${added.length ? `, recorded cost ${num(added.reduce((t, i) => t + (Number(i.cost) || 0), 0))} ${cur}` : ''}`],
+    ['Recorded cost of all active clothing', `${num(activeClothing.reduce((t, i) => t + (Number(i.cost) || 0), 0))} ${cur}`],
+    ['Average lifetime CPW, active clothing with cost and wears', avg === null ? '' : `${num(avg)} ${cur}`],
+    ['Undated lifetime wears (all clothing)', summary.undatedCount],
+  ]), '');
+
+  const byDay = new Map();
+  [...summary.events].reverse().forEach(e => {
+    const key = day(e.wornAt);
+    if (!byDay.has(key)) byDay.set(key, { wornAt: e.wornAt, items: new Map() });
+    const d = byDay.get(key); d.items.set(e.item.id, (d.items.get(e.item.id) || 0) + 1);
+  });
+  out.push('## Wears by day (chronological)');
+  out.push(byDay.size ? table(['Date', 'Day', 'Items worn'], [...byDay].map(([date, d]) =>
+    [date, weekday(d.wornAt), [...d.items].map(([id, n]) => named(id) + (n > 1 ? ` x${n}` : '')).join('; ')])) : 'No dated clothing wears in this month.', '');
+
+  const outfits = s.outfitHistory.filter(o => o.wornAt >= start && o.wornAt < end).sort((a, b) => a.wornAt - b.wornAt);
+  out.push('## Outfits logged this month (items worn together)');
+  out.push(outfits.length ? table(['Date', 'Items'], outfits.map(o => [day(o.wornAt), o.itemIds.map(named).join('; ')])) : 'None logged.', '');
+
+  out.push(`## Clothing items (${clothing.length}; sorted by wears this month, then lifetime wears)`);
+  out.push(table(['Ref', 'Category', 'Subcategory', 'Brand', 'Colour', 'Model/notes', 'Tags', `Cost (${cur})`, 'Status', 'Added', 'Wears this month', 'Lifetime wears', 'Undated wears', 'Last worn', `CPW (${cur})`],
+    clothing.map(i => [refs.get(i.id), G.category(i.categoryId).name, G.subcategory(i.subcategoryId)?.name || '', G.brand(i.brandId)?.name || '', G.color(i.colorId)?.name || '',
+      i.subtext || '', tagNames(i).join(', '), i.cost === '' || i.cost == null ? '' : num(Number(i.cost)), retiredText(i), day(i.createdAt),
+      monthCounts.get(i.id) || 0, i.wearCount || 0, WearHistory.ensure(i).undatedCount, day(i.lastWornAt), num(costPerWear(i))])));
+  if (omittedRetired > 0) out.push(`${omittedRetired} retired clothing item${omittedRetired === 1 ? '' : 's'} not worn this month omitted.`);
+  out.push('');
+
+  out.push(`## Perfumes (${perfumes.length}; no dated wears are recorded for perfumes, so nothing here is specific to this month)`);
+  out.push(perfumes.length ? table(['Ref', 'Brand', 'Name', 'Market tier', 'Scent family', 'Concentration', 'Volume', `Cost (${cur})`, `Cost per ml (${cur})`, 'Status', 'Added', 'Lifetime uses (undated)', 'Last used'],
+    perfumes.map(i => {
+      const volume = tagNames(i).find(n => PERFUME_VOLUMES.includes(n)) || '', ml = parseFloat(volume);
+      const cost = i.cost === '' || i.cost == null ? NaN : Number(i.cost);
+      return [refs.get(i.id), G.brand(i.brandId)?.name || '', i.subtext || '', G.subcategory(i.subcategoryId)?.name || '',
+        tagNames(i).filter(n => PERFUME_SCENT_FAMILIES.includes(n)).join(', '), tagNames(i).filter(n => PERFUME_CONCENTRATIONS.includes(n)).join(', '),
+        volume, num(cost), ml ? num(cost / ml) : '', retiredText(i), day(i.createdAt), i.wearCount || 0, day(i.lastWornAt)];
+    })) : 'No perfumes recorded.', '');
+  return out.join('\n');
+}
+function exportWearsForAI(year, monthIndex, mode) {
+  const text = buildWearExport(year, monthIndex);
+  if (mode === 'copy') {
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+      () => toast('Copied for AI'), () => toast('Couldn\u2019t copy, use Download', 'warn'));
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+  a.download = `rack-wears-${year}-${String(monthIndex + 1).padStart(2, '0')}.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 function openWardrobeHistoryModal(initial = new Date()) {
   let month = new Date(initial.getFullYear(), initial.getMonth(), 1);
   const body = el(`<div class="wear-history">
@@ -2147,6 +2262,10 @@ function openWardrobeHistoryModal(initial = new Date()) {
       </div>
     </div>
     <div id="wear-month-summary" aria-live="polite"></div>
+    <div class="backup-actions wear-export">
+      <button type="button" class="btn btn--ghost btn--small" id="wear-export-copy">Copy for AI</button>
+      <button type="button" class="btn btn--ghost btn--small" id="wear-export-download">Download for AI</button>
+    </div>
     <div id="wear-month-events"></div>
     <button type="button" class="btn btn--ghost" id="wear-show-more" hidden>Show more wears</button>
   </div>`);
@@ -2236,6 +2355,8 @@ function openWardrobeHistoryModal(initial = new Date()) {
     const now = new Date(); selectMonth(now.getFullYear(), now.getMonth());
   });
   qs('#wear-show-more', body).addEventListener('click', () => { shown += 50; showEvents(); });
+  qs('#wear-export-copy', body).addEventListener('click', () => exportWearsForAI(month.getFullYear(), month.getMonth(), 'copy'));
+  qs('#wear-export-download', body).addEventListener('click', () => exportWearsForAI(month.getFullYear(), month.getMonth(), 'download'));
   refresh();
   Modal.open('Wardrobe wear history', body);
 }

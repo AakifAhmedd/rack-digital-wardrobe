@@ -1114,8 +1114,10 @@ function renderBookshelf() {
         <label class="wardrobe-filter-field">Ownership<select data-book-filter="ownership"><option value="">All ownership states</option>${bookOptions(BOOK_OWNERSHIP, bookshelfFilters.ownership)}</select></label>
         <label class="wardrobe-filter-field">Genre<select data-book-filter="genre"><option value="">All genres</option>${bookOptions(Object.fromEntries([...genres].sort((a, b) => a[1].localeCompare(b[1]))), bookshelfFilters.genre)}</select></label>
         <label class="wardrobe-filter-field">Sort<select id="bookshelf-sort">${bookOptions(BOOK_SORTS, bookshelfFilters.sort)}</select></label>
-        <button type="button" class="btn btn--ghost btn--small" id="bookshelf-reset-filters">Reset filters</button>
-        <button type="button" class="btn btn--ghost filters-done-btn" id="bookshelf-filters-done">Done</button>
+        <div class="filters-actions form-actions--sticky">
+          <button type="button" class="btn btn--ghost btn--small" id="bookshelf-reset-filters">Reset filters</button>
+          <button type="button" class="btn btn--ghost filters-done-btn" id="bookshelf-filters-done">Done</button>
+        </div>
       </div>
     </div>
     <p id="bookshelf-result-count" class="muted" aria-live="polite"></p>
@@ -1466,8 +1468,10 @@ function renderWardrobe() {
             <option value="cpw-asc">Best value / wear</option>
             <option value="cpw-desc">Worst value / wear</option>
           </select>
-          <button type="button" class="btn btn--ghost btn--small" id="filters-reset-btn">Reset filters</button>
-          <button type="button" class="btn btn--ghost filters-done-btn" id="filters-done-btn">Done</button>
+          <div class="filters-actions form-actions--sticky">
+            <button type="button" class="btn btn--ghost btn--small" id="filters-reset-btn">Reset filters</button>
+            <button type="button" class="btn btn--ghost filters-done-btn" id="filters-done-btn">Done</button>
+          </div>
         </div>
         <div class="view-toggle" id="view-toggle">
           <button type="button" class="view-toggle__btn ${wardrobeViewMode === 'card' ? 'is-active' : ''}" data-mode="card">Cards</button>

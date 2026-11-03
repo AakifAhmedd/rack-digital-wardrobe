@@ -1328,9 +1328,15 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .modal__body .toolbar__filters.is-open {
   display: flex; position: static; flex-direction: column; margin: 0; padding: 0;
   border: 0; border-radius: 0; box-shadow: none; background: transparent; max-height: none; overflow: visible;
+  backdrop-filter: none; -webkit-backdrop-filter: none;  /* the glass sheet blur must not draw a second panel inside the modal */
 }
 .modal__body .toolbar__filters select { width: 100%; }
 .modal__body .filters-done-btn { display: block; }
+/* Reset + Done stay pinned at the bottom of the scrolling sheet */
+.filters-actions { display: contents; }
+.modal__body .filters-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.modal__body .filters-actions .btn { width: 100%; }
+[data-style="glass"] .modal__body .filters-actions .btn { border: 1px solid var(--line); background: transparent; }
 .wardrobe-filter-field[hidden] { display: none; }
 
 [data-tab="bookshelf"][hidden] { display: none; }

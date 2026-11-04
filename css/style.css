@@ -484,7 +484,8 @@ input[type="date"] {
    vertically and a bigger shadow shows up as a hard-edged band under the chips. */
 /* Liquid glass chips. Chromium gets real refraction via an inline backdrop-filter from
    LiquidGlass (app.js); everywhere else this frosted version applies. */
-.outfit-chips-bar .outfit-activity-chips .subnav__link {
+.outfit-chips-bar .outfit-activity-chips .subnav__link,
+[data-style="glass"] .modal__body .form-actions .btn--ghost {
   background: linear-gradient(145deg, rgba(255,255,255,.42), rgba(255,255,255,.10) 55%, rgba(255,255,255,.22));
   border: 1px solid rgba(255,255,255,.55); color: var(--text);
   backdrop-filter: blur(6px) saturate(1.7) brightness(1.06); -webkit-backdrop-filter: blur(6px) saturate(1.7) brightness(1.06);
@@ -493,7 +494,8 @@ input[type="date"] {
     inset 1px 0 1px rgba(255,255,255,.35), inset -1px 0 1px rgba(255,255,255,.35),
     inset 0 0 14px rgba(255,255,255,.22), 0 2px 6px rgba(20,30,50,.12);
 }
-.outfit-chips-bar .outfit-activity-chips .subnav__link.is-active {
+.outfit-chips-bar .outfit-activity-chips .subnav__link.is-active,
+[data-style="glass"] .modal__body .form-actions .btn--primary {
   background: linear-gradient(145deg, color-mix(in srgb, var(--ink) 74%, transparent), color-mix(in srgb, var(--ink) 62%, transparent));
   color: var(--accent-ink); border-color: rgba(255,255,255,.28);
   box-shadow:
@@ -647,11 +649,17 @@ input[type="date"] {
   border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: .45rem;
 }
 .activity-preview__list { display: flex; flex-wrap: wrap; gap: .35rem; }
-.form-actions--sticky {
-  position: sticky; bottom: -1.3rem; z-index: 5;
-  background: var(--surface); margin: .3rem -1.3rem -1.3rem; padding: .7rem 1.3rem;
-  border-top: 1px solid var(--line);
+/* Modal action rows float as pills at the bottom of the scrolling body, with no bar behind them.
+   One rule for every modal form (add/edit item, filters, activity, book, ...). Glass styling is below. */
+.modal__body .form-actions {
+  position: sticky; bottom: 0; z-index: 5; margin: .3rem 0 0; padding-top: .8rem;
+  pointer-events: none;  /* the gap between pills passes taps through to the fields underneath */
 }
+.modal__body .form-actions .btn { pointer-events: auto; padding: .65rem 1.25rem; font-size: .9rem; }
+:where(.modal__body .form-actions) .btn { box-shadow: 0 3px 10px rgba(20,30,50,.18); }
+:where(.modal__body .form-actions) .btn--ghost { background: var(--surface-raised); }
+@media (max-width: 640px) { .modal__body .form-actions .btn { flex: 1 1 0; } }
+.modal__body .toolbar__filters .form-actions .btn { white-space: nowrap; }  /* otherwise the flex column parent sizes the bar for a wrapped label */
 .small-label { font-size: .78rem; color: var(--ink-soft); font-weight: 500; margin: .3rem 0 -.2rem; }
 
 .cat-rule { border-bottom: 1px solid var(--line); padding: .7rem 0; }
@@ -1011,7 +1019,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="glass"] .item-row__menu button { border-bottom-color: var(--glass-border); }
 [data-style="glass"] .item-row__menu button:hover { background: var(--glass-bg); }
 [data-style="glass"] .activity-preview { background: var(--glass-strong); }
-[data-style="glass"] .form-actions--sticky { background: color-mix(in srgb, var(--surface-raised) 97%, transparent); border-top-color: var(--glass-border); }
 [data-style="glass"] .toast { background: color-mix(in srgb, var(--ink) 85%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 
 /* ---- liquid glass surfaces (glass style) ----
@@ -1029,6 +1036,17 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   backdrop-filter: var(--lg) blur(8px); -webkit-backdrop-filter: var(--lg) blur(8px);  /* no saturate/brightness: they leave a visible inset rectangle on this wide shape */
   border-color: color-mix(in srgb, var(--surface-raised) 60%, transparent);
   box-shadow: var(--lg-rim), 0 8px 22px rgba(20,30,50,.14);
+}
+/* Same chip recipe as the Outfit activity pills, a little more opaque and blurrier because form text scrolls underneath */
+[data-style="glass"] .modal__body .form-actions .btn {
+  border-radius: 999px;
+  backdrop-filter: blur(10px) saturate(1.7) brightness(1.06); -webkit-backdrop-filter: blur(10px) saturate(1.7) brightness(1.06);
+}
+[data-style="glass"] .modal__body .form-actions .btn--ghost {
+  background: linear-gradient(145deg, rgba(255,255,255,.88), rgba(255,255,255,.64) 55%, rgba(255,255,255,.8));
+}
+[data-style="glass"] .modal__body .form-actions .btn.lg-on {
+  backdrop-filter: var(--lg) blur(10px) saturate(1.7) brightness(1.06); -webkit-backdrop-filter: var(--lg) blur(10px) saturate(1.7) brightness(1.06);
 }
 [data-style="glass"] .toast { border: 1px solid rgba(255,255,255,.22); box-shadow: var(--lg-rim), 0 4px 12px rgba(10,15,30,.22); }
 [data-style="glass"] .toast.lg-on {
@@ -1198,7 +1216,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 [data-style="brutalist"] .item-row__menu { border: 2px solid var(--text); box-shadow: var(--bru-shadow-s); }
 [data-style="brutalist"] .toast { border: 2px solid var(--text); box-shadow: var(--bru-shadow-s); font-weight: 600; }
 [data-style="brutalist"] .activity-preview { background: var(--surface-raised); border-bottom: 2px solid var(--text); }
-[data-style="brutalist"] .form-actions--sticky { background: var(--surface-raised); border-top: 2px solid var(--text); }
 @media (max-width: 640px) {
   [data-style="brutalist"] .toolbar__filters.is-open { border-top: 3px solid var(--text); border-radius: 0; box-shadow: none; background: var(--surface-raised); }
 }
@@ -1340,11 +1357,6 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 }
 .modal__body .toolbar__filters select { width: 100%; }
 .modal__body .filters-done-btn { display: block; }
-/* Reset + Done stay pinned at the bottom of the scrolling sheet */
-.filters-actions { display: contents; }
-.modal__body .filters-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-.modal__body .filters-actions .btn { width: 100%; }
-[data-style="glass"] .modal__body .filters-actions .btn { border: 1px solid var(--line); background: transparent; }
 .wardrobe-filter-field[hidden] { display: none; }
 
 [data-tab="bookshelf"][hidden] { display: none; }

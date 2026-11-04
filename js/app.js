@@ -464,6 +464,7 @@ const Modal = {
     document.documentElement.classList.add('modal-open');
     qs('#modal-close').addEventListener('click', () => Modal.close());
     qs('#modal-close').focus();
+    qsa('.form-actions .btn', body).forEach(btn => { if (!btn.classList.contains('lg-on')) LiquidGlass.apply(btn, { bezel: 12 }); });
     if (opts.onMount) opts.onMount(body);
   },
   close() {
@@ -1117,7 +1118,7 @@ function renderBookshelf() {
         <label class="wardrobe-filter-field">Ownership<select data-book-filter="ownership"><option value="">All ownership states</option>${bookOptions(BOOK_OWNERSHIP, bookshelfFilters.ownership)}</select></label>
         <label class="wardrobe-filter-field">Genre<select data-book-filter="genre"><option value="">All genres</option>${bookOptions(Object.fromEntries([...genres].sort((a, b) => a[1].localeCompare(b[1]))), bookshelfFilters.genre)}</select></label>
         <label class="wardrobe-filter-field">Sort<select id="bookshelf-sort">${bookOptions(BOOK_SORTS, bookshelfFilters.sort)}</select></label>
-        <div class="filters-actions form-actions--sticky">
+        <div class="form-actions">
           <button type="button" class="btn btn--ghost btn--small" id="bookshelf-reset-filters">Reset filters</button>
           <button type="button" class="btn btn--ghost filters-done-btn" id="bookshelf-filters-done">Done</button>
         </div>
@@ -1471,7 +1472,7 @@ function renderWardrobe() {
             <option value="cpw-asc">Best value / wear</option>
             <option value="cpw-desc">Worst value / wear</option>
           </select>
-          <div class="filters-actions form-actions--sticky">
+          <div class="form-actions">
             <button type="button" class="btn btn--ghost btn--small" id="filters-reset-btn">Reset filters</button>
             <button type="button" class="btn btn--ghost filters-done-btn" id="filters-done-btn">Done</button>
           </div>
@@ -3691,7 +3692,7 @@ function openActivityModal(existing) {
         <div class="chip-row" id="excl-tags"></div>
       </fieldset>
 
-      <div class="form-actions form-actions--sticky">
+      <div class="form-actions">
         <button type="button" class="btn btn--ghost" id="act-cancel">Cancel</button>
         <button type="submit" class="btn btn--primary">${isEdit ? 'Save activity' : 'Create activity'}</button>
       </div>

@@ -154,6 +154,9 @@ const STAT_ICONS = {
   pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
   trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   'trending-down': '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+  funnel: '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
+  list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
 };
 function statIconSvg(key, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
@@ -1446,8 +1449,8 @@ function renderWardrobe() {
       </div>
       <div class="toolbar">
         <input type="search" class="search-input" id="wardrobe-search" aria-label="Search wardrobe" placeholder="Search wardrobe…" autocomplete="off" value="${esc(wardrobeFilters.search || '')}">
-        <button type="button" class="btn btn--ghost filters-toggle-btn" id="filters-toggle-btn" aria-expanded="false" aria-controls="toolbar-filters">
-          Filters<span class="filter-count-badge" id="filter-count-badge" hidden></span>
+        <button type="button" class="btn btn--ghost filters-toggle-btn tb-btn" id="filters-toggle-btn" aria-label="Filters" title="Filters" aria-expanded="false" aria-controls="toolbar-filters">
+          ${statIconSvg('funnel', 18)}<span class="tb-btn__label">Filters</span><span class="filter-count-badge" id="filter-count-badge" hidden></span>
         </button>
         <div class="toolbar__filters" id="toolbar-filters">
           <select id="f-status">
@@ -1474,11 +1477,11 @@ function renderWardrobe() {
           </div>
         </div>
         <div class="view-toggle" id="view-toggle">
-          <button type="button" class="view-toggle__btn ${wardrobeViewMode === 'card' ? 'is-active' : ''}" data-mode="card">Cards</button>
-          <button type="button" class="view-toggle__btn ${wardrobeViewMode === 'list' ? 'is-active' : ''}" data-mode="list">List</button>
+          <button type="button" class="view-toggle__btn tb-btn ${wardrobeViewMode === 'card' ? 'is-active' : ''}" data-mode="card" aria-label="Cards" title="Cards">${navIconSvg('grid', 18)}<span class="tb-btn__label">Cards</span></button>
+          <button type="button" class="view-toggle__btn tb-btn ${wardrobeViewMode === 'list' ? 'is-active' : ''}" data-mode="list" aria-label="List" title="List">${statIconSvg('list', 18)}<span class="tb-btn__label">List</span></button>
         </div>
+        ${wardrobeSegment === 'clothing' ? `<button type="button" class="btn btn--ghost tb-btn" id="wardrobe-history-btn" aria-label="Wear history" title="Wear history">${statIconSvg('history', 18)}<span class="tb-btn__label">Wear history</span></button>` : ''}
         <button class="btn btn--primary" id="add-item-btn">+ Add item</button>
-        ${wardrobeSegment === 'clothing' ? '<button type="button" class="btn btn--ghost" id="wardrobe-history-btn">Wear history</button>' : ''}
       </div>
       <div class="filters-backdrop" id="filters-backdrop"></div>
       <div class="item-grid" id="item-grid"></div>

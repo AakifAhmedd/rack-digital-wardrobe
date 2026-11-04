@@ -404,6 +404,14 @@ input[type="date"] {
 /* selected state is a soft accent tint so + Add item stays the only solid dark button in the row */
 .view-toggle__btn.is-active { background: color-mix(in srgb, var(--accent) 20%, var(--surface-raised)); color: var(--text); font-weight: 600; }
 .segment-toggle { align-self: flex-start; }
+/* wardrobe toolbar buttons: icon + label on desktop, icon only on phones so the row stays on one line */
+.tb-btn { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; }
+.tb-btn svg { flex-shrink: 0; }
+@media (max-width: 640px) {
+  .tb-btn__label { display: none; }
+  .tb-btn { gap: 0; min-width: 44px; padding-inline: .7rem; }
+  .filters-toggle-btn.tb-btn .filter-count-badge { position: absolute; top: -7px; right: -7px; margin: 0; }
+}
 
 /* ---------------- compact list view ---------------- */
 .item-grid--list { display: flex; flex-direction: column; gap: .4rem; }

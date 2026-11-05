@@ -429,7 +429,9 @@ function svgSankey(rows, tiers, opts = {}) {
     nodes += `<rect x="${rightX}" y="${rn.y}" width="${nodeW}" height="${Math.max(2, rn.h)}" rx="2" fill="${tiers[t].color}"></rect>`;
     labels += `<text x="${rightX + nodeW + 8}" y="${rn.y + rn.h / 2 + 4}" class="chart-label">${esc(tiers[t].label)} <tspan class="chart-value">${tierTotals[t]}</tspan></text>`;
   });
-  return `<svg viewBox="0 0 ${width} ${height}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'sankey chart')}">${links}${nodes}${labels}</svg>`;
+  // vertical padding so icons on small first/last nodes aren't clipped at the svg edge
+  const pad = 6;
+  return `<svg viewBox="0 ${-pad} ${width} ${height + pad * 2}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'sankey chart')}">${links}${nodes}${labels}</svg>`;
 }
 function chartEmpty(msg) {
   return `<p class="muted" style="padding:.5rem 0;">${esc(msg)}</p>`;

@@ -39,6 +39,22 @@ function fmtDateShort(ts) {
   const sameYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: '2-digit' });
 }
+const reducedMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+/* Sequential entrance: rows/cards rise in 30ms apart (CSS .is-entering + --i). Only the first screenful animates;
+   nested matches are skipped so a card inside a panel doesn't animate twice. */
+const ENTER_UNITS = '.segment-toggle, .toolbar, .stat-card, .panel, .master-card, .item-card, .item-row, .book-card, .bookshelf-heading, .outfit-question, .outfit-category, .outfit-summary, .outfit-history__entry, .item-group, .empty-state';
+function staggerIn(root, max = 14) {
+  if (!root || reducedMotion()) return;
+  const all = qsa(ENTER_UNITS, root);
+  const units = all.filter(n => !all.some(o => o !== n && o.contains(n))).slice(0, max);
+  units.forEach((n, i) => { n.style.setProperty('--i', i); n.classList.add('is-entering'); });
+  setTimeout(() => units.forEach(n => { n.classList.remove('is-entering'); n.style.removeProperty('--i'); }), max * 30 + 1200);
+}
+let enterNext = false;   // set right before a render that should play the entrance (tab or segment switch)
+let pulseItemId = null;  // item whose card/row confirms a successful wear on the next render
+let pulseOutfitId = null;
+
 function toast(msg, kind = 'ok') {
   const host = qs('#toast-host');
   const t = el(`<div class="toast toast--${kind}">${esc(msg)}</div>`);
@@ -186,7 +202,22 @@ const SYNC_GLYPHS = {
   'not-connected': '<path d="M9.4 13h4.2"/>',
 };
 function syncIconSvg(status) {
-  return `<svg viewBox="0 0 24 24" width="24" height="24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${NAV_ICONS.cloud}${SYNC_GLYPHS[status] || ''}</g></svg>`;
+  return `<svg viewBox="0 0 24 24" width="24" height="24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${NAV_ICONS.cloud}<g class="sync-glyph-slot">${SYNC_GLYPHS[status] || ''}</g></g></svg>`;
+}
+/* Swap only the status glyph inside the cloud: the old one blurs out while the new one blurs in, overlapping. */
+function setSyncIcon(host, status) {
+  const slots = qsa('.sync-glyph-slot', host), slot = slots[slots.length - 1];
+  const current = host.dataset.status || 'not-connected';
+  if (!slot || reducedMotion()) { host.innerHTML = syncIconSvg(status); host.dataset.status = status; return; }
+  if (current === status) return;
+  host.dataset.status = status;
+  const next = slot.cloneNode(false);
+  next.innerHTML = SYNC_GLYPHS[status] || '';
+  next.classList.add('icon-swap--in');
+  slot.classList.add('icon-swap--out');
+  slot.after(next);
+  setTimeout(() => slot.remove(), 220);
+  setTimeout(() => next.classList.remove('icon-swap--in'), 260);
 }
 function navIconSvg(key, size = 20) {
   if (key === 'hanger') return iconSvg('hanger', size);
@@ -462,22 +493,42 @@ const Modal = {
     box.appendChild(header);
     box.appendChild(body);
     overlay.classList.toggle('modal-overlay--center', !!opts.center);
-    overlay.classList.add('is-open');
+    clearTimeout(this._clearT);
+    overlay.classList.add('is-open', 'is-opening');
+    clearTimeout(this._settleT);
+    this._settleT = setTimeout(() => overlay.classList.remove('is-opening'), 450);
     document.documentElement.classList.add('modal-open');
+    this._aim(box);
     qs('#modal-close').addEventListener('click', () => Modal.close());
     qs('#modal-close').focus();
     qsa('.form-actions .btn', body).forEach(btn => { if (!btn.classList.contains('lg-on')) LiquidGlass.apply(btn, { bezel: 12 }); });
     if (opts.onMount) opts.onMount(body);
   },
+  /* The box scales from the control that opened it, and folds back into it on close. */
+  _aim(box) {
+    box.style.transformOrigin = '';
+    const from = this._opener;
+    if (!from || !from.isConnected || !box.offsetWidth) return;
+    const r = from.getBoundingClientRect();
+    if (!r.width && !r.height) return;
+    const x = Math.min(Math.max(r.left + r.width / 2 - box.offsetLeft, 0), box.offsetWidth);
+    const y = Math.min(Math.max(r.top + r.height / 2 - box.offsetTop, 0), box.offsetHeight);
+    box.style.transformOrigin = `${x}px ${y}px`;
+  },
   close() {
-    if (!qs('#modal-overlay').classList.contains('is-open')) return;
+    const overlay = qs('#modal-overlay'), box = qs('#modal-box');
+    if (!overlay.classList.contains('is-open')) return;
     if (this._cleanup) this._cleanup();
     this._cleanup = null;
     this._background.forEach(node => { node.inert = false; });
     this._background = [];
-    qs('#modal-overlay').classList.remove('is-open');
+    overlay.classList.remove('is-open', 'is-opening');
     document.documentElement.classList.remove('modal-open');
-    qs('#modal-box').innerHTML = '';
+    /* keep the contents until the exit has played (0 when unstyled or under reduced motion) */
+    const exitMs = (parseFloat(getComputedStyle(overlay).transitionDuration) || 0) * 1000;
+    const clear = () => { if (!overlay.classList.contains('is-open')) box.innerHTML = ''; };
+    clearTimeout(this._clearT);
+    if (exitMs > 0) this._clearT = setTimeout(clear, exitMs + 40); else clear();
     if (this._opener?.isConnected) this._opener.focus();
     this._opener = null;
   },
@@ -562,6 +613,7 @@ function updateCollectionNav() {
     qsa('.nav__link, .bottom-nav__link').forEach(button => button.classList.toggle('is-active', button.dataset.tab === activeTab));
   }
   animateNavLens();
+  syncNavInk();
 }
 const PERFUMES_ENABLED_KEY = 'rack.perfumes.enabled';
 let perfumesPreference = (() => {
@@ -667,11 +719,26 @@ function saveCollapsedGroups() {
 
 function switchTab(name) {
   if (name === 'bookshelf' && !bookshelfEnabled()) name = 'wardrobe';
+  enterNext = name !== activeTab;
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   animateNavLens();
+  syncNavInk();
   render();
+}
+
+/* Desktop nav: one underline slides to the active tab instead of a new one appearing under it. */
+function syncNavInk() {
+  const nav = qs('.nav'); if (!nav) return;
+  let ink = qs('.nav__ink', nav);
+  if (!ink) { ink = el('<span class="nav__ink" aria-hidden="true"></span>'); nav.appendChild(ink); }
+  const active = qs('.nav__link.is-active', nav);
+  if (!active || !active.offsetWidth) return;
+  const pad = parseFloat(getComputedStyle(active).paddingLeft) || 16;
+  ink.style.setProperty('--ink-x', (active.offsetLeft + pad) + 'px');
+  ink.style.setProperty('--ink-w', (active.offsetWidth - pad * 2) + 'px');
+  if (!ink.classList.contains('is-ready')) requestAnimationFrame(() => ink.classList.add('is-ready'));  // first placement doesn't slide
 }
 
 /* Glass bottom nav: a highlight capsule slides under the active tab. */
@@ -683,18 +750,35 @@ function syncNavLens() {
 }
 /* The active tab grows/shrinks over ~.4s, so keep the capsule locked to it frame by frame. */
 let navLensRun = 0;
+let lensStretchT0 = -1e9;
 function animateNavLens() {
   const nav = qs('#bottom-nav'); if (!nav) return;
   const t0 = performance.now(); navLensRun = t0;
+  /* the capsule stretches ~12% at mid-travel and relaxes as it lands; it only travels when the tab changed */
+  const tab = qs('.bottom-nav__link.is-active', nav)?.dataset.tab || '';
+  if (nav.dataset.lensTab && nav.dataset.lensTab !== tab && !reducedMotion()) lensStretchT0 = t0;
+  nav.dataset.lensTab = tab;
+  const lens = qs('.bottom-nav__lens', nav);
   nav.classList.add('is-moving');
   (function step() {
     syncNavLens();
+    if (lens) {
+      const p = (performance.now() - lensStretchT0) / 360;
+      lens.style.setProperty('--lens-s', p >= 0 && p < 1 ? (1 + 0.12 * Math.sin(Math.PI * p)).toFixed(3) : 1);
+    }
     if (navLensRun !== t0) return;
     if (performance.now() - t0 < 480) requestAnimationFrame(step); else nav.classList.remove('is-moving');
   })();
 }
 function initNavBehaviour() {
-  const nav = qs('#bottom-nav'); if (!nav) return;
+  const nav = qs('#bottom-nav');
+  const top = qs('.nav');
+  if (top) {
+    new ResizeObserver(syncNavInk).observe(top);
+    window.addEventListener('resize', syncNavInk);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncNavInk);
+  }
+  if (!nav) return;
   new ResizeObserver(syncNavLens).observe(nav);
   window.addEventListener('resize', syncNavLens);
 }
@@ -709,6 +793,7 @@ function render() {
   else if (activeTab === 'bookshelf') main.appendChild(renderBookshelf());
   else if (activeTab === 'outfit') main.appendChild(renderOutfitBuilder());
   else if (activeTab === 'settings') main.appendChild(renderSettings());
+  if (enterNext) { enterNext = false; staggerIn(main); }
 }
 
 /* ================================================================
@@ -820,7 +905,7 @@ function initSyncIndicator() {
 
   function updateUI(status) {
     dot.className = 'sync-dot sync-dot--' + status;
-    qsa('.sync-indicator__icon').forEach(span => { span.innerHTML = syncIconSvg(status); });
+    qsa('.sync-indicator__icon').forEach(span => setSyncIcon(span, status));
     label.textContent = syncStatusLabel(status);
     statusEl.textContent = syncStatusDetail(status);
     const busy = status === 'syncing' || status === 'not-connected';
@@ -1503,6 +1588,7 @@ function renderWardrobe() {
       setWardrobeSegment(btn.dataset.seg);
       wardrobeFilters = { ...wardrobeFilters, category: '', subcategory: '', brand: '', color: '', tag: '' };
       saveWardrobeFilters();
+      enterNext = true;
       render();
     });
   });
@@ -1812,7 +1898,7 @@ function wireItemActions(root, item, isRetired) {
       if (e.detail > 1 || wearBtn.disabled || !WearHistory.record(item)) return;
       wearBtn.disabled = true;
       Store.save();
-      renderItemGrid();
+      pulseItemId = item.id; renderItemGrid(); pulseItemId = null;   // the rebuilt card confirms with a pulse
     });
     const undoBtn = qs('[data-act="undo"]', root);
     if (undoBtn) undoBtn.addEventListener('click', (e) => {
@@ -1977,6 +2063,7 @@ function itemCard(item, avg = avgCostPerWear()) {
   });
 
   wireItemActions(card, item, isRetired);
+  if (pulseItemId === item.id) qs('.stat-cell', card)?.classList.add('is-pulse');
   if (item.categoryId === 'cat_perfumes') attachItemCardPhoto(card, item.id);
   return card;
 }
@@ -2044,6 +2131,7 @@ function itemListRow(item) {
   });
 
   wireItemActions(row, item, isRetired);
+  if (pulseItemId === item.id) row.classList.add('is-pulse');
   return row;
 }
 
@@ -2088,7 +2176,7 @@ function openBackfillModal(item) {
         submit.disabled = true;
         Store.save();
         Modal.close();
-        renderItemGrid();
+        pulseItemId = item.id; renderItemGrid(); pulseItemId = null;
         toast(`Logged a wear for ${fmtDate(ts)}`);
       });
     },
@@ -3037,6 +3125,7 @@ function renderOutfitBuilder() {
       qsa('.subnav__link', chipRow).forEach(c => c.classList.remove('is-active'));
       chip.classList.add('is-active');
       renderOutfitBody();
+      staggerIn(body);
     });
     chipRow.appendChild(chip);
   });
@@ -3171,11 +3260,12 @@ function renderOutfitSummary(matches, refresh) {
     wearButton.disabled = true;
     const now = Date.now();
     const worn = selected.filter(item => WearHistory.record(item, now));
-    Store.state.outfitHistory.push({ id: uid('outfit'), wornAt: now, itemIds: selected.map(item => item.id) });
+    const entry = { id: uid('outfit'), wornAt: now, itemIds: selected.map(item => item.id) };
+    Store.state.outfitHistory.push(entry);
     Store.save();
     outfitSelectedIds.clear();
     toast(`Outfit logged — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`);
-    refresh();
+    pulseOutfitId = entry.id; refresh(); pulseOutfitId = null;
   });
   box.appendChild(actions);
 
@@ -3206,6 +3296,7 @@ function renderOutfitHistory() {
         if (!item) return `<li class="tag-chip tag-chip--muted">Deleted item</li>`;
         return `<li class="tag-chip outfit-history__chip">${itemLeadMarkup(item, G.color(item.colorId), { small: true })}${esc(itemTitle(item))}${item.status === 'retired' ? ' <span class="muted">(Retired)</span>' : ''}</li>`;
       }).join('')}</ul></li>`);
+    if (entry.id === pulseOutfitId) row.classList.add('is-pulse');
     qs('button', row).addEventListener('click', () => {
       Modal.confirm('Remove this outfit log? Item wear counts stay unchanged.', () => {
         Store.state.outfitHistory = Store.state.outfitHistory.filter(log => log.id !== entry.id);

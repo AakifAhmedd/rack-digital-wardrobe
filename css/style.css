@@ -26,6 +26,13 @@
   --radius-s: 4px;
   --radius-m: 10px;
   --shadow-card: 0 1px 0 rgba(35,32,27,0.06);
+
+  /* ---- motion ---- */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);       /* entrances: quick start, soft landing */
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);    /* anything that travels across the screen */
+  --dur-enter: 200ms;                             /* menus, popovers, modals (kept inside 150-250ms) */
+  --dur-exit: 160ms;                              /* exits run 20% shorter than entrances */
+  --stagger: 30ms;                                /* gap between sequential rows */
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-body: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
@@ -78,7 +85,7 @@ a { color: var(--accent); }
 .sync-indicator__icon { display: none; }
 .brand__version { font-size: .62rem; color: #C9BFA6; opacity: .75; font-weight: 400; letter-spacing: .04em; }
 
-.nav { display: flex; gap: 0; overflow-x: auto; flex: 1; }
+.nav { display: flex; gap: 0; overflow-x: auto; flex: 1; position: relative; }
 .nav__link {
   position: relative;
   background: none; border: none; color: #D8D0BC;
@@ -86,13 +93,16 @@ a { color: var(--accent); }
   padding: 1.1rem 1rem;
   cursor: pointer;
   white-space: nowrap;
+  transition: color .2s var(--ease-out);
 }
 .nav__link:hover { color: var(--accent-ink); }
 .nav__link.is-active { color: var(--accent-ink); }
-.nav__link.is-active::after {
-  content: ''; position: absolute; left: 1rem; right: 1rem; bottom: 0; height: 3px;
-  background: var(--thread);
+/* one shared underline (.nav__ink, placed by syncNavInk in app.js) slides between tabs instead of a new one appearing under each */
+.nav__ink {
+  position: absolute; left: 0; bottom: 0; height: 3px; width: var(--ink-w, 0); pointer-events: none;
+  transform: translateX(var(--ink-x, 0)); background: var(--thread);
 }
+.nav__ink.is-ready { transition: transform .3s var(--ease-in-out), width .3s var(--ease-in-out); }
 
 /* ---------------- sync indicator ---------------- */
 .sync-indicator { position: relative; margin-left: auto; }
@@ -102,10 +112,12 @@ a { color: var(--accent); }
   padding: .4rem .7rem; cursor: pointer; color: #D8D0BC;
   font-family: var(--font-body); font-size: .82rem;
 }
+.sync-indicator__btn { transition: background-color .2s var(--ease-out), transform .14s var(--ease-out); }
 .sync-indicator__btn:hover { background: rgba(255,255,255,.06); }
+.sync-indicator__btn:active { transform: scale(.97); }
 .sync-dot {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  background: #8C8880; transition: background .15s;
+  background: #8C8880; transition: background-color .25s var(--ease-out);
 }
 .sync-dot--synced { background: var(--good); }
 .sync-dot--pending { background: var(--accent); }
@@ -116,16 +128,24 @@ a { color: var(--accent); }
 
 .sync-popover {
   display: none;
+  opacity: 0; transform: scale(.95); transform-origin: calc(100% - 1.5rem) 0;  /* grows out of the sync button */
+  transition: opacity var(--dur-exit) var(--ease-out), transform var(--dur-exit) var(--ease-out), display var(--dur-exit) allow-discrete;
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 47;
   background: var(--surface-raised); color: var(--text);
   border: 1px solid var(--line); border-radius: var(--radius-m);
   box-shadow: 0 14px 34px rgba(0,0,0,.22);
   padding: .9rem; width: 240px;
 }
-.sync-popover.is-open { display: block; }
+.sync-popover.is-open {
+  display: block; opacity: 1; transform: none;
+  transition: opacity var(--dur-enter) var(--ease-out), transform var(--dur-enter) var(--ease-out), display var(--dur-enter) allow-discrete;
+}
+@starting-style { .sync-popover.is-open { opacity: 0; transform: scale(.95); } }
 /* scrim behind the popover: frosted (default) or fluted, via <html data-popover-blur> */
 .sync-scrim {
-  display: none; position: fixed; inset: 0; z-index: 44;
+  display: none; opacity: 0;
+  transition: opacity var(--dur-exit) var(--ease-out), display var(--dur-exit) allow-discrete;
+  position: fixed; inset: 0; z-index: 44;
   background: rgba(255,255,255,.18);
   backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
@@ -135,7 +155,8 @@ a { color: var(--accent); }
     rgba(255,255,255,.10);
   backdrop-filter: blur(12px) saturate(140%); -webkit-backdrop-filter: blur(12px) saturate(140%);
 }
-.sync-scrim.is-open { display: block; }
+.sync-scrim.is-open { display: block; opacity: 1; transition-duration: var(--dur-enter); }
+@starting-style { .sync-scrim.is-open { opacity: 0; } }
 .sync-popover__status { font-size: .82rem; color: var(--ink-soft); margin: 0 0 .7rem; }
 .sync-popover__actions { display: flex; gap: .5rem; }
 .sync-popover__actions .btn { flex: 1; }
@@ -177,9 +198,9 @@ a { color: var(--accent); }
 .btn {
   font-family: var(--font-body); font-size: .9rem; font-weight: 500;
   padding: .55rem 1rem; border-radius: var(--radius-s); border: 1px solid transparent;
-  cursor: pointer; transition: background .12s, border-color .12s, transform .05s;
+  cursor: pointer; transition: background-color .2s var(--ease-out), border-color .2s var(--ease-out), color .2s var(--ease-out), transform .14s var(--ease-out);
 }
-.btn:active { transform: translateY(1px); }
+.btn:active { transform: scale(.97); }
 .btn--primary { background: var(--ink); color: var(--accent-ink); }
 .btn--primary:hover { background: #38332A; }
 .btn--ghost { background: transparent; border-color: var(--line); color: var(--text); }
@@ -302,7 +323,9 @@ input[type="date"] {
 .tag-chip--warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
 .tag-chip--muted { opacity: .7; }
 .tag-chip--more { cursor: pointer; font-family: var(--font-mono); line-height: inherit; color: var(--text); }
+.tag-chip--more { transition: border-color .2s var(--ease-out), transform .14s var(--ease-out); }
 .tag-chip--more:hover { border-color: var(--ink-soft); }
+.tag-chip--more:active { transform: scale(.97); }
 .tag-chip[hidden] { display: none; }
 
 /* ---------------- item grid & cards ---------------- */
@@ -347,7 +370,7 @@ input[type="date"] {
   background: color-mix(in srgb, var(--surface-raised) 65%, transparent);
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
   display: flex; align-items: center; justify-content: center;
-  transition: background .15s ease, color .15s ease, transform .15s ease;
+  transition: background-color .2s var(--ease-out), color .2s var(--ease-out), transform .14s var(--ease-out);
 }
 .item-card__hole-btn svg { display: block; }
 .item-card__hole-btn::before { content: ''; position: absolute; inset: -6px; } /* larger tap target */
@@ -363,7 +386,7 @@ input[type="date"] {
   background: var(--surface);
 }
 .item-card__photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
-.item-card__hole-btn:active { transform: scale(.92); }
+.item-card__hole-btn:active { transform: scale(.97); }
 
 .item-card__stats {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: .55rem .8rem;
@@ -401,7 +424,9 @@ input[type="date"] {
 .view-toggle__btn {
   background: var(--surface-raised); border: none; padding: .55rem 1rem;
   font-family: var(--font-body); font-size: .9rem; color: var(--ink-soft); cursor: pointer;
+  transition: background-color .2s var(--ease-out), color .2s var(--ease-out), transform .14s var(--ease-out);  /* old and new state overlap instead of snapping */
 }
+.view-toggle__btn:active { transform: scale(.97); }
 /* selected state is a soft accent tint so + Add item stays the only solid dark button in the row */
 .view-toggle__btn.is-active { background: color-mix(in srgb, var(--accent) 20%, var(--surface-raised)); color: var(--text); font-weight: 600; }
 .segment-toggle { align-self: flex-start; }
@@ -428,12 +453,23 @@ input[type="date"] {
 .item-group__chev {
   width: .5rem; height: .5rem; margin: 0 .3rem .25rem .1rem; flex-shrink: 0;
   border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
-  transform: rotate(45deg); transition: transform .15s, margin .15s;
+  transform: rotate(45deg); transition: transform var(--dur-enter) var(--ease-in-out), margin var(--dur-enter) var(--ease-in-out);
 }
 .item-group.is-collapsed .item-group__chev { transform: rotate(-45deg); margin: 0 .35rem 0 0; }
 .item-group.is-collapsed .item-group__head { margin-bottom: 0; }
-.item-group.is-collapsed .item-grid { display: none; }
-.item-group.is-collapsed .settings-section__body { display: none; }
+/* Collapse reveals/hides by animating height while the box clips its contents (no display:none, so it can animate).
+   overflow flips to clip at once when closing and only after the reveal finishes when opening, so card shadows are
+   intact at rest and hidden cards add no scroll height. Where interpolate-size isn't supported the height just snaps. */
+:root { interpolate-size: allow-keywords; }
+.item-group__head { transition: margin-bottom var(--dur-enter) var(--ease-in-out); }
+.item-group > .item-grid, .item-group > .settings-section__body {
+  height: auto;
+  transition: height var(--dur-enter) var(--ease-in-out), opacity var(--dur-enter) var(--ease-out), overflow 0s linear var(--dur-enter) allow-discrete, visibility 0s;
+}
+.item-group.is-collapsed > .item-grid, .item-group.is-collapsed > .settings-section__body {
+  height: 0; opacity: 0; visibility: hidden; overflow: clip;
+  transition: height var(--dur-exit) var(--ease-in-out), opacity var(--dur-exit) var(--ease-out), overflow 0s allow-discrete, visibility 0s linear var(--dur-exit);
+}
 .item-row {
   display: flex; align-items: center; gap: .7rem;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
@@ -446,11 +482,17 @@ input[type="date"] {
 .item-row__overflow { position: relative; flex-shrink: 0; }
 .item-row__overflow-btn { font-size: 1.05rem; line-height: 1; padding: .35rem .55rem; }
 .item-row__menu {
-  display: none; position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  display: none; opacity: 0; visibility: hidden; transform: scale(.95); transform-origin: calc(100% - 16px) 0;  /* grows out of the ⋮ button */
+  transition: opacity var(--dur-exit) var(--ease-out), transform var(--dur-exit) var(--ease-out), visibility 0s linear var(--dur-exit), display var(--dur-exit) allow-discrete;
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
   box-shadow: 0 10px 26px rgba(0,0,0,.18); min-width: 168px; overflow: hidden;
 }
-.item-row__overflow.is-open .item-row__menu { display: block; }
+.item-row__overflow.is-open .item-row__menu {
+  display: block; opacity: 1; visibility: visible; transform: none;
+  transition: opacity var(--dur-enter) var(--ease-out), transform var(--dur-enter) var(--ease-out), visibility 0s, display var(--dur-enter) allow-discrete;
+}
+@starting-style { .item-row__overflow.is-open .item-row__menu { opacity: 0; transform: scale(.95); } }
 .item-row__menu button {
   display: block; width: 100%; text-align: left; padding: .55rem .8rem;
   background: none; border: none; border-bottom: 1px solid var(--line);
@@ -514,7 +556,9 @@ input[type="date"] {
   padding: .55rem .8rem; cursor: pointer; font-family: var(--font-body); color: var(--text);
   max-width: 260px;
 }
+.outfit-item-tile { transition: border-color .2s var(--ease-out), background-color .2s var(--ease-out), transform .14s var(--ease-out); }
 .outfit-item-tile:hover { border-color: var(--accent); }
+.outfit-item-tile:active { transform: scale(.97); }
 .outfit-item-tile.is-selected { border-color: var(--ink); background: var(--canvas); box-shadow: 0 0 0 1px var(--ink); }
 .outfit-item-tile__text { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
 .outfit-item-tile__title {
@@ -545,7 +589,9 @@ input[type="date"] {
 .subnav__link {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: 20px;
   padding: .4rem .9rem; font-size: .85rem; cursor: pointer; color: var(--ink-soft);
+  transition: background-color .2s var(--ease-out), border-color .2s var(--ease-out), color .2s var(--ease-out), transform .14s var(--ease-out);
 }
+.subnav__link:active { transform: scale(.97); }
 .subnav__link.is-active { background: var(--ink); color: var(--accent-ink); border-color: var(--ink); }
 
 .panel-list { display: flex; flex-direction: column; gap: .8rem; }
@@ -571,7 +617,9 @@ input[type="date"] {
   width: 40px; height: 40px; border-radius: var(--radius-s); border: 1px solid var(--line);
   background: var(--surface-raised); color: var(--ink-soft); cursor: pointer;
 }
+.icon-picker__btn { transition: background-color .2s var(--ease-out), color .2s var(--ease-out), border-color .2s var(--ease-out), transform .14s var(--ease-out); }
 .icon-picker__btn:hover { border-color: var(--accent); }
+.icon-picker__btn:active { transform: scale(.97); }
 .icon-picker__btn.is-selected { background: var(--ink); color: var(--accent-ink); border-color: var(--ink); }
 .sub-pill {
   background: var(--canvas); border: 1px solid var(--line); border-radius: 20px;
@@ -742,17 +790,23 @@ input[type="date"] {
 /* ---------------- modal ---------------- */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(35,32,27,0.55);
+  opacity: 0; transition: opacity var(--dur-exit) var(--ease-out), display var(--dur-exit) allow-discrete;
   display: none; align-items: flex-start; justify-content: center;
   padding: 5vh 1rem; overflow: hidden; overscroll-behavior: contain; z-index: 50;
 }
 html.modal-open, html.modal-open body { overflow: hidden; }
-.modal-overlay.is-open { display: flex; }
+.modal-overlay.is-open { display: flex; opacity: 1; transition-duration: var(--dur-enter); }
+@starting-style { .modal-overlay.is-open { opacity: 0; } }
 .modal-overlay--center { align-items: center; }
 .modal-box {
   background: var(--surface); border-radius: var(--radius-m); max-width: 720px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,.25);
   display: flex; flex-direction: column; max-height: 100%; overflow: hidden;
+  opacity: 0; transform: scale(.95);
+  transition: opacity var(--dur-exit) var(--ease-out), transform var(--dur-exit) var(--ease-out);
 }
+.modal-overlay.is-open .modal-box { opacity: 1; transform: none; transition-duration: var(--dur-enter); }
+@starting-style { .modal-overlay.is-open .modal-box { opacity: 0; transform: scale(.95); } }
 .modal__header { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.3rem; border-bottom: 1px solid var(--line); }
 .modal__header h3 { margin: 0; }
 .modal__body { padding: 1.3rem; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
@@ -762,10 +816,11 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .toast-host { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: .5rem; align-items: center; }
 .toast {
   background: var(--ink); color: var(--accent-ink); padding: .6rem 1.1rem; border-radius: 20px;
-  font-size: .85rem; opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s;
+  font-size: .85rem; opacity: 0; transform: translateY(6px) scale(.97);
+  transition: opacity var(--dur-exit) var(--ease-out), transform var(--dur-exit) var(--ease-out);
   box-shadow: 0 6px 20px rgba(0,0,0,.2);
 }
-.toast.is-visible { opacity: 1; transform: translateY(0); }
+.toast.is-visible { opacity: 1; transform: none; transition-duration: var(--dur-enter); }
 .toast--warn { background: var(--thread); }
 
 /* ---------------- responsive ---------------- */
@@ -1079,9 +1134,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
     border: 1px solid rgba(255,255,255,.3); color: #fff;
     background: color-mix(in srgb, var(--ink) 50%, transparent);
     box-shadow: var(--lg-rim), 0 6px 18px rgba(10,15,30,.26);
-    transition: width .3s ease, height .3s ease, transform .15s ease;
+    transition: width .3s var(--ease-in-out), height .3s var(--ease-in-out), transform .14s var(--ease-out);
   }
-  [data-style="glass"] .sync-indicator__btn:active { transform: scale(.94); }
+  [data-style="glass"] .sync-indicator__btn:active { transform: scale(.97); }
   [data-style="glass"] .sync-indicator__btn:hover { background: color-mix(in srgb, var(--ink) 50%, transparent); }
   [data-style="glass"] .sync-indicator__btn.lg-on {
     backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04); -webkit-backdrop-filter: var(--lg) blur(4px) saturate(1.6) brightness(1.04);
@@ -1091,27 +1146,27 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   [data-style="glass"] .sync-glyph--alert { color: color-mix(in srgb, var(--thread) 45%, #fff); }
   [data-style="glass"] .sync-glyph--spin { transform-origin: 11.5px 13px; animation: sync-spin .9s linear infinite; }
   [data-style="glass"] .bottom-nav__link, [data-style="glass"] .bottom-nav__link.is-active { color: #fff; }
-  [data-style="glass"] .sync-popover { top: auto; bottom: calc(100% + 10px); right: 0; }
+  [data-style="glass"] .sync-popover { top: auto; bottom: calc(100% + 10px); right: 0; transform-origin: calc(100% - 1.85rem) 100%; }
   /* the selection capsule slides between tabs */
   [data-style="glass"] .bottom-nav__lens {
     display: block; position: absolute; top: 4px; bottom: 4px; left: 0; width: var(--lens-w, 0); border-radius: 999px;
-    transform: translateX(var(--lens-x, 0)); pointer-events: none;
+    transform: translateX(var(--lens-x, 0)) scaleX(var(--lens-s, 1)); pointer-events: none;  /* --lens-s: ~12% stretch while travelling (app.js) */
     background: linear-gradient(160deg, rgba(255,255,255,.34), rgba(255,255,255,.10) 55%, rgba(255,255,255,.2));
     box-shadow: inset 0 1.5px 1px rgba(255,255,255,.6), inset 0 -1px 1px rgba(255,255,255,.2), 0 2px 8px rgba(10,15,30,.18);
-    transition: transform .42s cubic-bezier(.3,1.35,.5,1), width .42s cubic-bezier(.3,1.35,.5,1);
+    transition: transform .36s var(--ease-in-out), width .36s var(--ease-in-out);  /* no overshoot: this is everyday UI */
   }
   /* active tab expands inline (icon + label) inside the sliding capsule; the others stay icon-only */
   [data-style="glass"] .bottom-nav.is-moving .bottom-nav__lens { transition: none; }  /* JS tracks the tab while it grows */
   [data-style="glass"] .bottom-nav__link {
     z-index: 1; border-radius: 999px; flex: 1 1 0; min-width: 0; flex-direction: row; gap: 0; padding: .9rem .25rem;
-    transition: flex-grow .38s ease, padding .3s ease, gap .3s ease, transform .15s ease;
+    transition: flex-grow .36s var(--ease-in-out), padding .3s var(--ease-in-out), gap .3s var(--ease-in-out), transform .14s var(--ease-out);
   }
   [data-style="glass"] .bottom-nav__link.is-active { flex-grow: 3; gap: .4rem; }
-  [data-style="glass"] .bottom-nav__link:active { transform: scale(.94); }
+  [data-style="glass"] .bottom-nav__link:active { transform: scale(.97); }
   [data-style="glass"] .bottom-nav__link.is-active::before { display: none; }
   [data-style="glass"] .bottom-nav__label {
     font-size: .78rem; font-weight: 600; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
-    transition: max-width .38s ease, opacity .25s ease;
+    transition: max-width .36s var(--ease-in-out), opacity .25s var(--ease-out);
   }
   [data-style="glass"] .bottom-nav__link.is-active .bottom-nav__label { max-width: 5.5rem; opacity: 1; }
 }
@@ -1236,7 +1291,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   select:not([multiple]) { align-items: center; justify-content: space-between; gap: .5rem; cursor: pointer; }
   select:not([multiple])::picker-icon {
     content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    display: block; line-height: 0; transition: transform .15s;
+    display: block; line-height: 0; transition: transform var(--dur-enter) var(--ease-in-out);
   }
   select:not([multiple]):open::picker-icon { transform: rotate(180deg); }
   select:not([multiple])::picker(select) {
@@ -1244,7 +1299,11 @@ html.modal-open, html.modal-open body { overflow: hidden; }
     background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-s);
     padding: .25rem; margin-block: .25rem; box-shadow: 0 10px 28px color-mix(in srgb, var(--ink) 22%, transparent);
     max-height: min(340px, 60vh);
+    opacity: 0; transform: scale(.95); transform-origin: top center;  /* drops out of the field, folds back into it */
+    transition: opacity var(--dur-exit) var(--ease-out), transform var(--dur-exit) var(--ease-out), overlay var(--dur-exit) allow-discrete, display var(--dur-exit) allow-discrete;
   }
+  select:not([multiple])::picker(select):popover-open { opacity: 1; transform: none; transition-duration: var(--dur-enter); }
+  @starting-style { select:not([multiple])::picker(select):popover-open { opacity: 0; transform: scale(.95); } }
   select:not([multiple]) option { padding: .45rem .6rem; border-radius: calc(var(--radius-s) - 2px); cursor: pointer; }
   select:not([multiple]) option:hover,
   select:not([multiple]) option:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); outline: none; }
@@ -1327,6 +1386,7 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-month-controls { display: flex; align-items: end; gap: .5rem; }
 .wear-month-title { margin-bottom: 1.25rem; }
 .wear-month-select { position: relative; z-index: 1; }
+.wear-month-picker { transform-origin: top center; animation: popover-in var(--dur-enter) var(--ease-out); }
 .wear-month-field { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: .35rem; font-size: .85rem; font-weight: 500; }
 .wear-month-controls > button { min-height: 44px; flex-shrink: 0; }
 .wear-month-field input { width: 100%; min-width: 0; min-height: 44px; }
@@ -1437,6 +1497,61 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .collection-settings { display: grid; gap: 1rem; }
 .collection-option .bookshelf-option { display: flex; align-items: center; gap: .5rem; }
 .collection-option p { margin: .35rem 0 0; }
+
+/* ---------------- motion ----------------
+   Tokens live at the top of :root. Entrances ease out; things that travel ease in-out; exits are 20% shorter than
+   entrances; nothing bounces. Menus, the sync popover and the select picker scale up from .95 at their trigger
+   and fold back into it. Reduced motion switches all of this off (rule at the very end). */
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } }
+@keyframes popover-in { from { opacity: 0; transform: scale(.95); } }
+@keyframes reveal-x { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+/* Sequential entrance: app.js adds .is-entering and --i (0, 1, 2 ...) to rows/cards on tab switches. */
+.is-entering { animation: rise-in var(--dur-enter) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+.is-entering .chart-svg { animation: reveal-x 560ms var(--ease-out) 120ms backwards; }   /* charts uncover left to right through a clip mask */
+
+/* Modal contents settle just after the box: first fields stagger in, action pills stay put (they carry the glass blur). */
+.modal-overlay.is-opening .modal__body > :not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :not(.form-actions) {
+  animation: rise-in var(--dur-enter) var(--ease-out) backwards; animation-delay: 220ms;
+}
+.modal-overlay.is-opening .modal__body > :nth-child(1):not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :nth-child(1):not(.form-actions) { animation-delay: 40ms; }
+.modal-overlay.is-opening .modal__body > :nth-child(2):not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :nth-child(2):not(.form-actions) { animation-delay: 70ms; }
+.modal-overlay.is-opening .modal__body > :nth-child(3):not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :nth-child(3):not(.form-actions) { animation-delay: 100ms; }
+.modal-overlay.is-opening .modal__body > :nth-child(4):not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :nth-child(4):not(.form-actions) { animation-delay: 130ms; }
+.modal-overlay.is-opening .modal__body > :nth-child(5):not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :nth-child(5):not(.form-actions) { animation-delay: 160ms; }
+.modal-overlay.is-opening .modal__body > :nth-child(6):not(.form-actions),
+.modal-overlay.is-opening .modal__body > .form > :nth-child(6):not(.form-actions) { animation-delay: 190ms; }
+
+/* Success pulse: scale up and settle with a fading ring, no overshoot. */
+@keyframes confirm-pulse {
+  0%   { transform: scale(1); animation-timing-function: var(--ease-out); }
+  40%  { transform: scale(1.14); animation-timing-function: var(--ease-in-out); }
+  100% { transform: scale(1); }
+}
+@keyframes confirm-ring {
+  from { outline: 2px solid color-mix(in srgb, var(--good) 55%, transparent); outline-offset: 0; }
+  to   { outline: 2px solid color-mix(in srgb, var(--good) 0%, transparent); outline-offset: 8px; }
+}
+.stat-cell.is-pulse, .item-row.is-pulse, .outfit-history__entry.is-pulse { animation: confirm-ring 560ms var(--ease-out); }
+.stat-cell.is-pulse { border-radius: var(--radius-s); }
+.stat-cell.is-pulse .stat-cell__icon, .stat-cell.is-pulse .stat-cell__text .mono { animation: confirm-pulse 420ms; transform-origin: left center; }
+.stat-cell.is-pulse .stat-cell__icon { transform-origin: center; }
+
+/* Icon swaps (sync glyph): the old glyph blurs and shrinks away while the new one blurs and grows in, overlapping. */
+@keyframes icon-in { from { opacity: 0; filter: blur(4px); transform: scale(.6); } }
+@keyframes icon-out { to { opacity: 0; filter: blur(4px); transform: scale(.6); } }
+.sync-glyph-slot { transform-box: fill-box; transform-origin: center; }
+.sync-glyph-slot.icon-swap--in { animation: icon-in var(--dur-enter) var(--ease-out) backwards; }
+.sync-glyph-slot.icon-swap--out { animation: icon-out var(--dur-exit) var(--ease-out) forwards; }
+
+/* the sliding underline only exists where the nav draws one */
+[data-style="neumorphic"] .nav__ink, [data-style="brutalist"] .nav__ink { display: none; }
 
 /* Honor reduced motion, including the mobile glass navigation and sync glyph. */
 @media (prefers-reduced-motion: reduce) {

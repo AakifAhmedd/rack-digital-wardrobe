@@ -4696,6 +4696,139 @@ async function initVersion() {
   } catch (e) { /* offline or blocked — keeps the last known version */ }
 }
 
+/* ---------------- Searchable selects ----------------
+   A single-value <select> with more than 10 options keeps its native look and value, but opening it
+   shows a searchable list instead of the OS picker. The <select> stays the source of truth: choosing
+   sets it and fires input + change, so every existing handler and form read keeps working. */
+const SearchSelect = {
+  MIN_OPTIONS: 11,
+  _ui: null,
+  eligible(sel) {
+    return !sel.multiple && !(sel.size > 1) && !sel.hasAttribute('data-no-search') && sel.options.length >= this.MIN_OPTIONS;
+  },
+  scan() {
+    qsa('select:not(.ss-native)').forEach(sel => { if (this.eligible(sel)) sel.classList.add('ss-native'); });
+  },
+  init() {
+    this.scan();
+    let queued = false;
+    new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; this.scan(); });
+    }).observe(document.body, { childList: true, subtree: true });
+    /* .ss-native selects ignore pointer events (so the OS picker never opens); a tap that lands on one
+       is found by position on whatever sits underneath it. */
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!(target instanceof Element) || target instanceof HTMLSelectElement || target.closest('.ss-overlay')) return;
+      if (!e.clientX && !e.clientY) return;
+      const sel = qsa('select.ss-native').find(node => {
+        if (node.disabled || !target.contains(node)) return false;
+        const r = node.getBoundingClientRect();
+        return r.width && r.height && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      });
+      if (!sel) return;
+      e.preventDefault();   // also stops a wrapping <label> from refocusing the select
+      this.open(sel);
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      const sel = e.target;
+      if (!(sel instanceof HTMLSelectElement) || !sel.classList.contains('ss-native') || sel.disabled) return;
+      if (e.key === 'Enter' || e.key === ' ' || (e.key === 'ArrowDown' && e.altKey)) { e.preventDefault(); this.open(sel); }
+    }, true);
+  },
+  close() {
+    const ui = this._ui;
+    if (!ui) return;
+    this._ui = null;
+    ui.vv?.removeEventListener('resize', ui.fit);
+    ui.overlay.remove();
+  },
+  open(sel) {
+    this.close();
+    const lab = sel.closest('label');
+    const labelText = sel.getAttribute('aria-label')
+      || (lab ? [...lab.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' ').replace(/\s+/g, ' ').trim() : '');
+    const noun = (labelText || (sel.options[0]?.textContent || '').trim().replace(/^all\s+/i, '') || 'options').toLowerCase();
+    const overlay = el(`
+      <div class="ss-overlay">
+        <div class="ss-panel" role="dialog" aria-modal="true" aria-label="${esc(labelText || 'Choose an option')}">
+          <div class="ss-head">
+            <input type="search" class="ss-input" placeholder="Search ${esc(noun)}…" aria-label="Search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+            <button type="button" class="icon-btn ss-close" aria-label="Close">&times;</button>
+          </div>
+          <ul class="ss-list" role="listbox"></ul>
+        </div>
+      </div>`);
+    const input = qs('.ss-input', overlay), list = qs('.ss-list', overlay);
+    const entries = [...sel.options].map((o, i) => ({
+      i, o, text: o.textContent.trim(), group: o.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : '',
+    }));
+    let shown = [], active = 0;
+    const draw = (initial) => {
+      const q = input.value.trim().toLowerCase();
+      shown = entries.filter(x => !q || x.text.toLowerCase().includes(q));
+      if (q) {
+        const rank = x => { const t = x.text.toLowerCase(); return t.startsWith(q) ? 0 : t.includes(' ' + q) ? 1 : 2; };
+        shown.sort((a, b) => rank(a) - rank(b) || a.i - b.i);
+      }
+      active = initial ? Math.max(0, shown.findIndex(x => x.i === sel.selectedIndex)) : 0;
+      let lastGroup = '';
+      list.innerHTML = shown.length ? shown.map((x, n) => {
+        let head = '';
+        if (!q && x.group && x.group !== lastGroup) head = `<li class="ss-group" role="presentation">${esc(x.group)}</li>`;
+        lastGroup = x.group;
+        const cls = ['ss-option', x.i === sel.selectedIndex ? 'is-selected' : '', x.o.disabled ? 'is-disabled' : '', n === active ? 'is-active' : ''].join(' ').trim();
+        return `${head}<li class="${cls}" role="option" aria-selected="${x.i === sel.selectedIndex}" data-n="${n}"><span>${esc(x.text)}${q && x.group ? ` <span class="ss-sub">${esc(x.group)}</span>` : ''}</span></li>`;
+      }).join('') : '<li class="ss-empty" role="presentation">No matches</li>';
+      qs('.is-active', list)?.scrollIntoView({ block: initial ? 'center' : 'nearest' });
+    };
+    const move = (to) => {
+      if (!shown.length) return;
+      active = (to + shown.length) % shown.length;
+      qsa('.ss-option', list).forEach((li, n) => li.classList.toggle('is-active', n === active));
+      qs('.is-active', list)?.scrollIntoView({ block: 'nearest' });
+    };
+    const pick = (n) => {
+      const x = shown[n];
+      if (!x || x.o.disabled) return;
+      const changed = sel.isConnected && sel.selectedIndex !== x.i;
+      this.close();
+      if (!sel.isConnected) return;
+      if (changed) {
+        sel.selectedIndex = x.i;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      sel.focus({ preventScroll: true });
+    };
+    const dismiss = () => { this.close(); if (sel.isConnected) sel.focus({ preventScroll: true }); };
+    input.addEventListener('input', () => draw(false));
+    list.addEventListener('click', (e) => { const li = e.target.closest('.ss-option'); if (li) pick(+li.dataset.n); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
+    qs('.ss-close', overlay).addEventListener('click', dismiss);
+    overlay.addEventListener('keydown', (e) => {
+      e.stopPropagation();   // keep the modal's own Escape / Tab handling out of this
+      if (e.key === 'Escape') { e.preventDefault(); dismiss(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); move(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); move(active - 1); }
+      else if (e.key === 'Enter') { e.preventDefault(); pick(active); }
+      else if (e.key === 'Tab') { e.preventDefault(); }
+    });
+    /* on-screen keyboards shrink the visual viewport; keep the panel inside what's still visible */
+    const vv = window.visualViewport;
+    const fit = () => overlay.style.setProperty('--ss-h', `${vv ? vv.height : window.innerHeight}px`);
+    fit();
+    vv?.addEventListener('resize', fit);
+    this._ui = { overlay, vv, fit };
+    document.body.appendChild(overlay);
+    draw(true);
+    requestAnimationFrame(() => overlay.classList.add('is-open'));
+    input.focus({ preventScroll: true });
+  },
+};
+
 function init() {
   try { Store.load(); }
   catch (err) {
@@ -4736,6 +4869,7 @@ function init() {
   LiquidGlass.apply(qs('#bottom-nav'), { bezel: 16 });
   initNavBehaviour();
   initSyncIndicator();
+  SearchSelect.init();
   // Home-screen shortcuts open the app with ?tab=outfit etc.
   const startTab = new URLSearchParams(location.search).get('tab');
   if (startTab === 'masters') setSettingsPanel('masters');   // old links: Masters now lives in Settings

@@ -1571,3 +1571,38 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Mobile presentation is independent of the desktop dialog geometry and theme. */
+@media (max-width: 640px) {
+  .modal-overlay[data-presentation="sheet"] { padding: env(safe-area-inset-top) 0 0; align-items: flex-end; }
+  .modal-overlay[data-presentation="sheet"] .modal-box {
+    max-height: min(90dvh, 100%); border-radius: var(--radius-m) var(--radius-m) 0 0;
+    transform: translateY(100%); transform-origin: bottom center !important;
+  }
+  .modal-overlay[data-presentation="fullscreen"] { padding: 0; }
+  .modal-overlay[data-presentation="fullscreen"] .modal-box {
+    width: 100%; max-width: none; height: 100dvh; max-height: 100%; border-radius: 0;
+    transform: translateY(24px); transform-origin: bottom center !important;
+  }
+  .modal-overlay[data-presentation="fullscreen"] .modal__header {
+    padding-top: max(1.1rem, env(safe-area-inset-top));
+  }
+  .modal-overlay[data-presentation="sheet"].is-open .modal-box,
+  .modal-overlay[data-presentation="fullscreen"].is-open .modal-box { transform: none; }
+  @starting-style {
+    .modal-overlay[data-presentation="sheet"].is-open .modal-box { transform: translateY(100%); }
+    .modal-overlay[data-presentation="fullscreen"].is-open .modal-box { transform: translateY(24px); }
+  }
+  .modal__body { padding-bottom: max(1.3rem, env(safe-area-inset-bottom)); }
+  .modal__header, .modal__body { padding-left: max(1.1rem, env(safe-area-inset-left)); padding-right: max(1.1rem, env(safe-area-inset-right)); }
+  .modal__header .icon-btn { min-width: 44px; min-height: 44px; }
+  .modal__body input, .modal__body select, .modal__body textarea { font-size: 16px; }
+  .modal-quick-actions { display: grid; gap: .3rem; }
+  .modal-quick-actions button {
+    font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line);
+    padding: .85rem; text-align: left; min-height: 44px; cursor: pointer;
+  }
+  .modal-quick-actions button:hover { background: var(--canvas); }
+  .modal-quick-actions button.danger { color: var(--thread); }
+  .modal-quick-actions button:disabled { opacity: .4; cursor: not-allowed; }
+}

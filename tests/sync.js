@@ -21,6 +21,7 @@
   function advance() { cloud.updated_at = `revision-${++revision}`; }
   async function device() {
     const frame = document.createElement('iframe');
+    frame.width = '1024'; frame.height = '768';
     frame.hidden = true;
     document.body.append(frame);
     const w = frame.contentWindow;
@@ -283,7 +284,7 @@
       let confirm;
       a.Modal.confirm = (_, yes) => { confirm = yes; };
       a.eval('render = () => {};');
-      history.querySelector('.outfit-history button').click();
+      history.querySelector('.outfit-history__entry button').click();
       assert(a.Store.state.outfitHistory.length === 1, 'Removal waits for confirmation');
       confirm();
       assert(a.Store.state.outfitHistory.length === 0, 'Confirmed removal');
@@ -418,7 +419,7 @@
       assert(a.Store.state.outfitHistory.length === 1 && pants.wearCount === 1, 'Individual undo leaves outfit and other items intact');
       let remove;
       a.Modal.confirm = (_, yes) => { remove = yes; };
-      const history = a.renderOutfitHistory(); history.querySelector('button').click(); remove();
+      const history = a.renderOutfitHistory(); history.querySelector('.outfit-history__entry button').click(); remove();
       equal([pants.wearCount, pants.wearHistory.events.length, a.Store.state.outfitHistory.length], [1, 1, 0], 'Outfit removal leaves item history intact');
     });
     await check('Count edits preserve dated history, handle undated counts, and do not mutate on cancel', async () => {
@@ -521,6 +522,7 @@
     await runMilestoneChecks({ check, assert, equal, device });
     await runBooksChecks({ check, assert, equal, device });
     await runLogoChecks({ check, assert, equal, device });
+    await runModalChecks({ check, assert, equal, device, image });
     window.testResult = { passed: lines.length, failed: 0 };
     lines.push(`\nAll ${lines.length} checks passed.`);
   } catch (err) {

@@ -968,7 +968,8 @@ function renderDashboard() {
   const DORMANT_DAYS = 60;
   const idleDays = i => Math.floor((Date.now() - (i.lastWornAt || i.createdAt || Date.now())) / 86400000);
   const clothing = items.filter(i => WearHistory.isClothing(i));
-  const dormant = clothing.filter(i => idleDays(i) >= DORMANT_DAYS).length;
+  const dormantItems = clothing.filter(i => idleDays(i) >= DORMANT_DAYS).sort((a, b) => idleDays(b) - idleDays(a));
+  const dormant = dormantItems.length;
   const longestIdle = [...clothing].sort((a, b) => idleDays(b) - idleDays(a))[0];
   const totalWears = clothing.reduce((s, i) => s + (i.wearCount || 0), 0);
   const avgCPW = avgCostPerWear();
@@ -1017,6 +1018,27 @@ function renderDashboard() {
       </div>
     </div>
   `));
+
+  /* Tapping the idle card lists the dormant items, longest idle first. */
+  if (dormant) {
+    const idleCard = qs('.stat-idle', wrap);
+    const showDormant = () => {
+      const body = el(`
+        <div>
+          <p class="muted">Not worn in ${DORMANT_DAYS}+ days, longest idle first.</p>
+          <div class="mini-list">${dormantItems.map(i => `
+            <div class="mini-row"><span>${esc(itemTitle(i))}${i.lastWornAt ? '' : ' <span class="muted">· never worn</span>'}</span><span class="tag-chip tag-chip--warn">${idleDays(i)} days</span></div>`).join('')}
+          </div>
+        </div>`);
+      Modal.open(`Dormant items · ${dormant}`, body);
+    };
+    idleCard.classList.add('stat-idle--action');
+    idleCard.setAttribute('role', 'button');
+    idleCard.tabIndex = 0;
+    idleCard.setAttribute('aria-label', `Show ${dormant} dormant item${dormant === 1 ? '' : 's'}`);
+    idleCard.addEventListener('click', showDormant);
+    idleCard.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showDormant(); } });
+  }
 
   /* ---- charts ---- */
   const chartCols = el(`<div class="dash-cols"></div>`);

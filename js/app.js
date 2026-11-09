@@ -3671,7 +3671,7 @@ function renderSimpleListPanel(stateKey, label) {
         <span class="muted">${count}</span>
         ${stateKey === 'brands' ? '<button data-act="logo" title="Logo">' + statIconSvg('image', 14) + '</button>' : ''}
         <button data-act="rename" title="Rename">✎</button>
-        <button data-act="delete" title="Delete">&times;</button>
+        ${count ? '' : '<button data-act="delete" title="Delete">&times;</button>'}
       </div>`);
     if (stateKey === 'brands') {
       qs('[data-act="logo"]', chip).addEventListener('click', () => openBrandLogoModal(x));
@@ -3687,7 +3687,7 @@ function renderSimpleListPanel(stateKey, label) {
         x.name = name; Store.save(); render();
       }, { okLabel: 'Rename' });
     });
-    qs('[data-act="delete"]', chip).addEventListener('click', () => {
+    qs('[data-act="delete"]', chip)?.addEventListener('click', () => {
       Modal.confirm(`Delete "${x.name}"?`, () => {
         s[stateKey] = s[stateKey].filter(y => y.id !== x.id);
         Store.save(); render();
@@ -3727,9 +3727,9 @@ function renderColorsPanel() {
         <span class="swatch swatch--sm" style="${esc(swatchStyle)}"></span>
         <span>${esc(c.name)}</span>
         <span class="muted">${count}</span>
-        <button data-act="delete" title="Delete">&times;</button>
+        ${count ? '' : '<button data-act="delete" title="Delete">&times;</button>'}
       </div>`);
-    qs('[data-act="delete"]', chip).addEventListener('click', () => {
+    qs('[data-act="delete"]', chip)?.addEventListener('click', () => {
       Modal.confirm(`Delete color "${c.name}"?`, () => {
         s.colors = s.colors.filter(x => x.id !== c.id);
         Store.save(); render();

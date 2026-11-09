@@ -2972,6 +2972,13 @@ function saveOutfitActivityId(id) {
 }
 let outfitActivityId = loadOutfitActivityId();
 let outfitSelectedIds = new Set();
+/* Outfit history range: rolling 7 / 30 days or everything. Device-local, remembered. */
+const OUTFIT_HISTORY_RANGE_KEY = 'rack.outfit.historyRange';
+const OUTFIT_HISTORY_RANGES = [['7', '7 days', 7], ['30', '30 days', 30], ['all', 'All', 0]];
+function loadOutfitHistoryRange() {
+  try { const v = localStorage.getItem(OUTFIT_HISTORY_RANGE_KEY); return OUTFIT_HISTORY_RANGES.some(r => r[0] === v) ? v : '7'; } catch (e) { return '7'; }
+}
+let outfitHistoryRange = loadOutfitHistoryRange();
 /* Accessories are typically layered (watch + belt + sunglasses...), so that
    category allows multiple picks; every other category is one-at-a-time. */
 function outfitCategoryIsMulti(catId) { return catId === 'cat_accessories'; }
@@ -3280,10 +3287,30 @@ function outfitLogDate(ts) {
 }
 
 function renderOutfitHistory() {
-  const section = el('<section class="outfit-history" aria-label="Outfit history"><h2>Outfit history</h2></section>');
-  const entries = [...Store.state.outfitHistory].sort((a, b) => b.wornAt - a.wornAt);
-  if (!entries.length) {
+  const section = el('<section class="outfit-history" aria-label="Outfit history"><div class="outfit-history__head"><h2>Outfit history</h2></div></section>');
+  const all = [...Store.state.outfitHistory].sort((a, b) => b.wornAt - a.wornAt);
+  if (!all.length) {
     section.appendChild(el('<p class="muted">No outfits logged yet. Wear an outfit to save it here.</p>'));
+    return section;
+  }
+  const range = OUTFIT_HISTORY_RANGES.find(r => r[0] === outfitHistoryRange) || OUTFIT_HISTORY_RANGES[0];
+  const toggle = el(`<div class="view-toggle" role="group" aria-label="History range">${OUTFIT_HISTORY_RANGES.map(r =>
+    `<button type="button" class="view-toggle__btn ${r[0] === range[0] ? 'is-active' : ''}" data-range="${r[0]}">${r[1]}</button>`).join('')}</div>`);
+  qsa('button', toggle).forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.range === range[0]) return;
+    outfitHistoryRange = btn.dataset.range;
+    try { localStorage.setItem(OUTFIT_HISTORY_RANGE_KEY, outfitHistoryRange); } catch (e) { /* ignore */ }
+    section.replaceWith(renderOutfitHistory());
+  }));
+  qs('.outfit-history__head', section).appendChild(toggle);
+  // Rolling window of whole days, today included (so 7 days = today + previous 6).
+  let entries = all;
+  if (range[2]) {
+    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (range[2] - 1));
+    entries = all.filter(o => o.wornAt >= start.getTime());
+  }
+  if (!entries.length) {
+    section.appendChild(el(`<p class="muted">No outfits logged in the last ${range[2]} days.</p>`));
     return section;
   }
   const list = el('<ol class="outfit-history__list"></ol>');

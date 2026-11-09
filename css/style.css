@@ -568,6 +568,13 @@ input[type="date"] {
 }
 .outfit-item-tile__meta { display: block; font-size: .72rem; }
 .outfit-item-tile .swatch--sm { margin-top: 0; }
+@media (max-width: 640px) {
+  /* Two tiles per row on phones; a picked one-at-a-time item spans the full row. */
+  .outfit-item-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .outfit-item-tile { max-width: none; }
+  .outfit-item-tile__title { -webkit-line-clamp: 3; }
+  .outfit-item-tile.is-selected:only-child { grid-column: 1 / -1; }
+}
 
 .outfit-summary {
   background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);

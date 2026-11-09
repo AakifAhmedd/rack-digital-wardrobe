@@ -473,6 +473,38 @@ const Modal = {
   _opener: null,
   _cleanup: null,
   _background: [],
+  _stack: [],
+  _draft: null,
+  _snapshot(root) {
+    return JSON.stringify(qsa('input, select, textarea, button.is-active, button.is-selected', root).map(n =>
+      [n.name || n.id, n.tagName === 'BUTTON' ? n.textContent + (n.dataset.icon || '') : n.value, n.checked, n.tagName === 'SELECT' ? [...n.selectedOptions].map(o => o.value) : null]));
+  },
+  isDirty() {
+    return !!this._draft && (this._draft.changed || this._snapshot(this._draft.root) !== this._draft.initial);
+  },
+  contains(root) {
+    return root.isConnected || this._stack.some(frame => frame.nodes.some(node => node.contains(root)));
+  },
+  markDirty(root) {
+    const draft = root ? [this._draft, ...this._stack.map(frame => frame.draft)].find(d => d?.root === root) : this._draft;
+    if (draft) draft.changed = true;
+  },
+  requestClose(afterClose) {
+    if (!this.isDirty()) { this.close(); afterClose?.(); return; }
+    this.confirm('Discard your unsaved changes?', () => {
+      this.close(); afterClose?.();
+    }, { title: 'Discard changes?', yesLabel: 'Discard', danger: true });
+  },
+  actions(title, menu) {
+    const body = el('<div class="modal-quick-actions"></div>');
+    qsa('button', menu).forEach(source => {
+      const button = source.cloneNode(true);
+      button.removeAttribute('id');
+      button.addEventListener('click', () => { this.close(); source.click(); });
+      body.appendChild(button);
+    });
+    this.open(title, body);
+  },
   open(title, bodyEl, opts = {}) {
     const overlay = qs('#modal-overlay');
     const box = qs('#modal-box');
@@ -481,7 +513,14 @@ const Modal = {
       this._background = qsa('body > *').filter(node => node !== overlay && !node.inert);
       this._background.forEach(node => { node.inert = true; });
     }
-    if (this._cleanup) this._cleanup();
+    if (opts.nested && overlay.classList.contains('is-open')) {
+      // Keep the actual nodes, listeners, photo draft and cleanup alive beneath a dialog.
+      this._stack.push({ nodes: [...box.childNodes], cleanup: this._cleanup, draft: this._draft,
+        presentation: overlay.dataset.presentation, center: overlay.classList.contains('modal-overlay--center'),
+        focus: document.activeElement, scroll: qs('.modal__body', box)?.scrollTop || 0 });
+      box.replaceChildren();
+    } else if (this._cleanup) this._cleanup();
+    this._draft = null;
     this._cleanup = opts.onClose || null;
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
@@ -492,6 +531,7 @@ const Modal = {
     if (typeof bodyEl === 'string') body.innerHTML = bodyEl; else body.appendChild(bodyEl);
     box.appendChild(header);
     box.appendChild(body);
+    overlay.dataset.presentation = opts.center ? 'dialog' : (opts.presentation || 'sheet');
     overlay.classList.toggle('modal-overlay--center', !!opts.center);
     clearTimeout(this._clearT);
     overlay.classList.add('is-open', 'is-opening');
@@ -499,10 +539,11 @@ const Modal = {
     this._settleT = setTimeout(() => overlay.classList.remove('is-opening'), 450);
     document.documentElement.classList.add('modal-open');
     this._aim(box);
-    qs('#modal-close').addEventListener('click', () => Modal.close());
+    qs('#modal-close').addEventListener('click', () => Modal.requestClose());
     qs('#modal-close').focus();
     qsa('.form-actions .btn', body).forEach(btn => { if (!btn.classList.contains('lg-on')) LiquidGlass.apply(btn, { bezel: 12 }); });
     if (opts.onMount) opts.onMount(body);
+    if (qs('form', body)) this._draft = { root: body, initial: this._snapshot(body), changed: false };
   },
   /* The box scales from the control that opened it, and folds back into it on close. */
   _aim(box) {
@@ -515,11 +556,26 @@ const Modal = {
     const y = Math.min(Math.max(r.top + r.height / 2 - box.offsetTop, 0), box.offsetHeight);
     box.style.transformOrigin = `${x}px ${y}px`;
   },
-  close() {
+  close({ all = false } = {}) {
     const overlay = qs('#modal-overlay'), box = qs('#modal-box');
     if (!overlay.classList.contains('is-open')) return;
     if (this._cleanup) this._cleanup();
     this._cleanup = null;
+    this._draft = null;
+    if (all) {
+      while (this._stack.length) this._stack.pop().cleanup?.();
+    } else if (this._stack.length) {
+      const previous = this._stack.pop();
+      box.replaceChildren(...previous.nodes);
+      this._cleanup = previous.cleanup; this._draft = previous.draft;
+      overlay.dataset.presentation = previous.presentation;
+      overlay.classList.toggle('modal-overlay--center', previous.center);
+      overlay.classList.remove('is-opening');
+      qs('.modal__body', box).scrollTop = previous.scroll;
+      if (previous.focus?.isConnected) previous.focus.focus({ preventScroll: true });
+      else qs('#modal-close', box).focus();
+      return;
+    }
     this._background.forEach(node => { node.inert = false; });
     this._background = [];
     overlay.classList.remove('is-open', 'is-opening');
@@ -542,10 +598,10 @@ const Modal = {
         </div>
       </div>`);
     Modal.open(opts.title || 'Please confirm', body, {
-      center: true,
+      center: true, nested: true,
       onMount: (root) => {
         qs('#confirm-no', root).addEventListener('click', () => Modal.close());
-        qs('#confirm-yes', root).addEventListener('click', () => { onYes(); Modal.close(); });
+        qs('#confirm-yes', root).addEventListener('click', () => { Modal.close(); onYes(); });
       },
     });
   },
@@ -564,7 +620,7 @@ Modal.prompt = function (title, fields, onSubmit, opts = {}) {
   Modal.open(title, body, {
     onMount: (root) => {
       const form = qs('form', root);
-      qs('#prompt-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#prompt-cancel', root).addEventListener('click', () => Modal.requestClose());
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const values = {};
@@ -577,16 +633,23 @@ Modal.prompt = function (title, fields, onSubmit, opts = {}) {
     },
   });
 };
-qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'modal-overlay') Modal.close(); });
+qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'modal-overlay') Modal.requestClose(); });
 document.addEventListener('keydown', (e) => {
   if (!qs('#modal-overlay').classList.contains('is-open')) return;
-  if (e.key === 'Escape') { e.preventDefault(); Modal.close(); }
+  if (e.key === 'Escape') { e.preventDefault(); Modal.requestClose(); }
   if (e.key !== 'Tab') return;
   const controls = qsa('button, input, select, textarea, a[href], [tabindex]', qs('#modal-box'))
     .filter(node => !node.matches(':disabled') && node.tabIndex >= 0 && !node.closest('[hidden]') && node.getClientRects().length);
   const first = controls[0], last = controls[controls.length - 1];
   if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+});
+
+window.addEventListener('beforeunload', event => {
+  if (Modal.isDirty() || Modal._stack.some(frame => frame.draft &&
+      (frame.draft.changed || Modal._snapshot(frame.draft.root) !== frame.draft.initial))) {
+    event.preventDefault(); event.returnValue = '';
+  }
 });
 
 /* ---------------- tab navigation ---------------- */
@@ -857,6 +920,7 @@ function openConflictModal() {
       </div>
     </div>`);
   Modal.open('Sync conflict', body, {
+    center: true, nested: true,
     onMount: (root) => {
       qs('#conflict-pull', root).addEventListener('click', async () => {
         Modal.close();
@@ -1030,7 +1094,7 @@ function renderDashboard() {
             <div class="mini-row"><span>${esc(itemTitle(i))}${i.lastWornAt ? '' : ' <span class="muted">· never worn</span>'}</span><span class="tag-chip tag-chip--warn">${idleDays(i)} days</span></div>`).join('')}
           </div>
         </div>`);
-      Modal.open(`Dormant items · ${dormant}`, body);
+      Modal.open(`Dormant items · ${dormant}`, body, { presentation: 'fullscreen' });
     };
     idleCard.classList.add('stat-idle--action');
     idleCard.setAttribute('role', 'button');
@@ -1336,12 +1400,17 @@ function renderBookshelf() {
       const closeMenu = () => {
         overflow.classList.remove('is-open'); toggle.setAttribute('aria-expanded', 'false'); menu.hidden = true;
       };
-      toggle.addEventListener('click', () => { if (menu.hidden) openMenu(); else closeMenu(); });
+      toggle.addEventListener('click', () => {
+        if (matchMedia('(max-width: 640px)').matches) { Modal.actions(book.title, menu); return; }
+        if (menu.hidden) openMenu(); else closeMenu();
+      });
       overflow.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !menu.hidden) {
           event.preventDefault(); closeMenu(); toggle.focus();
         } else if (event.key === 'ArrowDown' && event.target === toggle) {
-          event.preventDefault(); openMenu(); qs('button', menu).focus();
+          event.preventDefault();
+          if (matchMedia('(max-width: 640px)').matches) { Modal.actions(book.title, menu); return; }
+          openMenu(); qs('button', menu).focus();
         }
       });
       overflow.addEventListener('focusout', event => { if (!overflow.contains(event.relatedTarget)) closeMenu(); });
@@ -1378,7 +1447,7 @@ function openBookModal(existing = null) {
     ${existing?.archived ? '<p class="muted">This book is archived. Editing keeps it archived.</p>' : ''}
     <div class="form-actions"><button type="button" class="btn btn--ghost" id="book-cancel">Cancel</button><button type="submit" class="btn btn--primary">${existing ? 'Save book' : 'Add book'}</button></div>
   </form>`);
-  qs('#book-cancel', body).addEventListener('click', () => Modal.close());
+  qs('#book-cancel', body).addEventListener('click', () => Modal.requestClose());
   const genrePreset = body.elements.genrePreset, genreInput = body.elements.genre;
   let customGenre = book.genre || '';
   function refreshGenreOptions() {
@@ -1409,7 +1478,7 @@ function openBookModal(existing = null) {
       Modal.close(); render(); toast(existing ? 'Book updated' : 'Book added');
     } catch (err) { saving = false; toast(err.message, 'warn'); }
   });
-  Modal.open(existing ? 'Edit book' : 'Add book', body, { onMount: () => body.elements.title.focus() });
+  Modal.open(existing ? 'Edit book' : 'Add book', body, { presentation: 'fullscreen', onMount: () => body.elements.title.focus() });
 }
 
 function fmtReadingDate(value) {
@@ -1458,7 +1527,7 @@ function openBookReadingModal(bookId, existing = null, finishNow = false) {
     <label>Finished on <span class="muted">Leave blank for a reading in progress</span><input type="date" name="finishedOn" max="${ReadingDates.today()}" value="${esc(finishNow ? ReadingDates.today() : existing?.finishedOn || '')}"></label>
     <div class="form-actions"><button type="button" class="btn btn--ghost" id="reading-cancel">Cancel</button><button type="submit" class="btn btn--primary">Save dates</button></div>
   </form>`);
-  qs('#reading-cancel', body).addEventListener('click', () => openBookReadingHistory(bookId));
+  qs('#reading-cancel', body).addEventListener('click', () => Modal.requestClose(() => openBookReadingHistory(bookId)));
   let saving = false;
   body.addEventListener('submit', event => {
     event.preventDefault(); if (saving) return;
@@ -1540,7 +1609,7 @@ function openReadingSummary() {
     showCompletions();
   }
   [mode, year, from, to].forEach(input => input.addEventListener('change', refresh));
-  refresh(); Modal.open('Reading summaries', body);
+  refresh(); Modal.open('Reading summaries', body, { presentation: 'fullscreen' });
 }
 
 function renderWardrobe() {
@@ -2079,6 +2148,9 @@ function itemCard(item, avg = avgCostPerWear()) {
   const overflowWrap = qs('.item-card__overflow', card);
   qs('[data-act="overflow-toggle"]', card).addEventListener('click', (e) => {
     e.stopPropagation();
+    if (matchMedia('(max-width: 640px)').matches) {
+      Modal.actions(itemTitle(item), qs('.item-row__menu', overflowWrap)); return;
+    }
     const wasOpen = overflowWrap.classList.contains('is-open');
     qsa('.item-row__overflow.is-open').forEach(w => w.classList.remove('is-open'));
     if (!wasOpen) overflowWrap.classList.add('is-open');
@@ -2147,6 +2219,9 @@ function itemListRow(item) {
   const overflowWrap = qs('.item-row__overflow', row);
   qs('[data-act="overflow-toggle"]', row).addEventListener('click', (e) => {
     e.stopPropagation();
+    if (matchMedia('(max-width: 640px)').matches) {
+      Modal.actions(itemTitle(item), qs('.item-row__menu', overflowWrap)); return;
+    }
     const wasOpen = overflowWrap.classList.contains('is-open');
     qsa('.item-row__overflow.is-open').forEach(w => w.classList.remove('is-open'));
     if (!wasOpen) overflowWrap.classList.add('is-open');
@@ -2183,7 +2258,7 @@ function openBackfillModal(item) {
     </form>`);
   Modal.open('Log a past wear', body, {
     onMount: (root) => {
-      qs('#backfill-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#backfill-cancel', root).addEventListener('click', () => Modal.requestClose());
       const form = qs('#backfill-form', root);
       const submit = qs('[type="submit"]', form);
       form.addEventListener('submit', (e) => {
@@ -2478,7 +2553,7 @@ function openWardrobeHistoryModal(initial = new Date()) {
   qs('#wear-export-copy', body).addEventListener('click', () => exportWearsForAI(month.getFullYear(), month.getMonth(), 'copy'));
   qs('#wear-export-download', body).addEventListener('click', () => exportWearsForAI(month.getFullYear(), month.getMonth(), 'download'));
   refresh();
-  Modal.open('Wardrobe wear history', body);
+  Modal.open('Wardrobe wear history', body, { presentation: 'fullscreen' });
 }
 
 function openRetireModal(item) {
@@ -2498,7 +2573,7 @@ function openRetireModal(item) {
     </form>`);
   Modal.open('Retire item', body, {
     onMount: (root) => {
-      qs('#retire-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#retire-cancel', root).addEventListener('click', () => Modal.requestClose());
       qs('#retire-form', root).addEventListener('submit', (e) => {
         e.preventDefault();
         const reason = new FormData(e.target).get('reason');
@@ -2631,7 +2706,7 @@ function openItemModal(existing, presetCategoryId) {
     </form>
   `);
 
-  Modal.open(isEdit ? 'Edit item' : 'Add a new item', body, {
+  Modal.open(isEdit ? 'Edit item' : 'Add a new item', body, { presentation: 'fullscreen',
     onMount: (root) => {
       const form = qs('#item-form', root);
       const catSelect = form.categoryId;
@@ -2743,13 +2818,13 @@ function openItemModal(existing, presetCategoryId) {
       }
 
       async function refreshPhotoField() {
-        if (!root.isConnected) return;
+        if (!Modal.contains(root)) return;
         const show = catSelect.value === 'cat_perfumes';
         photoField.hidden = !show;
         if (!show) return;
         if (storedPhoto === undefined) {
           storedPhoto = await RackPhotos.get(item.id); // null when there is none
-          if (!root.isConnected || catSelect.value !== 'cat_perfumes') return;
+          if (!Modal.contains(root) || catSelect.value !== 'cat_perfumes') return;
         }
         const effective = pendingPhoto || (removePhoto ? null : storedPhoto);
         renderPhotoPreview(effective);
@@ -2772,12 +2847,12 @@ function openItemModal(existing, presetCategoryId) {
         photoBusy = true; submitButton.disabled = true;
         try {
           const blob = z === 1 ? zoomBase : await RackPhotos.zoomBlob(zoomBase, z);
-          if (run !== zoomRun || !root.isConnected) return;
+          if (run !== zoomRun || !Modal.contains(root)) return;
           pendingPhoto = (z === 1 && zoomBaseStored) ? null : blob;
           removePhoto = false;
           renderPhotoPreview(blob);
         } catch (e) {
-          if (root.isConnected) toast('Couldn\u2019t zoom that photo', 'warn');
+          if (Modal.contains(root)) toast('Couldn\u2019t zoom that photo', 'warn');
         } finally {
           if (run === zoomRun) { photoBusy = false; submitButton.disabled = false; }
         }
@@ -2786,6 +2861,7 @@ function openItemModal(existing, presetCategoryId) {
       photoAddBtn.addEventListener('click', () => photoInput.click());
       photoReplaceBtn.addEventListener('click', () => photoInput.click());
       photoRemoveBtn.addEventListener('click', () => {
+        Modal.markDirty(root);
         removePhoto = true;
         pendingPhoto = null;
         resetZoom();
@@ -2795,20 +2871,22 @@ function openItemModal(existing, presetCategoryId) {
         const file = photoInput.files && photoInput.files[0];
         photoInput.value = ''; // allow picking the same file again
         if (!file) return;
+        Modal.markDirty(root);
         resetZoom();
         const run = zoomRun;
         photoBusy = true; submitButton.disabled = true;
         photoAddBtn.disabled = photoReplaceBtn.disabled = photoRemoveBtn.disabled = zoomInput.disabled = true;
         try {
           const blob = await RackPhotos.processImageFile(file);
-          if (!root.isConnected || run !== zoomRun) return;
+          if (!Modal.contains(root) || run !== zoomRun) return;
+          Modal.markDirty(root);
           pendingPhoto = blob;
           removePhoto = false;
           resetZoom();
           await refreshPhotoField();
           toast('Photo ready — save to keep it');
         } catch (e) {
-          if (root.isConnected) toast('Couldn\u2019t read that photo — try another', 'warn');
+          if (Modal.contains(root)) toast('Couldn\u2019t read that photo — try another', 'warn');
         } finally {
           photoBusy = false; submitButton.disabled = false;
           photoAddBtn.disabled = photoReplaceBtn.disabled = photoRemoveBtn.disabled = zoomInput.disabled = false;
@@ -2877,7 +2955,7 @@ function openItemModal(existing, presetCategoryId) {
         else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setBrandAdding(false); }
       });
 
-      qs('#item-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#item-cancel', root).addEventListener('click', () => Modal.requestClose());
 
       let saving = false;
       form.addEventListener('submit', (e) => {
@@ -2904,11 +2982,6 @@ function openItemModal(existing, presetCategoryId) {
         }
         item.tags = qsa('#tag-checks input:checked', root).map(cb => cb.value);
 
-        /* Using a brand outside its scope (e.g. a clothing house on a perfume)
-           means the house covers both — widen it so it stays visible in both
-           lists afterwards. */
-        const widenedBrand = upgradeBrandScopeForItem(G.brand(item.brandId), item.categoryId);
-
         // Same brand + same scent name already on the rack? Almost always
         // "another bottle", not a new scent — confirm before creating.
         if (!isEdit && item.categoryId === 'cat_perfumes') {
@@ -2928,6 +3001,7 @@ function openItemModal(existing, presetCategoryId) {
                 </div>
               </div>`);
             Modal.open('Already on your rack', body, {
+              center: true, nested: true,
               onMount: (r) => {
                 qs('#twin-cancel', r).addEventListener('click', () => Modal.close());
                 qs('#twin-add', r).addEventListener('click', () => {
@@ -2944,6 +3018,8 @@ function openItemModal(existing, presetCategoryId) {
         async function commitItem() {
           if (saving) return;
           saving = true;
+          // Widen brand scope only after the bottle is confirmed.
+          const widenedBrand = upgradeBrandScopeForItem(G.brand(item.brandId), item.categoryId);
           if (isEdit) {
             const idx = s.items.findIndex(i => i.id === item.id);
             s.items[idx] = item;
@@ -2952,7 +3028,7 @@ function openItemModal(existing, presetCategoryId) {
           }
           Store.save();
           await commitPhoto(); // the photo is durable before the grid re-renders
-          Modal.close();
+          Modal.close({ all: true });
           render();
           if (widenedBrand) toast(`${G.brand(item.brandId)?.name} now covers clothing and perfumes`);
           else toast(isEdit ? 'Item updated' : 'Item added to rack');
@@ -3322,7 +3398,7 @@ function openOutfitPastModal(selected, onDone) {
     </form>`);
   Modal.open('Log a past outfit', body, {
     onMount: (root) => {
-      qs('#outfit-past-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#outfit-past-cancel', root).addEventListener('click', () => Modal.requestClose());
       const form = qs('#outfit-past-form', root);
       const submit = qs('[type="submit"]', form);
       form.addEventListener('submit', (e) => {
@@ -3513,7 +3589,7 @@ function openCategoryModal(existing) {
           qsa('.icon-picker__btn', root).forEach(b => b.classList.toggle('is-selected', b === btn));
         });
       });
-      qs('#cat-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#cat-cancel', root).addEventListener('click', () => Modal.requestClose());
       qs('#cat-form', root).addEventListener('submit', (e) => {
         e.preventDefault();
         const name = qs('[name="name"]', root).value.trim();
@@ -3595,7 +3671,7 @@ function openTagModal(existing) {
     </form>`);
   Modal.open(isEdit ? 'Edit tag' : 'New tag', body, {
     onMount: (root) => {
-      qs('#tag-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#tag-cancel', root).addEventListener('click', () => Modal.requestClose());
       qs('#tag-form', root).addEventListener('submit', (e) => {
         e.preventDefault();
         const name = qs('[name="name"]', root).value.trim();
@@ -3891,7 +3967,7 @@ function openActivityModal(existing) {
       </div>
     </form>`);
 
-  Modal.open(isEdit ? 'Edit activity' : 'New activity', body, {
+  Modal.open(isEdit ? 'Edit activity' : 'New activity', body, { presentation: 'fullscreen',
     onMount: (root) => {
       function updatePreview() {
         const items = activeItems().filter(it => matchActivity(activity, it));
@@ -4102,7 +4178,7 @@ function openActivityModal(existing) {
         tagsWrap.appendChild(chip);
       });
 
-      qs('#act-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#act-cancel', root).addEventListener('click', () => Modal.requestClose());
       qs('#activity-form', root).addEventListener('submit', (e) => {
         e.preventDefault();
         const name = qs('[name="name"]', root).value.trim();
@@ -4608,9 +4684,9 @@ function openThemeModal() {
         <button type="submit" class="btn btn--primary">Create theme</button>
       </div>
     </form>`);
-  Modal.open('New theme', body, {
+  Modal.open('New theme', body, { presentation: 'fullscreen',
     onMount: (root) => {
-      qs('#theme-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#theme-cancel', root).addEventListener('click', () => Modal.requestClose());
       /* keep each swatch and hex field in step */
       qsa('.hex-input', root).forEach(box => {
         const swatch = qs('.hex-input__swatch', box), txt = qs('input[type="text"]', box);
@@ -4670,7 +4746,7 @@ function openFontModal() {
     </form>`);
   Modal.open('New font', body, {
     onMount: (root) => {
-      qs('#font-cancel', root).addEventListener('click', () => Modal.close());
+      qs('#font-cancel', root).addEventListener('click', () => Modal.requestClose());
       qs('#font-form', root).addEventListener('submit', (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);

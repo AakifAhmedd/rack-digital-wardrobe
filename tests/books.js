@@ -53,6 +53,7 @@ async function runBooksChecks({ check, assert, equal, device }) {
     w.openBookReadingModal(book().id);
     let form = w.document.querySelector('#book-reading-form');
     form.elements.startedOn.value = '2026-03-01'; form.querySelector('#reading-cancel').click();
+    w.document.querySelector('#confirm-yes').click();
     equal(w.Store.exportJSON(), before, 'Cancel changes nothing');
     w.document.querySelector('#book-log-reading').click();
     form = w.document.querySelector('#book-reading-form');

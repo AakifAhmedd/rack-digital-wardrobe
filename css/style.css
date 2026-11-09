@@ -651,6 +651,8 @@ input[type="date"] {
 }
 .chip-card button { background: none; border: none; cursor: pointer; color: var(--ink-soft); }
 .chip-card button:hover { color: var(--thread); }
+/* no delete button when in use: keep the count from hugging the rounded edge */
+.chip-card > .muted:last-child { padding-right: .3rem; }
 /* per-brand scope picker in Masters > Brands */
 .chip-card__scope {
   font-size: .72rem; padding: .15rem .3rem; border-radius: 10px;

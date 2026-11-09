@@ -3258,9 +3258,11 @@ function renderOutfitSummary(matches, refresh) {
   const actions = el(`
     <div class="outfit-summary__actions">
       <button type="button" class="btn btn--ghost btn--small" id="outfit-clear">Clear</button>
+      <button type="button" class="btn btn--ghost btn--small" id="outfit-past">Log past</button>
       <button type="button" class="btn btn--primary" id="outfit-wear">Wear this outfit</button>
     </div>`);
   qs('#outfit-clear', actions).addEventListener('click', () => { outfitSelectedIds.clear(); refresh(); });
+  qs('#outfit-past', actions).addEventListener('click', () => openOutfitPastModal(selected, refresh));
   const wearButton = qs('#outfit-wear', actions);
   wearButton.addEventListener('click', () => {
     if (wearButton.disabled) return;
@@ -3279,8 +3281,57 @@ function renderOutfitSummary(matches, refresh) {
   return box;
 }
 
-/* Logs retain only stable IDs. Names/status are resolved from today's rack. */
+/* Log the selected outfit on a past date (rare). Same date handling as the item "Log past" modal. */
+function openOutfitPastModal(selected, onDone) {
+  const maxDate = todayDateStr();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const defaultDate = todayDateStr(yesterday.getTime());
+  const body = el(`
+    <form class="form" id="outfit-past-form">
+      <p class="muted">Log this outfit on a past date. Each clothing item gets one wear on that date; "Last worn" only moves forward if the date is more recent than what's already stored.</p>
+      <label>Date worn
+        <input type="date" name="date" max="${maxDate}" value="${defaultDate}" required>
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="outfit-past-cancel">Cancel</button>
+        <button type="submit" class="btn btn--primary">Log outfit</button>
+      </div>
+    </form>`);
+  Modal.open('Log a past outfit', body, {
+    onMount: (root) => {
+      qs('#outfit-past-cancel', root).addEventListener('click', () => Modal.close());
+      const form = qs('#outfit-past-form', root);
+      const submit = qs('[type="submit"]', form);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (submit.disabled) return;
+        const dateStr = new FormData(e.target).get('date');
+        if (!dateStr) return;
+        if (dateStr > maxDate) { toast('Pick a date up to today', 'warn'); return; }
+        const ts = new Date(dateStr + 'T12:00:00').getTime();
+        if (!Number.isFinite(ts) || todayDateStr(ts) !== dateStr) { toast('Pick a valid date', 'warn'); return; }
+        submit.disabled = true;
+        const worn = selected.filter(item => WearHistory.record(item, ts));
+        const entry = { id: uid('outfit'), wornAt: ts, itemIds: selected.map(item => item.id) };
+        Store.state.outfitHistory.push(entry);
+        Store.save();
+        Modal.close();
+        outfitSelectedIds.clear();
+        toast(`Outfit logged for ${fmtDate(ts)} — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`);
+        pulseOutfitId = entry.id; onDone(); pulseOutfitId = null;
+      });
+    },
+  });
+}
+
+/* Logs retain only stable IDs. Names/status are resolved from today's rack.
+   Past-dated logs are stored at local noon, so those show the date without a made-up time. */
 function outfitLogDate(ts) {
+  const d = new Date(ts);
+  if (d.getHours() === 12 && !d.getMinutes() && !d.getSeconds() && !d.getMilliseconds()) {
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
   return new Date(ts).toLocaleString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });

@@ -424,7 +424,10 @@ function svgHBarChart(rows, opts = {}) {
 /* Two-column Sankey: rows = { label, iconKey, count, flows: [n per tier] }, tiers = [{ label, color }].
    Left nodes are categories, right nodes are tiers; link width = item count. */
 function svgSankey(rows, tiers, opts = {}) {
-  const width = 560, height = 280, labelW = 34, nodeW = 12, rightW = 118, gap = 8;
+  // viewBox follows the screen on phones so text stays near its real size instead of shrinking with the svg
+  const width = Math.max(300, Math.min(560, (window.innerWidth || 560) - 80));
+  const height = 280, labelW = 34, nodeW = 12, rightW = 104, gap = 8;
+  const spread = (cys, minGap) => { let prev = -Infinity; return cys.map(c => (prev = Math.max(c, prev + minGap))); };
   const leftX = labelW, rightX = width - rightW - nodeW;
   const total = rows.reduce((s, r) => s + r.count, 0);
   const tierTotals = tiers.map((_, t) => rows.reduce((s, r) => s + r.flows[t], 0));
@@ -443,7 +446,8 @@ function svgSankey(rows, tiers, opts = {}) {
 
   const mid = (leftX + nodeW + rightX) / 2;
   let links = '', nodes = '', labels = '';
-  lNodes.forEach(ln => {
+  const iconY = spread(lNodes.map(n => n.y + n.h / 2), 17);
+  lNodes.forEach((ln, i) => {
     liveTiers.forEach(t => {
       const n = ln.r.flows[t];
       if (!n) return;
@@ -453,12 +457,14 @@ function svgSankey(rows, tiers, opts = {}) {
       links += `<path d="M${leftX + nodeW},${y0} C${mid},${y0} ${mid},${y1} ${rightX},${y1}" fill="none" stroke="${tiers[t].color}" stroke-opacity=".38" stroke-width="${Math.max(1, h)}"><title>${esc(ln.r.label)} → ${esc(tiers[t].label)}: ${n}</title></path>`;
     });
     nodes += `<rect x="${leftX}" y="${ln.y}" width="${nodeW}" height="${Math.max(2, ln.h)}" rx="2" fill="var(--ink-soft)"></rect>`;
-    labels += `<svg x="4" y="${ln.y + ln.h / 2 - 10}" width="20" height="20" viewBox="0 0 24 24" class="chart-icon"><title>${esc(ln.r.label)}</title>${iconMarkup(ln.r.iconKey)}</svg>`;
+    labels += `<svg x="6" y="${iconY[i] - 8}" width="16" height="16" viewBox="0 0 24 24" class="chart-icon"><title>${esc(ln.r.label)}</title>${iconMarkup(ln.r.iconKey)}</svg>`;
   });
-  liveTiers.forEach(t => {
+  const labelY = spread(liveTiers.map(t => rNodes[t].y + rNodes[t].h / 2), 30);
+  liveTiers.forEach((t, i) => {
     const rn = rNodes[t];
     nodes += `<rect x="${rightX}" y="${rn.y}" width="${nodeW}" height="${Math.max(2, rn.h)}" rx="2" fill="${tiers[t].color}"></rect>`;
-    labels += `<text x="${rightX + nodeW + 8}" y="${rn.y + rn.h / 2 + 4}" class="chart-label">${esc(tiers[t].label)} <tspan class="chart-value">${tierTotals[t]}</tspan></text>`;
+    const lx = rightX + nodeW + 8, cy = labelY[i], n = tierTotals[t];
+    labels += `<text x="${lx}" y="${cy - 2}" class="chart-label">${esc(tiers[t].label)}</text><text x="${lx}" y="${cy + 12}" class="chart-value">${n} item${n === 1 ? '' : 's'}</text>`;
   });
   // vertical padding so icons on small first/last nodes aren't clipped at the svg edge
   const pad = 6;

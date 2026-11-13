@@ -661,7 +661,8 @@ input[type="date"] {
 }
 .sub-pill button { background: none; border: none; cursor: pointer; color: var(--ink-soft); font-size: .8rem; padding: 0; width: 1.5rem; height: 1.6rem; display: inline-flex; align-items: center; justify-content: center; }
 .sub-pill button:hover { color: var(--text); }
-.sub-pill button[data-act="delete-sub"]:hover { color: var(--thread); }
+.sub-pill button[data-act="delete-sub"], .chip-card button[data-act="delete"] { color: var(--thread); border-radius: 50%; }  /* destructive: same warning colour as the big delete buttons */
+.sub-pill button[data-act="delete-sub"]:hover, .chip-card button[data-act="delete"]:hover { color: var(--thread); background: var(--warn-bg); }
 
 .tag-table__row {
   display: grid; grid-template-columns: 6.4rem minmax(0, 1fr) auto; align-items: center; gap: .6rem;
@@ -679,7 +680,6 @@ input[type="date"] {
 }
 .chip-card button { background: none; border: none; cursor: pointer; color: var(--ink-soft); padding: 0; width: 1.6rem; height: 1.6rem; flex: none; display: inline-flex; align-items: center; justify-content: center; }
 .chip-card button:hover { color: var(--text); }
-.chip-card button[data-act="delete"]:hover { color: var(--thread); }
 /* Brands: one full-width row per brand (several per row on wide screens); controls line up in columns */
 .chip-grid--rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: .5rem; }
 .chip-grid--rows .chip-card { padding: .5rem .5rem .5rem .9rem; min-width: 0; }

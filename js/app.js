@@ -167,7 +167,8 @@ const STAT_ICONS = {
   wears: '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>',
   calendar: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
   wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
-  pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  pencil: '<g transform="matrix(-1 0 0 1 24 0)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
   trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   'trending-down': '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
   funnel: '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
@@ -178,6 +179,10 @@ const STAT_ICONS = {
 };
 function statIconSvg(key, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
+}
+/* Small inline edit/delete/etc. icon button used inside pills and chips (same glyphs as the big pencil + trash pair). */
+function miniIconBtn(act, icon, label) {
+  return `<button type="button" data-act="${act}" title="${label}" aria-label="${label}">${statIconSvg(icon, 15)}</button>`;
 }
 /* Pencil + solid trash pair used on master rows and cards. */
 function editDeleteIconBtns(name) {
@@ -3514,12 +3519,10 @@ function renderMasters() {
 function renderCategoriesPanel() {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
-  box.appendChild(el(`
-    <div class="panel-list__header">
-      <p class="muted" data-hint>Subcategories carry the same weight as the built-in ones.</p>
-      <button class="btn btn--primary btn--small" id="add-cat">+ Add category</button>
-    </div>`));
-  qs('#add-cat', box).addEventListener('click', () => openCategoryModal());
+  box.appendChild(el(`<p class="muted" data-hint>Subcategories carry the same weight as the built-in ones.</p>`));
+  const addCat = el(`<button class="btn btn--primary btn--small" id="add-cat" data-header-action>+ Add category</button>`);
+  addCat.addEventListener('click', () => openCategoryModal());
+  box.appendChild(addCat);
 
   s.categories.forEach(cat => {
     const subs = G.subsFor(cat.id);
@@ -3538,8 +3541,8 @@ function renderCategoriesPanel() {
           ${subs.map(sc => `
             <span class="sub-pill" data-sub="${esc(sc.id)}">
               ${esc(sc.name)}
-              <button data-act="rename-sub" title="Rename">✎</button>
-              <button data-act="delete-sub" title="Delete">&times;</button>
+              ${miniIconBtn('rename-sub', 'pencil', 'Rename')}
+              ${miniIconBtn('delete-sub', 'trash', 'Delete')}
             </span>`).join('')}
           <button class="btn btn--tiny btn--ghost" data-act="add-sub">+ Subcategory</button>
         </div>
@@ -3555,11 +3558,11 @@ function renderCategoriesPanel() {
     });
     qs('[data-act="add-sub"]', catBox).addEventListener('click', () => promptSubcategory(cat));
     qsa('[data-act="rename-sub"]', catBox).forEach(btn => btn.addEventListener('click', (e) => {
-      const sc = G.subcategory(e.target.closest('.sub-pill').dataset.sub);
+      const sc = G.subcategory(e.currentTarget.closest('.sub-pill').dataset.sub);
       promptSubcategory(cat, sc);
     }));
     qsa('[data-act="delete-sub"]', catBox).forEach(btn => btn.addEventListener('click', (e) => {
-      const scId = e.target.closest('.sub-pill').dataset.sub;
+      const scId = e.currentTarget.closest('.sub-pill').dataset.sub;
       Modal.confirm('Delete this subcategory?', () => {
         s.subcategories = s.subcategories.filter(sc => sc.id !== scId);
         Store.save(); render();
@@ -3625,12 +3628,10 @@ function promptSubcategory(cat, existing) {
 function renderTagsPanel() {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
-  box.appendChild(el(`
-    <div class="panel-list__header">
-      <p class="muted" data-hint>Tags are scoped to categories, so only relevant tags show up when tagging an item.</p>
-      <button class="btn btn--primary btn--small" id="add-tag">+ Add tag</button>
-    </div>`));
-  qs('#add-tag', box).addEventListener('click', () => openTagModal(null));
+  box.appendChild(el(`<p class="muted" data-hint>Tags are scoped to categories, so only relevant tags show up when tagging an item.</p>`));
+  const addTag = el(`<button class="btn btn--primary btn--small" id="add-tag" data-header-action>+ Add tag</button>`);
+  addTag.addEventListener('click', () => openTagModal(null));
+  box.appendChild(addTag);
 
   const list = el(`<div class="tag-table"></div>`);
   s.tags.forEach(t => {
@@ -3741,43 +3742,44 @@ let brandLogoTrimBusy = false;
 function renderSimpleListPanel(stateKey, label) {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
-  box.appendChild(el(`
-    <div class="panel-list__header ${stateKey === 'brands' ? 'panel-list__header--brand-actions' : ''}">
-      <button class="btn btn--primary btn--small" id="add-simple">+ Add ${label.toLowerCase()}</button>
-      ${stateKey === 'brands' ? `<button type="button" class="btn btn--ghost btn--small" id="trim-brand-logos" ${brandLogoTrimBusy || !s.brands.some(brand => brand.logo) ? 'disabled' : ''}>${brandLogoTrimBusy ? 'Trimming logos…' : 'Trim uploaded logos'}</button>` : ''}
-    </div>`));
-  qs('#add-simple', box).addEventListener('click', () => {
+  const isBrands = stateKey === 'brands';
+  if (isBrands) box.appendChild(el(`<p class="muted" data-hint>Scope sets where a brand shows up: Clothing, Perfumes or Both. A brand that items use can't be deleted.</p>`));
+  const trimBtn = isBrands ? el(`<button type="button" class="btn btn--ghost btn--small btn--icon" id="trim-brand-logos" data-header-action title="Trim uploaded logos" aria-label="Trim uploaded logos" ${brandLogoTrimBusy || !s.brands.some(brand => brand.logo) ? 'disabled' : ''}>${statIconSvg('crop', 17)}</button>`) : null;
+  if (trimBtn) box.appendChild(trimBtn);
+  const addSimple = el(`<button class="btn btn--primary btn--small" id="add-simple" data-header-action>+ Add ${label.toLowerCase()}</button>`);
+  box.appendChild(addSimple);
+  addSimple.addEventListener('click', () => {
     Modal.prompt(`New ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', required: true }], ({ name }) => {
       if (!name) return;
       s[stateKey].push({ id: uid(stateKey.slice(0, 3)), name, custom: true });
       Store.save(); render();
     }, { okLabel: 'Add' });
   });
-  qs('#trim-brand-logos', box)?.addEventListener('click', async () => {
+  trimBtn?.addEventListener('click', async () => {
     if (brandLogoTrimBusy) return;
     brandLogoTrimBusy = true;
-    const button = qs('#trim-brand-logos', box); button.disabled = true; button.textContent = 'Trimming logos…';
+    trimBtn.disabled = true;
     try {
       const { trimmed, skipped } = await BrandLogo.trimExisting();
       toast(`${trimmed} logo${trimmed === 1 ? '' : 's'} cropped${skipped ? `; ${skipped} kept unchanged (unreadable or edited during processing)` : ''}`);
     } catch (_) { toast('Could not save cropped logos. Your existing logos were kept.', 'warn'); }
     finally { brandLogoTrimBusy = false; render(); }
   });
-  const grid = el(`<div class="chip-grid"></div>`);
+  const grid = el(`<div class="chip-grid ${isBrands ? 'chip-grid--rows' : ''}"></div>`);
   s[stateKey].forEach(x => {
     const count = s.items.filter(i => i[`${stateKey.slice(0, -1)}Id`] === x.id).length;
     const chip = el(`
       <div class="chip-card">
-        ${stateKey === 'brands' ? BrandLogo.html(x, 18) : ''}
-        <span>${esc(x.name)}</span>
+        ${isBrands ? `<span class="chip-card__logo">${BrandLogo.html(x, 18)}</span>` : ''}
+        <span class="chip-card__name">${esc(x.name)}</span>
         ${stateKey === 'brands' ? `<select class="chip-card__scope" data-act="scope" title="Where this brand applies" aria-label="Scope for ${esc(x.name)}">
             ${[['clothing', 'Clothing'], ['perfumes', 'Perfumes'], ['both', 'Both']].map(([v, lbl]) =>
               `<option value="${v}" ${brandScope(x) === v ? 'selected' : ''}>${lbl}</option>`).join('')}
           </select>` : ''}
         <span class="muted">${count}</span>
-        ${stateKey === 'brands' ? '<button data-act="logo" title="Logo">' + statIconSvg('image', 14) + '</button>' : ''}
-        <button data-act="rename" title="Rename">✎</button>
-        ${count ? '' : '<button data-act="delete" title="Delete">&times;</button>'}
+        ${isBrands ? miniIconBtn('logo', 'image', 'Logo') : ''}
+        ${miniIconBtn('rename', 'pencil', 'Rename')}
+        ${count ? (isBrands ? '<span class="chip-card__spacer" aria-hidden="true"></span>' : '') : miniIconBtn('delete', 'trash', 'Delete')}
       </div>`);
     if (stateKey === 'brands') {
       qs('[data-act="logo"]', chip).addEventListener('click', () => openBrandLogoModal(x));
@@ -3809,12 +3811,10 @@ function renderSimpleListPanel(stateKey, label) {
 function renderColorsPanel() {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
-  box.appendChild(el(`
-    <div class="panel-list__header">
-      <p class="muted" data-hint>Colors are a distinct attribute — not part of an item's name.</p>
-      <button class="btn btn--primary btn--small" id="add-color">+ Add color</button>
-    </div>`));
-  qs('#add-color', box).addEventListener('click', () => {
+  box.appendChild(el(`<p class="muted" data-hint>Colors are a distinct attribute — not part of an item's name.</p>`));
+  const addColor = el(`<button class="btn btn--primary btn--small" id="add-color" data-header-action>+ Add color</button>`);
+  box.appendChild(addColor);
+  addColor.addEventListener('click', () => {
     Modal.prompt('New color', [
       { name: 'name', label: 'Name', required: true },
       { name: 'hex', label: 'Hex code', hint: '(e.g. #445566 — blank for multi-color)', value: '#888888' },
@@ -3833,7 +3833,7 @@ function renderColorsPanel() {
         <span class="swatch swatch--sm" style="${esc(swatchStyle)}"></span>
         <span>${esc(c.name)}</span>
         <span class="muted">${count}</span>
-        ${count ? '' : '<button data-act="delete" title="Delete">&times;</button>'}
+        ${count ? '' : miniIconBtn('delete', 'trash', 'Delete')}
       </div>`);
     qs('[data-act="delete"]', chip)?.addEventListener('click', () => {
       Modal.confirm(`Delete color "${c.name}"?`, () => {
@@ -3851,12 +3851,10 @@ function renderColorsPanel() {
 function renderActivitiesPanel() {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
-  box.appendChild(el(`
-    <div class="panel-list__header">
-      <p class="muted" data-hint>Activities use category, subcategory, and tag rules to decide which items qualify — you don't assign items one by one.</p>
-      <button class="btn btn--primary btn--small" id="add-activity">+ Add activity</button>
-    </div>`));
-  qs('#add-activity', box).addEventListener('click', () => openActivityModal(null));
+  box.appendChild(el(`<p class="muted" data-hint>Activities use category, subcategory, and tag rules to decide which items qualify — you don't assign items one by one.</p>`));
+  const addActivity = el(`<button class="btn btn--primary btn--small" id="add-activity" data-header-action>+ Add activity</button>`);
+  addActivity.addEventListener('click', () => openActivityModal(null));
+  box.appendChild(addActivity);
 
   s.activities.forEach(act => {
     const count = itemsForActivity(act.id).length;
@@ -4220,7 +4218,8 @@ function collapseHints(body, section) {
   if (!hints.length) return;
   hints.forEach(p => { p.hidden = true; });
   const btn = el(`<button type="button" class="settings-hint-btn" aria-expanded="false" aria-label="More info">?</button>`);
-  section.appendChild(btn);
+  const actions = qs('.settings-section__actions', section);
+  actions.prepend(btn);
   const texts = hints.map(p => {
     const label = hints.length > 1 ? (qs('h3', p.parentNode) || {}).textContent : '';
     return { label, text: p.textContent.trim() };
@@ -4228,7 +4227,7 @@ function collapseHints(body, section) {
   /* Short hints are a tooltip (hover on desktop, tap on touch); long ones expand in place. */
   if (texts.reduce((n, t) => n + t.text.length, 0) <= 260) {
     const tip = el(`<div class="settings-hint-tip" role="tooltip">${texts.map(t => `<p>${t.label ? `<strong>${esc(t.label)}</strong> ` : ''}${esc(t.text)}</p>`).join('')}</div>`);
-    section.appendChild(tip);
+    btn.after(tip);
     btn.addEventListener('click', () => {
       const show = !tip.classList.contains('is-open');
       tip.classList.toggle('is-open', show);
@@ -4261,11 +4260,13 @@ function settingsSection(key, title, buildBody, count) {
         <span class="item-group__name">${esc(title)}</span>
         ${count == null ? '' : `<span class="item-group__count mono">${count}</span>`}
       </button>
+      <div class="settings-section__actions"></div>
       <div class="settings-section__body"></div>
     </section>`);
   const body = qs('.settings-section__body', section);
+  const actions = qs('.settings-section__actions', section);
   let built = false;
-  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); collapseHints(body, section); } };
+  const ensureBody = () => { if (!built) { built = true; body.appendChild(buildBody()); qsa('[data-header-action]', body).forEach(b => actions.appendChild(b)); collapseHints(body, section); } };
   if (open) ensureBody();
   qs('.item-group__head', section).addEventListener('click', () => {
     const nowCollapsed = !section.classList.contains('is-collapsed');

@@ -630,6 +630,7 @@ Modal.prompt = function (title, fields, onSubmit, opts = {}) {
         <button type="submit" class="btn btn--primary">${esc(opts.okLabel || 'Save')}</button>
       </div>
     </form>`);
+  if (opts.extra) qs('.confirm__actions', body).before(opts.extra);
   Modal.open(title, body, {
     onMount: (root) => {
       const form = qs('form', root);
@@ -3696,7 +3697,7 @@ function openTagModal(existing) {
 
 /* ---- Brands (simple list, reused pattern) ---- */
 /* Brand logo editor: upload/replace a custom logo, or remove it (falls back to the built-in one, if any). */
-function openBrandLogoModal(brand) {
+function openBrandLogoModal(brand, opts = {}) {
   const body = el(`
     <div class="brand-logo-editor">
       <div class="brand-logo-editor__preview">${BrandLogo.html(brand, 56) || '<span class="muted">No logo</span>'}</div>
@@ -3735,7 +3736,19 @@ function openBrandLogoModal(brand) {
   });
   const rm = qs('#brand-logo-remove', body);
   if (rm) rm.addEventListener('click', () => { delete brand.logo; Store.save(); Modal.close(); render(); });
-  Modal.open(`${brand.name} logo`, body);
+  Modal.open(`${brand.name} logo`, body, opts);
+}
+/* "Logo" row inside the brand edit dialog: opens the logo dialog on top, so the name edit isn't lost. */
+function brandLogoRow(brand) {
+  const row = el(`<div class="brand-edit-logo"><span class="brand-edit-logo__label">Logo</span><span class="brand-edit-logo__preview"></span><button type="button" class="btn btn--ghost btn--small"></button></div>`);
+  const sync = () => {
+    const html = BrandLogo.html(Store.state.brands.find(b => b.id === brand.id) || brand, 24);
+    qs('.brand-edit-logo__preview', row).innerHTML = html;
+    qs('button', row).textContent = html ? 'Change logo' : 'Upload logo';
+  };
+  sync();
+  qs('button', row).addEventListener('click', () => openBrandLogoModal(brand, { nested: true, onClose: sync }));
+  return row;
 }
 
 let brandLogoTrimBusy = false;
@@ -3743,7 +3756,7 @@ function renderSimpleListPanel(stateKey, label) {
   const s = Store.state;
   const box = el(`<div class="panel-list"></div>`);
   const isBrands = stateKey === 'brands';
-  if (isBrands) box.appendChild(el(`<p class="muted" data-hint>Scope sets where a brand shows up: Clothing, Perfumes or Both. A brand that items use can't be deleted.</p>`));
+  if (isBrands) box.appendChild(el(`<p class="muted" data-hint>Tap a logo to change it. Scope sets where a brand shows up: Clothing, Perfumes or Both. A brand that items use can't be deleted.</p>`));
   const trimBtn = isBrands ? el(`<button type="button" class="btn btn--ghost btn--small btn--icon" id="trim-brand-logos" data-header-action title="Trim uploaded logos" aria-label="Trim uploaded logos" ${brandLogoTrimBusy || !s.brands.some(brand => brand.logo) ? 'disabled' : ''}>${statIconSvg('crop', 17)}</button>`) : null;
   if (trimBtn) box.appendChild(trimBtn);
   const addSimple = el(`<button class="btn btn--primary btn--small" id="add-simple" data-header-action>+ Add ${label.toLowerCase()}</button>`);
@@ -3770,14 +3783,13 @@ function renderSimpleListPanel(stateKey, label) {
     const count = s.items.filter(i => i[`${stateKey.slice(0, -1)}Id`] === x.id).length;
     const chip = el(`
       <div class="chip-card">
-        ${isBrands ? `<span class="chip-card__logo">${BrandLogo.html(x, 18)}</span>` : ''}
+        ${isBrands ? `<button type="button" class="chip-card__logo" data-act="logo" title="Logo" aria-label="Logo for ${esc(x.name)}">${BrandLogo.html(x, 18) || `<span class="chip-card__logo-empty">${statIconSvg('image', 16)}</span>`}</button>` : ''}
         <span class="chip-card__name">${esc(x.name)}</span>
         ${stateKey === 'brands' ? `<select class="chip-card__scope" data-act="scope" title="Where this brand applies" aria-label="Scope for ${esc(x.name)}">
             ${[['clothing', 'Clothing'], ['perfumes', 'Perfumes'], ['both', 'Both']].map(([v, lbl]) =>
               `<option value="${v}" ${brandScope(x) === v ? 'selected' : ''}>${lbl}</option>`).join('')}
           </select>` : ''}
         <span class="muted">${count}</span>
-        ${isBrands ? miniIconBtn('logo', 'image', 'Logo') : ''}
         ${miniIconBtn('rename', 'pencil', 'Rename')}
         ${count ? (isBrands ? '<span class="chip-card__spacer" aria-hidden="true"></span>' : '') : miniIconBtn('delete', 'trash', 'Delete')}
       </div>`);
@@ -3790,10 +3802,10 @@ function renderSimpleListPanel(stateKey, label) {
       });
     }
     qs('[data-act="rename"]', chip).addEventListener('click', () => {
-      Modal.prompt(`Rename ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', value: x.name, required: true }], ({ name }) => {
+      Modal.prompt(isBrands ? 'Edit brand' : `Rename ${label.toLowerCase()}`, [{ name: 'name', label: 'Name', value: x.name, required: true }], ({ name }) => {
         if (!name) return;
         x.name = name; Store.save(); render();
-      }, { okLabel: 'Rename' });
+      }, { okLabel: isBrands ? 'Save' : 'Rename', extra: isBrands ? brandLogoRow(x) : null });
     });
     qs('[data-act="delete"]', chip)?.addEventListener('click', () => {
       Modal.confirm(`Delete "${x.name}"?`, () => {

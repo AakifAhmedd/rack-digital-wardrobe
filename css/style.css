@@ -682,10 +682,14 @@ input[type="date"] {
 .chip-card button:hover { color: var(--text); }
 /* Brands: one full-width row per brand (several per row on wide screens); controls line up in columns */
 .chip-grid--rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: .5rem; }
-.chip-grid--rows .chip-card { padding: .5rem .5rem .5rem .9rem; min-width: 0; }
+.chip-grid--rows .chip-card { padding: .5rem .5rem .5rem .65rem; min-width: 0; }
 .chip-grid--rows .chip-card > .muted { min-width: 1.4rem; text-align: right; }
 .chip-card__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip-card__logo { flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
+.chip-card button.chip-card__logo { color: var(--text); }  /* the logo is the tap target for changing it; keep logo colour, not the icon grey */
+.chip-card__logo-empty { display: inline-flex; opacity: .35; }  /* no logo yet: faint placeholder in the same slot */
+.brand-edit-logo { display: flex; align-items: center; gap: .7rem; }
+.brand-edit-logo__label { font-size: .85rem; font-weight: 500; }
+.brand-edit-logo .btn { margin-left: auto; }
 .chip-card__spacer { flex: none; width: 1.6rem; }
 /* no delete button when in use: keep the count from hugging the rounded edge */
 .chip-card > .muted:last-child { padding-right: .3rem; }

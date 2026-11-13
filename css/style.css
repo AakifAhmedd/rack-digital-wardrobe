@@ -695,7 +695,7 @@ input[type="date"] {
 .chip-card > .muted:last-child { padding-right: .3rem; }
 /* per-brand scope picker in Masters > Brands */
 .chip-card__scope {
-  font-size: .72rem; padding: .15rem .3rem; border-radius: 10px;
+  width: 6rem; font-size: .72rem; padding: .15rem .3rem; border-radius: 10px;
   border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
   cursor: pointer;
 }

@@ -173,6 +173,8 @@ const STAT_ICONS = {
   funnel: '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
   list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
 };
 function statIconSvg(key, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
@@ -4218,12 +4220,37 @@ function collapseHints(body, section) {
   if (!hints.length) return;
   hints.forEach(p => { p.hidden = true; });
   const btn = el(`<button type="button" class="settings-hint-btn" aria-expanded="false" aria-label="More info">?</button>`);
+  section.appendChild(btn);
+  const texts = hints.map(p => {
+    const label = hints.length > 1 ? (qs('h3', p.parentNode) || {}).textContent : '';
+    return { label, text: p.textContent.trim() };
+  });
+  /* Short hints are a tooltip (hover on desktop, tap on touch); long ones expand in place. */
+  if (texts.reduce((n, t) => n + t.text.length, 0) <= 260) {
+    const tip = el(`<div class="settings-hint-tip" role="tooltip">${texts.map(t => `<p>${t.label ? `<strong>${esc(t.label)}</strong> ` : ''}${esc(t.text)}</p>`).join('')}</div>`);
+    section.appendChild(tip);
+    btn.addEventListener('click', () => {
+      const show = !tip.classList.contains('is-open');
+      tip.classList.toggle('is-open', show);
+      btn.setAttribute('aria-expanded', String(show));
+    });
+    if (!collapseHints.bound) {
+      collapseHints.bound = true;
+      document.addEventListener('click', e => {
+        qsa('.settings-hint-tip.is-open').forEach(t => {
+          if (t.contains(e.target) || t.previousElementSibling.contains(e.target)) return;
+          t.classList.remove('is-open');
+          t.previousElementSibling.setAttribute('aria-expanded', 'false');
+        });
+      });
+    }
+    return;
+  }
   btn.addEventListener('click', () => {
     const show = hints[0].hidden;
     hints.forEach(p => { p.hidden = !show; });
     btn.setAttribute('aria-expanded', String(show));
   });
-  section.appendChild(btn);
 }
 function settingsSection(key, title, buildBody, count) {
   const open = !!settingsOpen[key];
@@ -4299,16 +4326,16 @@ function renderGeneralSettings() {
       <div class="panel">
         <h3>Data</h3>
         <div class="backup-actions">
-          <button class="btn btn--primary" id="export-btn">Download</button>
-          <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="import-file" accept="application/json" hidden></label>
+          <button class="btn btn--primary" id="export-btn">${statIconSvg('download', 18)}Download</button>
+          <label class="btn btn--ghost" style="cursor:pointer;">${statIconSvg('upload', 18)}Restore<input type="file" id="import-file" accept="application/json" hidden></label>
         </div>
       </div>
       <div class="panel">
         <h3>Photos</h3>
         <p class="muted" data-hint>Photos aren't in the data backup. Push/Pull includes them; Download/Restore keeps a separate photo backup. Restore adds photos without removing others.</p>
         <div class="backup-actions">
-          <button class="btn btn--primary" id="photos-export-btn">Download</button>
-          <label class="btn btn--ghost" style="cursor:pointer;">Restore<input type="file" id="photos-import-file" accept="application/json" hidden></label>
+          <button class="btn btn--primary" id="photos-export-btn">${statIconSvg('download', 18)}Download</button>
+          <label class="btn btn--ghost" style="cursor:pointer;">${statIconSvg('upload', 18)}Restore<input type="file" id="photos-import-file" accept="application/json" hidden></label>
         </div>
       </div>
     </div>`);

@@ -51,6 +51,36 @@ function staggerIn(root, max = 14) {
   units.forEach((n, i) => { n.style.setProperty('--i', i); n.classList.add('is-entering'); });
   setTimeout(() => units.forEach(n => { n.classList.remove('is-entering'); n.style.removeProperty('--i'); }), max * 30 + 1200);
 }
+/* Count up: the dashboard's headline figures run from 0 to their value when the tab is entered. Only the first number
+   in each element animates (currency and units stay put) and the final text is restored verbatim. */
+const COUNT_UP_TARGETS = '.stat-card__num, .stat-hero__val';
+function countUpIn(root, duration = 900) {
+  if (!root || reducedMotion()) return;
+  qsa(COUNT_UP_TARGETS, root).forEach(node => {
+    if (node.children.length) return;
+    const text = node.textContent;
+    const m = text.match(/\d[\d,]*(?:\.\d+)?/);
+    if (!m) return;
+    const token = m[0];
+    const target = parseFloat(token.replace(/,/g, ''));
+    const decimals = token.includes('.') ? token.split('.')[1].length : 0;
+    const fmt = v => v.toLocaleString('en-US', { useGrouping: token.includes(','), minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    if (!(target > 0) || fmt(target) !== token) return;   // unfamiliar number format: leave it as is
+    const prefix = text.slice(0, m.index), suffix = text.slice(m.index + token.length);
+    node.style.minWidth = node.getBoundingClientRect().width + 'px';   // no reflow while the digits grow
+    node.textContent = prefix + fmt(0) + suffix;
+    const t0 = performance.now();
+    (function step(now) {
+      if (!node.isConnected) return;
+      const p = Math.min(1, (now - t0) / duration);
+      if (p >= 1) { node.textContent = text; node.style.minWidth = ''; return; }
+      node.textContent = prefix + fmt(target * (1 - Math.pow(1 - p, 3))) + suffix;
+      requestAnimationFrame(step);
+    })(t0);
+  });
+}
+let countUpNext = true; // the dashboard counts up on app open and whenever its tab is entered
+
 let enterNext = false;   // set right before a render that should play the entrance (tab or segment switch)
 let pulseItemId = null;  // item whose card/row confirms a successful wear on the next render
 let pulseOutfitId = null;
@@ -797,6 +827,7 @@ function saveCollapsedGroups() {
 function switchTab(name) {
   if (name === 'bookshelf' && !bookshelfEnabled()) name = 'wardrobe';
   enterNext = name !== activeTab;
+  if (enterNext && name === 'dashboard') countUpNext = true;
   activeTab = name;
   qsa('.nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
   qsa('.bottom-nav__link').forEach(b => b.classList.toggle('is-active', b.dataset.tab === name));
@@ -871,6 +902,7 @@ function render() {
   else if (activeTab === 'outfit') main.appendChild(renderOutfitBuilder());
   else if (activeTab === 'settings') main.appendChild(renderSettings());
   if (enterNext) { enterNext = false; staggerIn(main); }
+  if (activeTab === 'dashboard' && countUpNext) { countUpNext = false; countUpIn(main); }
 }
 
 /* ================================================================

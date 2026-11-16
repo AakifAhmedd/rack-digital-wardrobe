@@ -3488,7 +3488,8 @@ function renderOutfitHistory() {
       }).join('')}</ul></li>`);
     if (entry.id === pulseOutfitId) row.classList.add('is-pulse');
     qs('button', row).addEventListener('click', () => {
-      Modal.confirm('Remove this outfit log? Item wear counts stay unchanged.', () => {
+      Modal.confirm('Remove this outfit log? The wears it recorded are removed too.', () => {
+        entry.itemIds.forEach(id => { const item = G.item(id); if (item) WearHistory.removeAt(item, entry.wornAt); });
         Store.state.outfitHistory = Store.state.outfitHistory.filter(log => log.id !== entry.id);
         Store.save();
         render();

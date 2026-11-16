@@ -1561,6 +1561,12 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .is-entering { animation: rise-in var(--dur-enter) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * var(--stagger)); }
 .is-entering .chart-svg { animation: reveal-x 560ms var(--ease-out) 120ms backwards; }   /* charts uncover left to right through a clip mask */
 
+/* Animated list: rows below the fold wait hidden, then rise and settle as they scroll in (app.js listReveal). */
+@keyframes list-in { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+.is-hidden { opacity: 0; transform: translateY(14px) scale(.96); }
+.is-revealing { animation: list-in 260ms var(--ease-out) backwards; animation-delay: calc(var(--r, 0) * var(--stagger)); }
+@media (prefers-reduced-motion: reduce) { .is-hidden { opacity: 1; transform: none; } }
+
 /* Modal contents settle just after the box: first fields stagger in, action pills stay put (they carry the glass blur). */
 .modal-overlay.is-opening .modal__body > :not(.form-actions),
 .modal-overlay.is-opening .modal__body > .form > :not(.form-actions) {

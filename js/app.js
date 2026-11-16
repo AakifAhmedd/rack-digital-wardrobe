@@ -79,6 +79,29 @@ function countUpIn(root, duration = 900) {
     })(t0);
   });
 }
+/* Animated list: cards and rows that start below the fold rise in as they scroll into view, once per render.
+   Anything already on screen is left alone, and reduced motion skips it entirely. */
+const REVEAL_UNITS = '.item-card, .item-row, .outfit-history__entry';
+const revealObservers = new WeakMap();   // list root -> its observer, so a re-render drops the old one
+function listReveal(root) {
+  if (!root || reducedMotion() || !('IntersectionObserver' in window)) return;
+  requestAnimationFrame(() => {   // runs before the next paint, once the list is attached
+    revealObservers.get(root)?.disconnect();
+    const below = qsa(REVEAL_UNITS, root).filter(n => n.getBoundingClientRect().top > window.innerHeight);
+    if (!below.length) return;
+    const io = new IntersectionObserver(entries => {
+      entries.filter(e => e.isIntersecting).forEach((e, i) => {
+        const n = e.target;
+        io.unobserve(n);
+        n.style.setProperty('--r', Math.min(i, 8));
+        n.classList.replace('is-hidden', 'is-revealing');
+        setTimeout(() => { n.classList.remove('is-revealing'); n.style.removeProperty('--r'); }, 700);
+      });
+    });
+    revealObservers.set(root, io);
+    below.forEach(n => { n.classList.remove('is-entering'); n.style.removeProperty('--i'); n.classList.add('is-hidden'); io.observe(n); });
+  });
+}
 let countUpNext = true; // the dashboard counts up on app open and whenever its tab is entered
 
 let enterNext = false;   // set right before a render that should play the entrance (tab or segment switch)
@@ -1926,6 +1949,7 @@ function renderItemGrid() {
     items.forEach(item => grid.appendChild(makeNode(item)));
     fitCardTags(grid);
     fitCardStats(grid);
+    listReveal(grid);
     return;
   }
 
@@ -1971,6 +1995,7 @@ function renderItemGrid() {
     grid.appendChild(section);
     if (!isCollapsed) { fitCardTags(inner); fitCardStats(inner); }
   });
+  listReveal(grid);
 }
 
 /* Shrink a stat value's font just enough that it isn't cut off with an ellipsis. */
@@ -3531,6 +3556,7 @@ function renderOutfitHistory() {
     list.appendChild(row);
   });
   section.appendChild(list);
+  listReveal(list);
   return section;
 }
 

@@ -87,6 +87,21 @@
     const red = await image(a, 'red');
     const blue = await image(a, 'blue');
     await a.RackPhotos.put('bottle', red);
+    await check('Hold to confirm ignores taps and early release, and fires after a full hold', async () => {
+      const pause = ms => new Promise(resolve => a.setTimeout(resolve, ms));
+      const press = (node, type) => node.dispatchEvent(new a.PointerEvent(type, { button: 0, bubbles: true }));
+      let fired = 0;
+      a.Modal.confirm('Hold test', () => { fired++; }, { danger: true, hold: 200 });
+      const yes = a.document.querySelector('#confirm-yes');
+      yes.click();
+      equal(fired, 0, 'A tap does not confirm');
+      press(yes, 'pointerdown'); await pause(80); press(yes, 'pointerup'); await pause(250);
+      equal([fired, yes.style.getPropertyValue('--hold')], [0, '0'], 'Early release cancels and empties the fill');
+      press(yes, 'pointerdown'); await pause(350);
+      equal(fired, 1, 'A full hold confirms once');
+      press(yes, 'pointerup');
+      equal(fired, 1, 'Releasing afterwards does not confirm again');
+    });
     await check('Push creates both Gist files in one request without image data in wardrobe JSON', async () => {
       await a.SyncEngine.push();
       assert(a.Sync.getGistId() === cloud.id, 'Created Gist ID remembered');

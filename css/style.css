@@ -1579,6 +1579,22 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .modal-overlay.is-opening .modal__body > :nth-child(6):not(.form-actions),
 .modal-overlay.is-opening .modal__body > .form > :nth-child(6):not(.form-actions) { animation-delay: 190ms; }
 
+/* Gradient text: a slow colour drift across the glyphs, drawn from theme tokens so every theme stays legible.
+   The tile is mirrored (a b c b a) and shifts by exactly one tile, so the loop has no seam. Brutalist stays flat. */
+@keyframes gradient-drift { to { background-position: 200% 0; } }
+.gradient-text {
+  --gt-a: var(--text); --gt-b: var(--accent); --gt-c: var(--thread);
+  background-image: linear-gradient(90deg, var(--gt-a), var(--gt-b), var(--gt-c), var(--gt-b), var(--gt-a));
+  background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: gradient-drift 8s linear infinite;
+}
+.stat-hero .stat-card__num.gradient-text { align-self: flex-start; }
+.brand .gradient-text { --gt-a: var(--accent-ink); --gt-b: color-mix(in srgb, var(--accent) 55%, var(--accent-ink)); --gt-c: var(--accent); }   /* dark header */
+[data-style="neumorphic"] .brand .gradient-text { --gt-a: var(--text); --gt-b: var(--accent); --gt-c: var(--thread); }   /* light header */
+[data-style="brutalist"] .gradient-text { background: none; -webkit-text-fill-color: currentColor; color: var(--text); animation: none; }
+
 /* Success pulse: scale up and settle with a fading ring, no overshoot. */
 @keyframes confirm-pulse {
   0%   { transform: scale(1); animation-timing-function: var(--ease-out); }

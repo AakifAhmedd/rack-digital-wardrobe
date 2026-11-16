@@ -1110,7 +1110,7 @@ function renderDashboard() {
     <div class="stat-grid">
       <div class="stat-card stat-hero">
         <span class="stat-card__label">Avg. cost per wear</span>
-        <span class="stat-card__num">${avgCPW !== null ? esc(fmtMoney(avgCPW)) : '—'}</span>
+        <span class="stat-card__num gradient-text">${avgCPW !== null ? esc(fmtMoney(avgCPW)) : '—'}</span>
         <div class="stat-hero__meta">
           <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items</span></div>
           <div class="stat-hero__item"><span class="stat-hero__val">${totalWears.toLocaleString()}</span><span class="stat-card__label">Wears</span></div>

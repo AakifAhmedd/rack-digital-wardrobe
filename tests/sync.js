@@ -286,7 +286,7 @@
       a.eval("outfitSelectedIds = new Set(['one']);");
       assert(!a.renderOutfitSummary(items, () => {}).querySelector('.outfit-repeat'), 'Subset is not an exact repeat');
     });
-    await check('History renders retired/deleted items safely, without activities, and confirms removal', async () => {
+    await check('History renders retired/deleted items safely, without activities, and removes with undo', async () => {
       a.Store.state.items[0].status = 'retired';
       a.Store.state.items[0].categoryId = 'cat_perfumes';
       a.Store.state.items[0].subtext = '<img src=x onerror=alert(1)>';
@@ -296,15 +296,16 @@
       assert(history.textContent.includes('Retired') && history.textContent.includes('Deleted item'), 'Historical items retained');
       assert(history.querySelector('time').getAttribute('datetime'), 'Date/time present');
       assert(!history.querySelector('.outfit-history img') && history.textContent.includes('<img src=x onerror=alert(1)>'), 'Names escaped');
-      let confirm;
-      a.Modal.confirm = (_, yes) => { confirm = yes; };
-      a.eval('render = () => {};');
+      a.eval('render = () => {}; undoToast = (message, undo) => { window.__undo = undo; };');
+      a.Modal.confirm = () => {};   // later checks expect confirmations (e.g. discard changes) to stay inert
+      const entryId = a.Store.state.outfitHistory[0].id;
       history.querySelector('.outfit-history__entry button').click();
-      assert(a.Store.state.outfitHistory.length === 1, 'Removal waits for confirmation');
-      confirm();
-      assert(a.Store.state.outfitHistory.length === 0, 'Confirmed removal');
+      assert(a.Store.state.outfitHistory.length === 0, 'Removal is immediate');
       assert(a.Store.state.items[0].wearCount === 3, 'Removal keeps wear count');
       assert(a.renderOutfitHistory().textContent.includes('No outfits logged yet'), 'Empty state after removal');
+      a.__undo();
+      assert(a.Store.state.outfitHistory.length === 1 && a.Store.state.outfitHistory[0].id === entryId, 'Undo brings the log back');
+      a.Store.state.outfitHistory = [];
     });
     await check('History syncs via Push/Pull and participates in whole-wardrobe conflicts', async () => {
       a.Store.state.outfitHistory = [{ id: 'remote-log', wornAt: 123, itemIds: ['one'] }];
@@ -432,25 +433,48 @@
       assert(!perfume.wearHistory, 'No perfume events');
       a.WearHistory.undo(shirt); a.Store.save();
       assert(a.Store.state.outfitHistory.length === 1 && pants.wearCount === 1, 'Individual undo leaves outfit and other items intact');
-      let remove;
-      a.Modal.confirm = (_, yes) => { remove = yes; };
-      const history = a.renderOutfitHistory(); history.querySelector('.outfit-history__entry button').click(); remove();
+      a.eval('render = () => {}; undoToast = (message, undo) => { window.__undo = undo; };');
+      const history = a.renderOutfitHistory(); history.querySelector('.outfit-history__entry button').click();
       equal([pants.wearCount, pants.wearHistory.events.length, a.Store.state.outfitHistory.length], [0, 0, 0], 'Outfit removal removes the wears it recorded');
       equal([shirt.wearCount, perfume.wearCount], [1, 8], 'Other items and perfume counts intact');
+      a.__undo();
+      equal([pants.wearCount, pants.wearHistory.events.length, a.Store.state.outfitHistory.length], [1, 1, 1], 'Undo puts the log and its wear back');
+      assert(pants.wearHistory.events[0].wornAt === log.wornAt && a.Store.state.outfitHistory[0] === log, 'Same wear time and same log entry');
     });
     await check('Removing an outfit log leaves wears that do not match it', async () => {
       const kept = clothingItem('kept', 2, 1600000000000);
-      const retired = { ...clothingItem('gone'), status: 'retired' };
+      const retired = clothingItem('gone');
       a.WearHistory.record(kept, 1700000000000);
       a.WearHistory.record(retired, 1800000000000);
+      retired.status = 'retired';   // retired after it was worn, as in real use (record() refuses retired items)
       a.Store.state.items = [kept, retired];
       a.Store.state.outfitHistory = [{ id: 'old-log', wornAt: 1800000000000, itemIds: ['kept', 'gone', 'missing'] }];
       a.Store.save();
-      let remove;
-      a.Modal.confirm = (_, yes) => { remove = yes; };
-      a.eval('render = () => {}; toast = () => {};');
-      a.renderOutfitHistory().querySelector('.outfit-history__entry button').click(); remove();
+      a.eval('render = () => {}; undoToast = (message, undo) => { window.__undo = undo; };');
+      a.renderOutfitHistory().querySelector('.outfit-history__entry button').click();
       equal([kept.wearCount, kept.wearHistory.events.length, retired.wearCount, a.Store.state.outfitHistory.length], [3, 1, 0, 0], 'Only the matching wear is removed, including on retired items');
+      a.__undo();
+      equal([kept.wearCount, retired.wearCount, a.Store.state.outfitHistory.length], [3, 1, 1], 'Undo restores the retired item wear and leaves the others alone');
+    });
+    await check('Master deletes are immediate and Undo restores rows, positions and item tags', async () => {
+      a.eval('render = () => {}; undoToast = (message, undo) => { window.__undo = undo; };');
+      const s = a.Store.state;
+      const saved = { categories: s.categories, subcategories: s.subcategories, tags: s.tags, items: s.items };
+      s.categories = ['c1', 'c2', 'c3'].map(id => ({ id, name: id, icon: 'tag' }));
+      s.subcategories = [['s1', 'c2'], ['s2', 'c2'], ['s3', 'c3']].map(([id, categoryId]) => ({ id, categoryId, name: id }));
+      s.tags = ['t1', 't2', 't3'].map(id => ({ id, name: id, categoryIds: [] }));
+      s.items = [{ ...clothingItem('tagged'), tags: ['t1', 't2'] }, { ...clothingItem('plain'), tags: ['t3'] }];
+      a.Store.save();
+      const click = (panel, act, nth) => panel.querySelectorAll(`[data-act="${act}"]`)[nth].click();
+      click(a.renderCategoriesPanel(), 'delete', 1);
+      equal([s.categories.map(c => c.id), s.subcategories.map(x => x.id)], [['c1', 'c3'], ['s3']], 'Category and its subcategories go straight away');
+      a.__undo();
+      equal([s.categories.map(c => c.id), s.subcategories.map(x => x.id)], [['c1', 'c2', 'c3'], ['s1', 's2', 's3']], 'Undo restores them in order');
+      click(a.renderTagsPanel(), 'delete', 0);
+      equal([s.tags.map(t => t.id), s.items[0].tags], [['t2', 't3'], ['t2']], 'Tag removed and stripped from items');
+      a.__undo();
+      equal([s.tags.map(t => t.id), s.items[0].tags, s.items[1].tags], [['t1', 't2', 't3'], ['t1', 't2'], ['t3']], 'Undo restores the tag on its items');
+      Object.assign(s, saved); a.Store.save();   // leave the shared state as later checks expect it
     });
     await check('Count edits preserve dated history, handle undated counts, and do not mutate on cancel', async () => {
       const item = clothingItem('edit', 5, 1600000000000);

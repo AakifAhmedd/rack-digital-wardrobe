@@ -535,6 +535,31 @@ function chartEmpty(msg) {
 }
 
 /* ---------------- modal system ---------------- */
+/* Hold to confirm: the action fires only once the button has been held for `ms`. The button fills as it goes;
+   letting go, sliding off or leaving the button cancels. Touch, mouse and Enter/Space all work; a plain tap does nothing. */
+function holdToConfirm(btn, onDone, ms = 1200) {
+  btn.classList.add('btn--hold');
+  let raf = 0, timer = 0, t0 = 0, done = false;
+  const fill = p => btn.style.setProperty('--hold', p);
+  const frame = now => {   // the fill is cosmetic; the timer below decides when the hold counts
+    fill(Math.max(0, Math.min(1, (now - t0) / ms)));
+    raf = requestAnimationFrame(frame);
+  };
+  const finish = () => {
+    cancelAnimationFrame(raf); raf = timer = 0; done = true; fill(1);
+    navigator.vibrate?.(25);
+    onDone();
+  };
+  const start = () => { if (done || timer) return; t0 = performance.now(); timer = setTimeout(finish, ms); raf = requestAnimationFrame(frame); };
+  const stop = () => { clearTimeout(timer); cancelAnimationFrame(raf); raf = timer = 0; if (!done) fill(0); };
+  btn.addEventListener('pointerdown', e => { if (e.button === 0) start(); });
+  ['pointerup', 'pointercancel', 'pointerleave', 'blur'].forEach(type => btn.addEventListener(type, stop));
+  btn.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); start(); } });
+  btn.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') stop(); });
+  btn.addEventListener('contextmenu', e => e.preventDefault());   // long-press must not open the browser menu
+  btn.addEventListener('click', e => e.preventDefault());
+}
+
 const Modal = {
   _opener: null,
   _cleanup: null,
@@ -667,7 +692,10 @@ const Modal = {
       center: true, nested: true,
       onMount: (root) => {
         qs('#confirm-no', root).addEventListener('click', () => Modal.close());
-        qs('#confirm-yes', root).addEventListener('click', () => { Modal.close(); onYes(); });
+        const yes = qs('#confirm-yes', root);
+        const go = () => { Modal.close(); onYes(); };
+        if (opts.hold) holdToConfirm(yes, go, opts.hold === true ? 1200 : opts.hold);
+        else yes.addEventListener('click', go);
       },
     });
   },
@@ -2094,7 +2122,7 @@ function wireItemActions(root, item, isRetired) {
       RackPhotos.delete(item.id).catch(() => {}); // the photo is per-device — drop it with the item
       render();
       toast('Item deleted');
-    }, { danger: true, yesLabel: 'Delete permanently' });
+    }, { danger: true, yesLabel: 'Hold to delete permanently', hold: true });
   });
 }
 
@@ -4464,7 +4492,7 @@ function renderGeneralSettings() {
           applyStoredAppearance();
           render();
           toast('Backup restored');
-        }, { danger: true, yesLabel: 'Restore' });
+        }, { danger: true, yesLabel: 'Hold to restore', hold: true });
       } catch (err) {
         toast('That file could not be read as a backup', 'warn');
       }
@@ -4531,7 +4559,7 @@ function renderGeneralSettings() {
       applyStoredAppearance();
       render();
       toast('App reset');
-    }, { danger: true, yesLabel: 'Erase everything' });
+    }, { danger: true, yesLabel: 'Hold to erase everything', hold: true });
   });
 
   /* each panel's own heading becomes its collapsible header */
@@ -4923,7 +4951,7 @@ function init() {
       Modal.confirm('Erase the saved wardrobe on this device? Download a recovery copy first.', () => {
         try { localStorage.removeItem(STORAGE_KEY); location.reload(); }
         catch (_) { toast('Browser storage is unavailable', 'warn'); }
-      }, { danger: true, yesLabel: 'Erase saved wardrobe' });
+      }, { danger: true, yesLabel: 'Hold to erase saved wardrobe', hold: true });
     });
     return;
   }

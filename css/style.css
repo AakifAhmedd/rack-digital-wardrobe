@@ -875,6 +875,14 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 }
 .toast.is-visible { opacity: 1; transform: none; transition-duration: var(--dur-enter); }
 .toast--warn { background: var(--thread); }
+/* Undo toast (app.js undoToast): the bar burns down over the window in which Undo still works. */
+@keyframes fuse-burn { to { transform: scaleX(0); } }
+.toast--undo { position: relative; overflow: hidden; display: flex; align-items: center; gap: .9rem; padding-bottom: .75rem; }
+.toast__undo { background: none; border: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: .35rem .5rem; margin: -.35rem -.5rem; border-radius: 12px; cursor: pointer; }
+.toast__fuse { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); transform-origin: left; animation: fuse-burn var(--fuse-ms, 6000ms) linear forwards; }
+@media (prefers-reduced-motion: reduce) { .toast__fuse { display: none; } }
+.toast-host:has(.toast--undo) { width: max-content; max-width: calc(100vw - 1.5rem); }   /* the host sits at left:50%, which would squeeze the message onto two lines */
+@media (max-width: 640px) { .toast-host:has(.toast--undo) { bottom: calc(5.4rem + env(safe-area-inset-bottom)); } }   /* clear of the bottom nav, like glass */
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 640px) {

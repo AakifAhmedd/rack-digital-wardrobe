@@ -117,6 +117,26 @@ function toast(msg, kind = 'ok') {
   setTimeout(() => { t.classList.remove('is-visible'); setTimeout(() => t.remove(), 250); }, 2600);
 }
 
+/* Undo toast with a fuse: the removal has already happened, and the bar burns down while Undo can still revert it. */
+function undoToast(msg, undo, ms = 6000) {
+  const t = el(`<div class="toast toast--undo" role="status"><span>${esc(msg)}</span><button type="button" class="toast__undo">Undo</button><span class="toast__fuse" aria-hidden="true"></span></div>`);
+  t.style.setProperty('--fuse-ms', ms + 'ms');
+  qs('#toast-host').appendChild(t);
+  LiquidGlass.apply(t, { bezel: 12 });
+  requestAnimationFrame(() => t.classList.add('is-visible'));
+  let closed = false;
+  const close = () => { if (closed) return; closed = true; clearTimeout(timer); t.classList.remove('is-visible'); setTimeout(() => t.remove(), 250); };
+  const timer = setTimeout(close, ms);
+  qs('.toast__undo', t).addEventListener('click', () => { if (closed) return; close(); undo(); });
+}
+/* Takes the matching rows out of a state list and returns a function that puts them back at their old positions. */
+function takeOut(key, match) {
+  const list = Store.state[key];
+  const taken = list.map((row, index) => ({ row, index })).filter(t => match(t.row));
+  Store.state[key] = list.filter(row => !match(row));
+  return () => { const now = Store.state[key]; taken.forEach(({ row, index }) => now.splice(Math.min(index, now.length), 0, row)); };
+}
+
 /* ---------------- getters ---------------- */
 const G = {
   category: id => Store.state.categories.find(c => c.id === id) || { id, name: 'Unknown', custom: true },
@@ -3573,13 +3593,20 @@ function renderOutfitHistory() {
       }).join('')}</ul></li>`);
     if (entry.id === pulseOutfitId) row.classList.add('is-pulse');
     qs('button', row).addEventListener('click', () => {
-      Modal.confirm('Remove this outfit log? The wears it recorded are removed too.', () => {
-        entry.itemIds.forEach(id => { const item = G.item(id); if (item) WearHistory.removeAt(item, entry.wornAt); });
-        Store.state.outfitHistory = Store.state.outfitHistory.filter(log => log.id !== entry.id);
+      const index = Store.state.outfitHistory.findIndex(log => log.id === entry.id);
+      if (index < 0) return;
+      const wears = [];
+      entry.itemIds.forEach(id => { const item = G.item(id); const taken = item && WearHistory.removeAt(item, entry.wornAt); if (taken) wears.push({ id, taken }); });
+      Store.state.outfitHistory.splice(index, 1);
+      Store.save();
+      render();
+      undoToast('Outfit log removed', () => {
+        wears.forEach(({ id, taken }) => { const item = G.item(id); if (item) WearHistory.restore(item, taken); });
+        const now = Store.state.outfitHistory;
+        now.splice(Math.min(index, now.length), 0, entry);
         Store.save();
-        render();
-        toast('Outfit log removed');
-      }, { danger: true, yesLabel: 'Remove log' });
+        pulseOutfitId = entry.id; render(); pulseOutfitId = null;
+      });
     });
     list.appendChild(row);
   });
@@ -3638,11 +3665,10 @@ function renderCategoriesPanel() {
 
     qs('[data-act="edit"]', catBox).addEventListener('click', () => openCategoryModal(cat));
     qs('[data-act="delete"]', catBox).addEventListener('click', () => {
-      Modal.confirm(`Delete category "${cat.name}" and its subcategories? Items already using it will keep a dangling reference.`, () => {
-        s.categories = s.categories.filter(c => c.id !== cat.id);
-        s.subcategories = s.subcategories.filter(sc => sc.categoryId !== cat.id);
-        Store.save(); render();
-      }, { danger: true, yesLabel: 'Delete' });
+      const putCategory = takeOut('categories', c => c.id === cat.id);
+      const putSubs = takeOut('subcategories', sc => sc.categoryId === cat.id);
+      Store.save(); render();
+      undoToast(`Deleted category “${cat.name}”`, () => { putCategory(); putSubs(); Store.save(); render(); });
     });
     qs('[data-act="add-sub"]', catBox).addEventListener('click', () => promptSubcategory(cat));
     qsa('[data-act="rename-sub"]', catBox).forEach(btn => btn.addEventListener('click', (e) => {
@@ -3651,10 +3677,10 @@ function renderCategoriesPanel() {
     }));
     qsa('[data-act="delete-sub"]', catBox).forEach(btn => btn.addEventListener('click', (e) => {
       const scId = e.currentTarget.closest('.sub-pill').dataset.sub;
-      Modal.confirm('Delete this subcategory?', () => {
-        s.subcategories = s.subcategories.filter(sc => sc.id !== scId);
-        Store.save(); render();
-      }, { danger: true, yesLabel: 'Delete' });
+      const subName = G.subcategory(scId)?.name || 'subcategory';
+      const put = takeOut('subcategories', sc => sc.id === scId);
+      Store.save(); render();
+      undoToast(`Deleted “${subName}”`, () => { put(); Store.save(); render(); });
     }));
 
     box.appendChild(catBox);
@@ -3734,11 +3760,15 @@ function renderTagsPanel() {
       </div>`);
     qs('[data-act="edit"]', row).addEventListener('click', () => openTagModal(t));
     qs('[data-act="delete"]', row).addEventListener('click', () => {
-      Modal.confirm(`Delete tag "${t.name}"?`, () => {
-        s.tags = s.tags.filter(x => x.id !== t.id);
-        s.items.forEach(i => { i.tags = i.tags.filter(id => id !== t.id); });
+      const putTag = takeOut('tags', x => x.id === t.id);
+      const tagged = Store.state.items.filter(i => i.tags.includes(t.id)).map(i => ({ item: i, tags: i.tags }));
+      tagged.forEach(({ item }) => { item.tags = item.tags.filter(id => id !== t.id); });
+      Store.save(); render();
+      undoToast(`Deleted tag “${t.name}”`, () => {
+        putTag();
+        tagged.forEach(({ item, tags }) => { if (!item.tags.includes(t.id)) item.tags = tags; });
         Store.save(); render();
-      }, { danger: true, yesLabel: 'Delete' });
+      });
     });
     list.appendChild(row);
   });
@@ -3895,10 +3925,9 @@ function renderSimpleListPanel(stateKey, label) {
       }, { okLabel: isBrands ? 'Save' : 'Rename', extra: isBrands ? brandLogoRow(x) : null });
     });
     qs('[data-act="delete"]', chip)?.addEventListener('click', () => {
-      Modal.confirm(`Delete "${x.name}"?`, () => {
-        s[stateKey] = s[stateKey].filter(y => y.id !== x.id);
-        Store.save(); render();
-      }, { danger: true, yesLabel: 'Delete' });
+      const put = takeOut(stateKey, y => y.id === x.id);
+      Store.save(); render();
+      undoToast(`Deleted “${x.name}”`, () => { put(); Store.save(); render(); });
     });
     grid.appendChild(chip);
   });
@@ -3935,10 +3964,9 @@ function renderColorsPanel() {
         ${count ? '' : miniIconBtn('delete', 'trash', 'Delete')}
       </div>`);
     qs('[data-act="delete"]', chip)?.addEventListener('click', () => {
-      Modal.confirm(`Delete color "${c.name}"?`, () => {
-        s.colors = s.colors.filter(x => x.id !== c.id);
-        Store.save(); render();
-      }, { danger: true, yesLabel: 'Delete' });
+      const put = takeOut('colors', x => x.id === c.id);
+      Store.save(); render();
+      undoToast(`Deleted color “${c.name}”`, () => { put(); Store.save(); render(); });
     });
     grid.appendChild(chip);
   });
@@ -3972,10 +4000,9 @@ function renderActivitiesPanel() {
     qs('[data-act="build"]', card).addEventListener('click', () => openOutfitBuilderFor(act.id));
     qs('[data-act="edit"]', card).addEventListener('click', () => openActivityModal(act));
     qs('[data-act="delete"]', card).addEventListener('click', () => {
-      Modal.confirm(`Delete activity "${act.name}"?`, () => {
-        s.activities = s.activities.filter(a => a.id !== act.id);
-        Store.save(); render();
-      }, { danger: true, yesLabel: 'Delete' });
+      const put = takeOut('activities', a => a.id === act.id);
+      Store.save(); render();
+      undoToast(`Deleted activity “${act.name}”`, () => { put(); Store.save(); render(); });
     });
     box.appendChild(card);
   });

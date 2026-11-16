@@ -311,13 +311,24 @@ const WearHistory = {
   },
 
   // Removes one dated wear stamped exactly wornAt (an outfit log's own wear). Undated counts are never touched.
+  // Returns what it took out ({ event, index }) so restore() can put it back, or null when nothing matched.
   removeAt(item, wornAt) {
-    if (!this.isClothing(item)) return false;
+    if (!this.isClothing(item)) return null;
     const events = this.ensure(item).events;
     for (let i = events.length - 1; i >= 0; i--) {
-      if (events[i].wornAt === wornAt) { events.splice(i, 1); this.recalculate(item); return true; }
+      if (events[i].wornAt === wornAt) { const [event] = events.splice(i, 1); this.recalculate(item); return { event, index: i }; }
     }
-    return false;
+    return null;
+  },
+
+  // Puts back a wear taken out by removeAt, at its old position.
+  restore(item, { event, index }) {
+    if (!this.isClothing(item)) return false;
+    const events = this.ensure(item).events;
+    if (events.some(e => e.id === event.id)) return false;
+    events.splice(Math.min(index, events.length), 0, event);
+    this.recalculate(item);
+    return true;
   },
 
   setCount(item, count) {

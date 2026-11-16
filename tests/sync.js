@@ -402,7 +402,7 @@
       equal(item.wearCount, count, 'Empty date rejected');
       a.Modal.close();
     });
-    await check('Outfit wear creates dated item events and preserves independent outfit logs', async () => {
+    await check('Outfit wear creates dated item events; removing the log removes its wears', async () => {
       const shirt = clothingItem('outfit-shirt', 1, 1600000000000);
       const pants = { ...clothingItem('outfit-pants'), categoryId: 'cat_pants' };
       const perfume = { id: 'scent', categoryId: 'cat_perfumes', tags: [], wearCount: 8, lastWornAt: 1600000000000 };
@@ -420,7 +420,22 @@
       let remove;
       a.Modal.confirm = (_, yes) => { remove = yes; };
       const history = a.renderOutfitHistory(); history.querySelector('.outfit-history__entry button').click(); remove();
-      equal([pants.wearCount, pants.wearHistory.events.length, a.Store.state.outfitHistory.length], [1, 1, 0], 'Outfit removal leaves item history intact');
+      equal([pants.wearCount, pants.wearHistory.events.length, a.Store.state.outfitHistory.length], [0, 0, 0], 'Outfit removal removes the wears it recorded');
+      equal([shirt.wearCount, perfume.wearCount], [1, 8], 'Other items and perfume counts intact');
+    });
+    await check('Removing an outfit log leaves wears that do not match it', async () => {
+      const kept = clothingItem('kept', 2, 1600000000000);
+      const retired = { ...clothingItem('gone'), status: 'retired' };
+      a.WearHistory.record(kept, 1700000000000);
+      a.WearHistory.record(retired, 1800000000000);
+      a.Store.state.items = [kept, retired];
+      a.Store.state.outfitHistory = [{ id: 'old-log', wornAt: 1800000000000, itemIds: ['kept', 'gone', 'missing'] }];
+      a.Store.save();
+      let remove;
+      a.Modal.confirm = (_, yes) => { remove = yes; };
+      a.eval('render = () => {}; toast = () => {};');
+      a.renderOutfitHistory().querySelector('.outfit-history__entry button').click(); remove();
+      equal([kept.wearCount, kept.wearHistory.events.length, retired.wearCount, a.Store.state.outfitHistory.length], [3, 1, 0, 0], 'Only the matching wear is removed, including on retired items');
     });
     await check('Count edits preserve dated history, handle undated counts, and do not mutate on cancel', async () => {
       const item = clothingItem('edit', 5, 1600000000000);

@@ -350,7 +350,7 @@ function applyFont(fontId) {
   const font = getFontById(fontId);
   if (!font) return;
   ensureGoogleFont(font.googleQuery);
-  document.documentElement.style.setProperty('--font-display', `'${font.display}', Georgia, 'Times New Roman', serif`);
+  document.documentElement.style.setProperty('--font-display', `'${font.display} Tabular', '${font.display}', Georgia, 'Times New Roman', serif`);
   document.documentElement.style.setProperty('--font-body', `'${font.body}', -apple-system, Segoe UI, sans-serif`);
   if (Store.state.appearance.fontId !== fontId) {
     Store.state.appearance.fontId = fontId;

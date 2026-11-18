@@ -506,12 +506,20 @@ function svgHBarChart(rows, opts = {}) {
 function svgSankey(rows, tiers, opts = {}) {
   // viewBox follows the screen on phones so text stays near its real size instead of shrinking with the svg
   const width = Math.max(300, Math.min(560, (window.innerWidth || 560) - 80));
-  const height = 280, labelW = 34, nodeW = 12, rightW = 104, gap = 8;
+  const height = 280, labelW = 34, nodeW = 12, gap = 8;
   const spread = (cys, minGap) => { let prev = -Infinity; return cys.map(c => (prev = Math.max(c, prev + minGap))); };
-  const leftX = labelW, rightX = width - rightW - nodeW;
   const total = rows.reduce((s, r) => s + r.count, 0);
   const tierTotals = tiers.map((_, t) => rows.reduce((s, r) => s + r.flows[t], 0));
   const liveTiers = tiers.map((_, t) => t).filter(t => tierTotals[t] > 0);
+  // the label column is sized to the text itself, so the flows get all the width the labels don't need
+  const ctx = (svgSankey.ctx ||= document.createElement('canvas').getContext('2d'));
+  const textW = (text, size, family) => { ctx.font = `${size}px ${family}`; return ctx.measureText(text).width; };
+  const bodyFont = getComputedStyle(document.body).fontFamily, monoFont = getComputedStyle(document.documentElement).getPropertyValue('--font-mono');
+  const rightW = Math.ceil(Math.max(0, ...liveTiers.map(t => Math.max(
+    textW(tiers[t].label, 12, bodyFont),
+    textW(`${tierTotals[t]} items`, 11, monoFont)
+  )))) + 8 + 4;   // 8 = gap after the node, 4 = slack for fonts that load after this measurement
+  const leftX = labelW, rightX = width - rightW - nodeW;
   const scale = Math.min(
     (height - gap * (rows.length - 1)) / total,
     (height - gap * (liveTiers.length - 1)) / total
@@ -548,7 +556,7 @@ function svgSankey(rows, tiers, opts = {}) {
   });
   // vertical padding so icons on small first/last nodes aren't clipped at the svg edge
   const pad = 6;
-  return `<svg viewBox="0 ${-pad} ${width} ${height + pad * 2}" class="chart-svg" role="img" aria-label="${esc(opts.aria || 'sankey chart')}">${links}${nodes}${labels}</svg>`;
+  return `<svg viewBox="0 ${-pad} ${width} ${height + pad * 2}" class="chart-svg" style="overflow:visible" role="img" aria-label="${esc(opts.aria || 'sankey chart')}">${links}${nodes}${labels}</svg>`;
 }
 function chartEmpty(msg) {
   return `<p class="muted" style="padding:.5rem 0;">${esc(msg)}</p>`;

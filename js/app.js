@@ -1302,17 +1302,23 @@ function renderDashboard() {
     return box;
   };
 
+  // brand logo in place of the brand name, as on item cards and wear history; brands without a logo keep their name
+  const miniName = (item, size = 16) => {
+    const brand = G.brand(item.brandId), has = BrandLogo.has(brand);
+    return `<span title="${esc(itemTitle(item))}">${has ? BrandLogo.html(brand, size) : ''}${esc(itemTitle(item, { omitBrand: has }))}</span>`;
+  };
+
   cols.appendChild(mkList('Rarely worn', leastWorn, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--muted">${i.wearCount || 0}×</span></div>`)));
+    <div class="mini-row">${miniName(i)}<span class="tag-chip tag-chip--muted">${i.wearCount || 0}×</span></div>`)));
 
   cols.appendChild(mkList('Worst value', worstValue, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--warn">${esc(fmtMoney(costPerWear(i)))}</span></div>`)));
+    <div class="mini-row">${miniName(i)}<span class="tag-chip tag-chip--warn">${esc(fmtMoney(costPerWear(i)))}</span></div>`)));
 
   quietCols.appendChild(mkList('Most worn', mostWorn.slice(0, 3), i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip">${i.wearCount || 0}×</span></div>`), true));
+    <div class="mini-row">${miniName(i, 14)}<span class="tag-chip">${i.wearCount || 0}×</span></div>`), true));
 
   quietCols.appendChild(mkList('Best value', bestValue, i => el(`
-    <div class="mini-row"><span>${esc(itemTitle(i))}</span><span class="tag-chip tag-chip--good">${esc(fmtMoney(costPerWear(i)))}</span></div>`), true));
+    <div class="mini-row">${miniName(i, 14)}<span class="tag-chip tag-chip--good">${esc(fmtMoney(costPerWear(i)))}</span></div>`), true));
 
   wrap.appendChild(cols);
   wrap.appendChild(quietCols);

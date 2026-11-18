@@ -2385,7 +2385,6 @@ function openBackfillModal(item) {
   const defaultDate = maxDate;
   const body = el(`
     <form class="form" id="backfill-form">
-      <p class="muted">Log a wear for "${esc(itemTitle(item))}" on a past date. This adds to the wear count; "Last worn" only moves forward if this date is more recent than what's already stored.</p>
       <label>Date worn
         <input type="date" name="date" max="${maxDate}" value="${defaultDate}" required>
       </label>
@@ -3523,7 +3522,6 @@ function openOutfitPastModal(selected, onDone) {
   const defaultDate = maxDate;
   const body = el(`
     <form class="form" id="outfit-past-form">
-      <p class="muted">Log this outfit on a past date. Each clothing item gets one wear on that date; "Last worn" only moves forward if the date is more recent than what's already stored.</p>
       <label>Date worn
         <input type="date" name="date" max="${maxDate}" value="${defaultDate}" required>
       </label>

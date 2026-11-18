@@ -2372,12 +2372,17 @@ function todayDateStr(ts = Date.now()) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/* Latest date the Log past forms accept: yesterday, in local time. */
+function lastPastDate() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return todayDateStr(d.getTime());
+}
+
 function openBackfillModal(item) {
   if (!WearHistory.isClothing(item) || item.status === 'retired') return;
-  const maxDate = todayDateStr();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const defaultDate = todayDateStr(yesterday.getTime());
+  const maxDate = lastPastDate();   // past days only: not today, not the future
+  const defaultDate = maxDate;
   const body = el(`
     <form class="form" id="backfill-form">
       <p class="muted">Log a wear for "${esc(itemTitle(item))}" on a past date. This adds to the wear count; "Last worn" only moves forward if this date is more recent than what's already stored.</p>
@@ -2399,7 +2404,7 @@ function openBackfillModal(item) {
         if (submit.disabled) return;
         const dateStr = new FormData(e.target).get('date');
         if (!dateStr) return;
-        if (dateStr > maxDate) { toast('Pick a date up to today', 'warn'); return; }
+        if (dateStr > maxDate) { toast('Pick a date before today', 'warn'); return; }
         const ts = new Date(dateStr + 'T12:00:00').getTime();
         if (!Number.isFinite(ts) || todayDateStr(ts) !== dateStr) { toast('Pick a valid date', 'warn'); return; }
         if (!WearHistory.record(item, ts)) return;
@@ -3514,10 +3519,8 @@ function renderOutfitSummary(matches, refresh) {
 
 /* Log the selected outfit on a past date (rare). Same date handling as the item "Log past" modal. */
 function openOutfitPastModal(selected, onDone) {
-  const maxDate = todayDateStr();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const defaultDate = todayDateStr(yesterday.getTime());
+  const maxDate = lastPastDate();   // past days only: not today, not the future
+  const defaultDate = maxDate;
   const body = el(`
     <form class="form" id="outfit-past-form">
       <p class="muted">Log this outfit on a past date. Each clothing item gets one wear on that date; "Last worn" only moves forward if the date is more recent than what's already stored.</p>
@@ -3539,7 +3542,7 @@ function openOutfitPastModal(selected, onDone) {
         if (submit.disabled) return;
         const dateStr = new FormData(e.target).get('date');
         if (!dateStr) return;
-        if (dateStr > maxDate) { toast('Pick a date up to today', 'warn'); return; }
+        if (dateStr > maxDate) { toast('Pick a date before today', 'warn'); return; }
         const ts = new Date(dateStr + 'T12:00:00').getTime();
         if (!Number.isFinite(ts) || todayDateStr(ts) !== dateStr) { toast('Pick a valid date', 'warn'); return; }
         submit.disabled = true;

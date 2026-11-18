@@ -413,9 +413,21 @@
       const count = item.wearCount;
       submit(a, invalid);
       equal(item.wearCount, count, 'Future date rejected');
-      invalid.elements.namedItem('date').value = '';
+      const input = invalid.elements.namedItem('date');
+      equal(input.max, a.lastPastDate(), 'Picker stops at yesterday');
+      assert(a.lastPastDate() < a.todayDateStr(), 'Yesterday is before today');
+      input.value = a.todayDateStr();
       submit(a, invalid);
-      equal(item.wearCount, count, 'Empty date rejected');
+      equal(item.wearCount, count, 'Today rejected');
+      input.value = a.lastPastDate();
+      submit(a, invalid);
+      equal(item.wearCount, count + 1, 'Yesterday accepted');
+      a.openBackfillModal(item);
+      const again = a.document.querySelector('#backfill-form');
+      equal(again.elements.namedItem('date').value, a.lastPastDate(), 'Defaults to yesterday');
+      again.elements.namedItem('date').value = '';
+      submit(a, again);
+      equal(item.wearCount, count + 1, 'Empty date rejected');
       a.Modal.close();
     });
     await check('Outfit wear creates dated item events; removing the log removes its wears', async () => {

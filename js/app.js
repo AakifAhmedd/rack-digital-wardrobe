@@ -764,6 +764,54 @@ Modal.prompt = function (title, fields, onSubmit, opts = {}) {
   });
 };
 qs('#modal-overlay').addEventListener('click', (e) => { if (e.target.id === 'modal-overlay') Modal.requestClose(); });
+
+/* Swipe a mobile sheet down to dismiss it: drag the header, or the body once it is scrolled to the top.
+   Closing goes through requestClose, so unsaved changes still ask before discarding. */
+(() => {
+  const overlay = qs('#modal-overlay'), box = qs('#modal-box'), phone = matchMedia('(max-width: 640px)');
+  let drag = null;
+  const startable = target => {
+    if (!phone.matches || !overlay.classList.contains('is-open') || overlay.dataset.presentation !== 'sheet') return false;
+    if (target.closest('input[type="range"], canvas')) return false;
+    for (let n = target; n && n !== box; n = n.parentElement) if (n.scrollTop > 0) return false;   // something inside is mid-scroll
+    return true;
+  };
+  const reset = (animate) => {
+    if (!animate) box.style.transition = 'none';
+    box.style.transform = '';
+    if (!animate) { void box.offsetWidth; box.style.transition = ''; }
+    else box.style.transition = '';
+  };
+  box.addEventListener('touchstart', e => {
+    drag = e.touches.length === 1 && startable(e.target) ? { x: e.touches[0].clientX, y: e.touches[0].clientY, active: false } : null;
+  }, { passive: true });
+  box.addEventListener('touchmove', e => {
+    if (!drag) return;
+    const t = e.touches[0], dy = t.clientY - drag.y, dx = t.clientX - drag.x;
+    if (e.touches.length > 1) { if (drag.active) reset(true); drag = null; return; }
+    if (!drag.active) {
+      if (dy < -6 || Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { drag = null; return; }   // scrolling up or sideways
+      if (dy < 10 || dy < Math.abs(dx) * 1.5) return;
+      drag.active = true; drag.y = t.clientY; drag.t = e.timeStamp; drag.dy = 0;
+      box.style.transition = 'none';
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+    drag.dy = Math.max(0, t.clientY - drag.y);
+    box.style.transform = `translateY(${drag.dy}px)`;
+  }, { passive: false });
+  const end = (e) => {
+    const d = drag; drag = null;
+    if (!d?.active) return;
+    const fast = d.dy / Math.max(e.timeStamp - d.t, 1) > 0.6;
+    if (e.type === 'touchcancel' || !(d.dy > 100 || d.dy > box.offsetHeight * 0.3 || d.dy > 30 && fast)) { reset(true); return; }
+    Modal.requestClose();
+    if (overlay.classList.contains('is-open')) reset(false);   // a discard prompt took over the box
+    else { box.style.transition = ''; box.style.transform = ''; }   // plays the normal exit from where the finger let go
+  };
+  box.addEventListener('touchend', end);
+  box.addEventListener('touchcancel', end);
+})();
 document.addEventListener('keydown', (e) => {
   if (!qs('#modal-overlay').classList.contains('is-open')) return;
   if (e.key === 'Escape') { e.preventDefault(); Modal.requestClose(); }

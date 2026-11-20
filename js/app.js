@@ -17,6 +17,13 @@ function el(html) {
 function esc(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// when too narrow, cut out the middle of a name and keep its last words (what the item is) visible
+function midTruncate(text) {
+  const words = String(text).split(' '), n = words.length > 2 ? 2 : 1;
+  const start = words.slice(0, -n).join(' '), end = words.slice(-n).join(' ');
+  return `<span class="mid"><span class="mid__start">${esc(start)}</span><span class="mid__end">${start ? ' ' : ''}${esc(end)}</span></span>`;
+}
 function fmtMoney(n) {
   if (n === null || n === undefined || n === '') return '—';
   const cur = Store.state.meta.currency || 'LKR';
@@ -1201,7 +1208,7 @@ function renderDashboard() {
       <div class="stat-card stat-idle">
         <div class="stat-idle__main">
           <span class="stat-card__num">${longestIdle ? idleDays(longestIdle) + ' days' : '—'}</span>
-          <span class="stat-card__label stat-idle__name">${longestIdle ? 'Longest idle · ' + esc(itemTitle(longestIdle)) : 'Longest idle'}</span>
+          <span class="stat-card__label stat-idle__name">${longestIdle ? midTruncate('Longest idle · ' + itemTitle(longestIdle)) : 'Longest idle'}</span>
         </div>
         <span class="tag-chip ${dormant ? 'tag-chip--warn' : 'tag-chip--muted'}" title="Not worn in ${DORMANT_DAYS}+ days">${dormant} dormant</span>
       </div>
@@ -1300,13 +1307,6 @@ function renderDashboard() {
     if (!list.length) mini.appendChild(el(`<p class="muted">Nothing yet.</p>`));
     list.forEach(i => mini.appendChild(renderRow(i)));
     return box;
-  };
-
-  // when too narrow, cut out the middle of a name and keep its last words (what the item is) visible
-  const midTruncate = text => {
-    const words = String(text).split(' '), n = words.length > 2 ? 2 : 1;
-    const start = words.slice(0, -n).join(' '), end = words.slice(-n).join(' ');
-    return `<span class="mid"><span class="mid__start">${esc(start)}</span><span class="mid__end">${start ? ' ' : ''}${esc(end)}</span></span>`;
   };
 
   // brand logo in place of the brand name, as on item cards and wear history; brands without a logo keep their name

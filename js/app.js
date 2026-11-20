@@ -1302,10 +1302,17 @@ function renderDashboard() {
     return box;
   };
 
+  // when too narrow, cut out the middle of a name and keep its last words (what the item is) visible
+  const midTruncate = text => {
+    const words = String(text).split(' '), n = words.length > 2 ? 2 : 1;
+    const start = words.slice(0, -n).join(' '), end = words.slice(-n).join(' ');
+    return `<span class="mid"><span class="mid__start">${esc(start)}</span><span class="mid__end">${start ? ' ' : ''}${esc(end)}</span></span>`;
+  };
+
   // brand logo in place of the brand name, as on item cards and wear history; brands without a logo keep their name
   const miniName = (item, size = 16) => {
     const brand = G.brand(item.brandId), has = BrandLogo.has(brand);
-    return `<span title="${esc(itemTitle(item))}">${has ? BrandLogo.html(brand, size) : ''}${esc(itemTitle(item, { omitBrand: has }))}</span>`;
+    return `<span class="mini-name" title="${esc(itemTitle(item))}">${has ? BrandLogo.html(brand, size) : ''}${midTruncate(itemTitle(item, { omitBrand: has }))}</span>`;
   };
 
   cols.appendChild(mkList('Rarely worn', leastWorn, i => el(`

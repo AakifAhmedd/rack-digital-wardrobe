@@ -280,6 +280,10 @@ input[type="date"] {
 .stat-idle--action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mini-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-row > .tag-chip { flex: none; white-space: nowrap; }
+.mini-row > .mini-name:first-child { display: flex; align-items: center; }
+.mid { display: flex; min-width: 0; }
+.mid__start { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.mid__end { flex: none; white-space: pre; }
 
 .dash-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
 .panel {

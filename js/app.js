@@ -256,6 +256,9 @@ const STAT_ICONS = {
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>',
+  archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  'archive-restore': '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/>',
 };
 function statIconSvg(key, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || ''}</g></svg>`;
@@ -623,12 +626,18 @@ const Modal = {
   },
   actions(title, menu) {
     const body = el('<div class="modal-quick-actions"></div>');
+    const icons = { undo: 'undo', backfill: 'calendar', history: 'history', retire: 'archive', edit: 'pencil', delete: 'trash', archive: 'archive' };
     qsa('button', menu).forEach(source => {
       const button = source.cloneNode(true);
       button.removeAttribute('id');
+      const label = source.textContent.trim();
+      const icon = label === 'Restore' ? 'archive-restore' : icons[source.dataset.act || source.dataset.bookAct];
+      if (icon) button.innerHTML = `${statIconSvg(icon, 18)}<span>${esc(label)}</span>`;
       button.addEventListener('click', () => { this.close(); source.click(); });
       body.appendChild(button);
     });
+    const plain = qsa('button:not(.danger)', body);
+    if (plain.length % 2) plain[plain.length - 1].classList.add('is-wide');   // no half-empty last row; Delete always spans the width
     this.open(title, body);
   },
   open(title, bodyEl, opts = {}) {

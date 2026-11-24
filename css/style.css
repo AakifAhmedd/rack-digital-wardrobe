@@ -1683,13 +1683,15 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
   .modal__header, .modal__body { padding-left: max(1.1rem, env(safe-area-inset-left)); padding-right: max(1.1rem, env(safe-area-inset-right)); }
   .modal__header .icon-btn { min-width: 44px; min-height: 44px; }
   .modal__body input, .modal__body select, .modal__body textarea { font-size: 16px; }
-  .modal-quick-actions { display: grid; gap: .3rem; }
+  .modal-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
   .modal-quick-actions button {
-    font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line);
-    padding: .85rem; text-align: left; min-height: 44px; cursor: pointer;
+    font: inherit; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-m);
+    display: flex; align-items: center; gap: .6rem; padding: .8rem .9rem; text-align: left; min-height: 52px; cursor: pointer;
   }
+  .modal-quick-actions button svg { flex: none; }
+  .modal-quick-actions button.is-wide, .modal-quick-actions button.danger { grid-column: 1 / -1; }
   .modal-quick-actions button:hover { background: var(--canvas); }
-  .modal-quick-actions button.danger { color: var(--thread); }
+  .modal-quick-actions button.danger { color: var(--thread); border-color: color-mix(in srgb, var(--thread) 35%, transparent); }
   .modal-quick-actions button:disabled { opacity: .4; cursor: not-allowed; }
 }
 

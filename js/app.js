@@ -1237,11 +1237,17 @@ function renderDashboard() {
 
   const mostWorn = [...clothing].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0)).slice(0, 5);
   const bestValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(a) - costPerWear(b)).slice(0, 3);
-  // wears each costed item still needs for its cost per wear to fall to the wardrobe average
+  // wears each costed item still needs for its cost per wear to fall to the wardrobe average;
+  // items added in the last 30 days are left out (not had time yet), the rest rank by wears per week since added
+  const MIN_AGE_DAYS = 30;
   const needsWearing = avgCPW === null ? [] : clothing
-    .map(item => ({ item, more: Math.ceil((Number(item.cost) || 0) / avgCPW) - (item.wearCount || 0) }))
-    .filter(r => r.more > 0)
-    .sort((a, b) => b.more - a.more).slice(0, 5);
+    .map(item => {
+      const ageDays = item.createdAt ? (Date.now() - item.createdAt) / 86400000 : MIN_AGE_DAYS;
+      return { item, ageDays, perWeek: (item.wearCount || 0) / (ageDays / 7),
+        more: Math.ceil((Number(item.cost) || 0) / avgCPW) - (item.wearCount || 0) };
+    })
+    .filter(r => r.more > 0 && r.ageDays >= MIN_AGE_DAYS)
+    .sort((a, b) => a.perWeek - b.perWeek || b.more - a.more).slice(0, 5);
 
   wrap.appendChild(el(`
     <div class="stat-grid">

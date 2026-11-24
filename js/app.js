@@ -250,6 +250,7 @@ const STAT_ICONS = {
   pencil: '<g transform="matrix(-1 0 0 1 24 0)"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>',
   crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
   trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  'arrow-left-right': '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
   'trending-down': '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
   funnel: '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
   list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
@@ -462,6 +463,28 @@ function avgCostPerWear() {
   const vals = activeItems().filter(i => i.categoryId !== 'cat_perfumes').map(costPerWear).filter(v => v !== null && isFinite(v));
   if (!vals.length) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+/* Total cost ÷ total wears across active clothing with a known cost. Every wear
+   weighs the same, so one wear barely moves it; items not yet worn add their cost. */
+function overallCostPerWear() {
+  const costed = activeItems().filter(i => i.categoryId !== 'cat_perfumes' && i.cost !== null && i.cost !== undefined && i.cost !== '');
+  const wears = costed.reduce((s, i) => s + (i.wearCount || 0), 0);
+  if (!wears) return null;
+  return costed.reduce((s, i) => s + (Number(i.cost) || 0), 0) / wears;
+}
+/* Which cost-per-wear figure the dashboard headline shows. Device-local view preference. */
+const CPW_MODE_KEY = 'rack.dashboard.cpwMode';
+const CPW_MODES = {
+  average: { label: 'Avg. cost per wear', hint: 'Average of each item\u2019s cost per wear' },
+  overall: { label: 'Overall cost per wear', hint: 'Total cost \u00f7 total wears' },
+};
+let cpwMode = (() => {
+  try { return localStorage.getItem(CPW_MODE_KEY) === 'overall' ? 'overall' : 'average'; }
+  catch (e) { return 'average'; }
+})();
+function setCpwMode(mode) {
+  cpwMode = mode;
+  try { localStorage.setItem(CPW_MODE_KEY, mode); } catch (e) { /* preference only */ }
 }
 
 /* ---------------- tiny SVG chart helpers ----------------
@@ -1226,6 +1249,7 @@ function renderDashboard() {
   const longestIdle = [...clothing].sort((a, b) => idleDays(b) - idleDays(a))[0];
   const totalWears = clothing.reduce((s, i) => s + (i.wearCount || 0), 0);
   const avgCPW = avgCostPerWear();
+  const cpwFigure = mode => { const v = mode === 'overall' ? overallCostPerWear() : avgCPW; return v !== null ? fmtMoney(v) : '\u2014'; };
 
   const byCategoryWears = {};
   const bySubcategoryWears = {};
@@ -1261,8 +1285,11 @@ function renderDashboard() {
   wrap.appendChild(el(`
     <div class="stat-grid">
       <div class="stat-card stat-hero">
-        <span class="stat-card__label">Avg. cost per wear</span>
-        <span class="stat-card__num gradient-text">${avgCPW !== null ? esc(fmtMoney(avgCPW)) : '—'}</span>
+        <div class="stat-hero__head">
+          <span class="stat-card__label" id="cpw-label" title="${esc(CPW_MODES[cpwMode].hint)}">${esc(CPW_MODES[cpwMode].label)}</span>
+          <button type="button" class="stat-hero__switch" id="cpw-switch">${statIconSvg('arrow-left-right', 15)}</button>
+        </div>
+        <span class="stat-card__num gradient-text" id="cpw-value">${esc(cpwFigure(cpwMode))}</span>
         <div class="stat-hero__meta">
           <div class="stat-hero__item"><span class="stat-hero__val">${items.length}</span><span class="stat-card__label">Items</span></div>
           <div class="stat-hero__item"><span class="stat-hero__val">${totalWears.toLocaleString()}</span><span class="stat-card__label">Wears</span></div>
@@ -1280,6 +1307,22 @@ function renderDashboard() {
       </div>
     </div>
   `));
+
+  /* The switch flips the headline between the per-item average and total cost ÷ total wears. */
+  const cpwSwitch = qs('#cpw-switch', wrap);
+  const showCpwMode = () => {
+    const other = cpwMode === 'average' ? 'overall' : 'average';
+    qs('#cpw-label', wrap).textContent = CPW_MODES[cpwMode].label;
+    qs('#cpw-label', wrap).title = CPW_MODES[cpwMode].hint;
+    cpwSwitch.setAttribute('aria-label', `Show ${CPW_MODES[other].label.toLowerCase()} (${CPW_MODES[other].hint.toLowerCase()})`);
+    cpwSwitch.title = `Switch to ${CPW_MODES[other].label.toLowerCase()}`;
+  };
+  showCpwMode();
+  cpwSwitch.addEventListener('click', () => {
+    setCpwMode(cpwMode === 'average' ? 'overall' : 'average');
+    qs('#cpw-value', wrap).textContent = cpwFigure(cpwMode);
+    showCpwMode();
+  });
 
   /* Tapping the idle card lists the dormant items, longest idle first. */
   if (dormant) {

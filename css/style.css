@@ -260,6 +260,13 @@ input[type="date"] {
 /* hero metric: one dominant figure, supporting numbers small beneath */
 .stat-hero { grid-column: 1 / -1; padding: .9rem 1.2rem; gap: .2rem; }
 .stat-hero .stat-card__num { font-size: 1.9rem; line-height: 1.1; }
+.stat-hero__head { display: flex; align-items: center; gap: .35rem; }
+.stat-hero__switch {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 30px; height: 30px; margin: -4px 0; padding: 0; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--ink-soft); cursor: pointer;
+}
+.stat-hero__switch:hover, .stat-hero__switch:focus-visible { color: var(--text); border-color: currentColor; }
 .stat-hero__meta {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .75rem 1rem;
   margin-top: .45rem; padding-top: .6rem; border-top: 1px dashed var(--line);

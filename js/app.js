@@ -1236,9 +1236,12 @@ function renderDashboard() {
   const topSub = Object.entries(bySubcategoryWears).sort((a, b) => b[1] - a[1])[0];
 
   const mostWorn = [...clothing].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0)).slice(0, 5);
-  const leastWorn = [...clothing].sort((a, b) => (a.wearCount || 0) - (b.wearCount || 0)).slice(0, 5);
   const bestValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(a) - costPerWear(b)).slice(0, 3);
-  const worstValue = items.filter(i => costPerWear(i) !== null && i.categoryId !== 'cat_perfumes').sort((a, b) => costPerWear(b) - costPerWear(a)).slice(0, 5);
+  // wears each costed item still needs for its cost per wear to fall to the wardrobe average
+  const needsWearing = avgCPW === null ? [] : clothing
+    .map(item => ({ item, more: Math.ceil((Number(item.cost) || 0) / avgCPW) - (item.wearCount || 0) }))
+    .filter(r => r.more > 0)
+    .sort((a, b) => b.more - a.more).slice(0, 5);
 
   wrap.appendChild(el(`
     <div class="stat-grid">
@@ -1363,11 +1366,11 @@ function renderDashboard() {
     return `<span class="mini-name" title="${esc(itemTitle(item))}">${has ? BrandLogo.html(brand, size) : ''}${midTruncate(itemTitle(item, { omitBrand: has }))}</span>`;
   };
 
-  cols.appendChild(mkList('Rarely worn', leastWorn, i => el(`
-    <div class="mini-row">${miniName(i)}<span class="tag-chip tag-chip--muted">${i.wearCount || 0}×</span></div>`)));
-
-  cols.appendChild(mkList('Worst value', worstValue, i => el(`
-    <div class="mini-row">${miniName(i)}<span class="tag-chip tag-chip--warn">${esc(fmtMoney(costPerWear(i)))}</span></div>`)));
+  cols.appendChild(mkList('Needs wearing', needsWearing, ({ item, more }) => el(`
+    <div class="mini-row">
+      <div class="mini-row__main">${miniName(item)}<small class="muted">${item.wearCount ? `${item.wearCount}× · ${esc(fmtMoney(costPerWear(item)))} / wear` : 'Never worn'}</small></div>
+      <span class="tag-chip tag-chip--warn">+${more} to avg</span>
+    </div>`)));
 
   quietCols.appendChild(mkList('Most worn', mostWorn.slice(0, 3), i => el(`
     <div class="mini-row">${miniName(i, 14)}<span class="tag-chip">${i.wearCount || 0}×</span></div>`), true));

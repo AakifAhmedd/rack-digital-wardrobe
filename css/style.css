@@ -1657,6 +1657,11 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
     transform: translateY(100%); transform-origin: bottom center !important;
   }
   .modal-overlay[data-presentation="sheet"] .modal__header { touch-action: none; }   /* header drags the sheet away */
+  .modal-overlay[data-presentation="sheet"] .modal-box { position: relative; }
+  .modal-overlay[data-presentation="sheet"] .modal-box::before {   /* grabber: this sheet can be swiped down */
+    content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px;
+    border-radius: 2px; background: color-mix(in srgb, var(--ink) 28%, transparent); pointer-events: none; z-index: 1;
+  }
   .modal-overlay[data-presentation="fullscreen"] { padding: 0; }
   .modal-overlay[data-presentation="fullscreen"] .modal-box {
     width: 100%; max-width: none; height: 100dvh; max-height: 100%; border-radius: 0;

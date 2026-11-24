@@ -360,10 +360,11 @@ input[type="date"] {
 .tag-chip {
   display: inline-block; font-family: var(--font-mono); font-size: .72rem;
   background: var(--canvas); border: 1px solid var(--line); border-radius: 20px;
-  padding: .15rem .55rem; color: var(--ink-soft);
+  padding: .15rem .55rem; color: color-mix(in srgb, var(--text) 68%, var(--canvas));
 }
-.tag-chip--good { background: var(--good-bg); color: var(--good); border-color: transparent; }
-.tag-chip--warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+/* the good/warn hues are often pale (and themeable), so the text is pulled toward --text to stay readable on their tint */
+.tag-chip--good { background: var(--good-bg); color: color-mix(in srgb, var(--good) 50%, var(--text)); border-color: transparent; }
+.tag-chip--warn { background: var(--warn-bg); color: color-mix(in srgb, var(--warn) 50%, var(--text)); border-color: transparent; }
 .tag-chip--muted { opacity: .7; }
 .tag-chip--more { cursor: pointer; font-family: var(--font-mono); line-height: inherit; color: var(--text); }
 .tag-chip--more { transition: border-color .2s var(--ease-out), transform .14s var(--ease-out); }

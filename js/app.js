@@ -2528,7 +2528,6 @@ function renderWearMonthPanel() {
   const panel = el(`<div class="panel wear-month-panel">
     <h3>Clothing · ${esc(wearMonthLabel(now))}</h3>
     ${wearMonthStats(summary)}
-    <p class="muted">Dated clothing wears, including retired items. Each item in an outfit counts as one wear.</p>
     <button type="button" class="btn btn--ghost btn--small">Browse wear history</button>
   </div>`);
   qs('button', panel).addEventListener('click', () => openWardrobeHistoryModal());

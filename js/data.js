@@ -300,14 +300,16 @@ const WearHistory = {
     return true;
   },
 
+  // Returns what it took out (truthy) so restore() can put it back, or false when there was nothing to undo.
   undo(item) {
     if (!this.isClothing(item) || item.status === 'retired') return false;
     const history = this.ensure(item);
-    if (history.events.length) history.events.pop();
-    else if (history.undatedCount) history.undatedCount--;
+    let removed;
+    if (history.events.length) removed = { event: history.events.pop(), index: history.events.length };
+    else if (history.undatedCount) { removed = { undated: true, legacyLastWornAt: history.legacyLastWornAt }; history.undatedCount--; }
     else return false;
     this.recalculate(item);
-    return true;
+    return removed;
   },
 
   // Removes one dated wear stamped exactly wornAt (an outfit log's own wear). Undated counts are never touched.
@@ -321,10 +323,12 @@ const WearHistory = {
     return null;
   },
 
-  // Puts back a wear taken out by removeAt, at its old position.
-  restore(item, { event, index }) {
+  // Puts back a wear taken out by removeAt or undo, at its old position.
+  restore(item, { event, index, undated, legacyLastWornAt }) {
     if (!this.isClothing(item)) return false;
-    const events = this.ensure(item).events;
+    const history = this.ensure(item);
+    if (undated) { history.undatedCount++; history.legacyLastWornAt = legacyLastWornAt ?? history.legacyLastWornAt; this.recalculate(item); return true; }
+    const events = history.events;
     if (events.some(e => e.id === event.id)) return false;
     events.splice(Math.min(index, events.length), 0, event);
     this.recalculate(item);

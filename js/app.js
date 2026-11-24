@@ -125,8 +125,8 @@ function toast(msg, kind = 'ok') {
 }
 
 /* Undo toast with a fuse: the removal has already happened, and the bar burns down while Undo can still revert it. */
-function undoToast(msg, undo, ms = 6000) {
-  const t = el(`<div class="toast toast--undo" role="status"><span>${esc(msg)}</span><button type="button" class="toast__undo">Undo</button><span class="toast__fuse" aria-hidden="true"></span></div>`);
+function undoToast(msg, undo, ms = 6000, label = 'Undo') {
+  const t = el(`<div class="toast toast--undo" role="status"><span>${esc(msg)}</span><button type="button" class="toast__undo">${esc(label)}</button><span class="toast__fuse" aria-hidden="true"></span></div>`);
   t.style.setProperty('--fuse-ms', ms + 'ms');
   qs('#toast-host').appendChild(t);
   LiquidGlass.apply(t, { bezel: 12 });
@@ -2199,10 +2199,17 @@ function wireItemActions(root, item, isRetired) {
     });
     const undoBtn = qs('[data-act="undo"]', root);
     if (undoBtn) undoBtn.addEventListener('click', (e) => {
-      if (e.detail > 1 || undoBtn.disabled || !WearHistory.undo(item)) return;
+      if (e.detail > 1 || undoBtn.disabled) return;
+      const removed = WearHistory.undo(item);
+      if (!removed) return;
       undoBtn.disabled = true;
       Store.save();
       renderItemGrid();
+      // an accidental tap shows itself and can be taken back, putting the same wear back exactly
+      undoToast('Last wear undone', () => {
+        if (!WearHistory.restore(item, removed)) return;
+        Store.save(); renderItemGrid();
+      }, 6000, 'Redo');
     });
     const backfillBtn = qs('[data-act="backfill"]', root);
     if (backfillBtn) backfillBtn.addEventListener('click', () => openBackfillModal(item));

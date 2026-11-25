@@ -2778,7 +2778,6 @@ function exportWearsForAI(year, monthIndex, mode) {
 function openWardrobeHistoryModal(initial = new Date()) {
   let month = new Date(initial.getFullYear(), initial.getMonth(), 1);
   const body = el(`<div class="wear-history">
-    <h3 id="wear-month-title" class="wear-month-title" aria-live="polite"></h3>
     <div class="wear-month-select">
       <div class="wear-month-controls">
         <button type="button" class="btn btn--ghost" id="wear-prev" aria-label="Previous month">←</button>
@@ -2858,7 +2857,6 @@ function openWardrobeHistoryModal(initial = new Date()) {
   function refresh() {
     const current = new Date();
     const currentMonth = new Date(current.getFullYear(), current.getMonth(), 1);
-    qs('#wear-month-title', body).textContent = wearMonthLabel(month);
     qs('#wear-month-value', body).textContent = wearMonthLabel(month);
     qs('#wear-prev', body).disabled = month.getFullYear() <= 1 && month.getMonth() === 0;
     qs('#wear-next', body).disabled = month >= currentMonth;

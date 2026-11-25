@@ -45,7 +45,7 @@ async function runMilestoneChecks({ check, assert, equal, device }) {
     picker.querySelector('#wear-year-prev').click();
     equal(Number(picker.querySelector('#wear-year').value), now.getFullYear() - 1, 'Earlier year can be browsed');
     picker.querySelector('[data-month="0"]').click();
-    assert(picker.hidden && body.querySelector('#wear-month-title').textContent.includes(String(now.getFullYear() - 1)), 'Month selection updates heading and closes picker');
+    assert(picker.hidden && body.querySelector('#wear-month-value').textContent.includes(String(now.getFullYear() - 1)), 'Month selection updates the month field and closes picker');
     trigger.click();
     const year = picker.querySelector('#wear-year');
     year.value = String(now.getFullYear() + 1); year.dispatchEvent(new w.Event('change'));

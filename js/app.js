@@ -1334,10 +1334,29 @@ function renderDashboard() {
     cpwSwitch.title = `Switch to ${CPW_MODES[other].label.toLowerCase()}`;
   };
   showCpwMode();
+  let flipping = false;
   cpwSwitch.addEventListener('click', () => {
-    setCpwMode(cpwMode === 'average' ? 'overall' : 'average');
-    qs('#cpw-value', wrap).textContent = cpwFigure(cpwMode);
-    showCpwMode();
+    if (flipping) return;
+    const swap = () => {
+      setCpwMode(cpwMode === 'average' ? 'overall' : 'average');
+      qs('#cpw-value', wrap).textContent = cpwFigure(cpwMode);
+      showCpwMode();
+    };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { swap(); return; }
+    // only the label and figure change, so only they flip, like a split-flap; the rest of the card stays put
+    flipping = true;
+    const parts = [qs('#cpw-label', wrap), qs('#cpw-value', wrap)];
+    const turn = (from, to, duration, easing) => parts.map(node => node.animate([
+      { transform: `perspective(500px) rotateX(${from}deg)`, opacity: from ? 0 : 1 },
+      { transform: `perspective(500px) rotateX(${to}deg)`, opacity: to ? 0 : 1 },
+    ], { duration, easing, fill: 'both' }));
+    const out = turn(0, 90, 130, 'ease-in');
+    Promise.all(out.map(a => a.finished)).then(() => {
+      swap();
+      const back = turn(-90, 0, 220, 'cubic-bezier(.22, 1, .36, 1)');
+      out.forEach(a => a.cancel());
+      return Promise.all(back.map(a => a.finished)).then(() => back.forEach(a => a.cancel()));
+    }).catch(() => {}).finally(() => { flipping = false; });
   });
 
   /* Tapping the idle card lists the dormant items, longest idle first. */

@@ -270,6 +270,7 @@ input[type="date"] {
   width: 30px; height: 30px; margin: -4px 0; padding: 0; border-radius: 999px;
   border: 1px solid var(--line); background: transparent; color: var(--ink-soft); cursor: pointer;
 }
+#cpw-label, #cpw-value { transform-origin: left center; }
 .stat-hero__switch:hover, .stat-hero__switch:focus-visible { color: var(--text); border-color: currentColor; }
 .stat-hero__meta {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .75rem 1rem;

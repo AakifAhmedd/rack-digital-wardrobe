@@ -323,7 +323,19 @@ const WearHistory = {
     return null;
   },
 
-  // Puts back a wear taken out by removeAt or undo, at its old position.
+  // Removes one specific dated wear by its id (a single wrong entry, wherever it sits in the history).
+  // Returns { event, index } for restore(), or null when it's already gone.
+  removeById(item, eventId) {
+    if (!this.isClothing(item)) return null;
+    const events = this.ensure(item).events;
+    const i = events.findIndex(e => e.id === eventId);
+    if (i < 0) return null;
+    const [event] = events.splice(i, 1);
+    this.recalculate(item);
+    return { event, index: i };
+  },
+
+  // Puts back a wear taken out by removeAt, removeById or undo, at its old position.
   restore(item, { event, index, undated, legacyLastWornAt }) {
     if (!this.isClothing(item)) return false;
     const history = this.ensure(item);

@@ -1462,6 +1462,8 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .wear-history { overflow-wrap: anywhere; }
 .wear-history__list { padding-left: 1.4rem; }
 .wear-history__list li { padding: .4rem 0; border-bottom: 1px solid var(--line); }
+.wear-history__row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.wear-history__remove { flex: none; min-width: 36px; min-height: 36px; }
 
 .wear-month-panel { margin-bottom: 1rem; }
 /* equal columns, but never narrower than their label, so no label wraps onto a second line */

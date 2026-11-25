@@ -684,7 +684,7 @@ const Modal = {
     const box = qs('#modal-box');
     if (!overlay.classList.contains('is-open')) {
       this._opener = document.activeElement;
-      this._background = qsa('body > *').filter(node => node !== overlay && !node.inert);
+      this._background = qsa('body > *').filter(node => node !== overlay && node.id !== 'toast-host' && !node.inert);   // toasts stay tappable so Undo works over a dialog
       this._background.forEach(node => { node.inert = true; });
     }
     if (opts.nested && overlay.classList.contains('is-open')) {
@@ -2265,6 +2265,12 @@ function wireItemActions(root, item, isRetired) {
       wearBtn.disabled = true;
       Store.save();
       pulseItemId = item.id; renderItemGrid(); pulseItemId = null;   // the rebuilt card confirms with a pulse
+      const wear = item.wearHistory.events.at(-1);
+      undoToast(`Marked worn · ${itemTitle(item)}`, () => {
+        if (!WearHistory.removeById(item, wear.id)) return;
+        Store.save();
+        renderItemGrid();
+      });
     });
     const undoBtn = qs('[data-act="undo"]', root);
     if (undoBtn) undoBtn.addEventListener('click', (e) => {
@@ -2566,18 +2572,51 @@ function openBackfillModal(item) {
   });
 }
 
+/* Takes one dated wear out; if an outfit log recorded it, the item leaves that log too (an emptied log goes).
+   Returns a function that puts everything back. */
+function takeOutWear(item, eventId) {
+  const event = WearHistory.ensure(item).events.find(e => e.id === eventId);
+  const taken = event && WearHistory.removeById(item, eventId);
+  if (!taken) return null;
+  const logs = Store.state.outfitHistory;
+  const logIndex = logs.findIndex(l => l.wornAt === event.wornAt && l.itemIds.includes(item.id));
+  const log = logIndex >= 0 ? logs[logIndex] : null, slot = log ? log.itemIds.indexOf(item.id) : -1;
+  if (log) { log.itemIds.splice(slot, 1); if (!log.itemIds.length) logs.splice(logIndex, 1); }
+  return () => {
+    WearHistory.restore(item, taken);
+    if (!log) return;
+    if (!logs.includes(log)) logs.splice(Math.min(logIndex, logs.length), 0, log);
+    if (!log.itemIds.includes(item.id)) log.itemIds.splice(Math.min(slot, log.itemIds.length), 0, item.id);
+  };
+}
 function openWearHistoryModal(item) {
   if (!WearHistory.isClothing(item)) return;
-  const history = WearHistory.ensure(item);
-  const body = el(`<div class="wear-history">
-    <p>${esc(itemTitle(item))} · ${item.wearCount || 0} wear${item.wearCount === 1 ? '' : 's'}</p>
-    ${history.undatedCount ? `<p class="muted">${history.undatedCount} earlier or manually entered wear${history.undatedCount === 1 ? '' : 's'} without individual dates.</p>` : ''}
-    ${history.legacyLastWornAt ? `<p class="muted">Previously recorded last worn: ${esc(fmtDate(history.legacyLastWornAt))}.</p>` : ''}
-    ${history.events.length ? `<ol class="wear-history__list">${[...history.events].sort((a, b) => b.wornAt - a.wornAt)
-      .map(event => `<li><time datetime="${esc(todayDateStr(event.wornAt))}">${esc(fmtDate(event.wornAt))}</time></li>`).join('')}</ol>`
-      : '<p class="muted">No individually dated wears yet.</p>'}
-    <p class="muted">Undo last wear removes the most recently logged wear. Outfit logs remain separate.</p>
-  </div>`);
+  const body = el(`<div class="wear-history"></div>`);
+  const fill = () => {
+    const history = WearHistory.ensure(item);
+    const inOutfit = new Set(Store.state.outfitHistory.filter(l => l.itemIds.includes(item.id)).map(l => l.wornAt));
+    body.innerHTML = `
+      <p>${esc(itemTitle(item))} · ${item.wearCount || 0} wear${item.wearCount === 1 ? '' : 's'}</p>
+      ${history.undatedCount ? `<p class="muted">${history.undatedCount} earlier or manually entered wear${history.undatedCount === 1 ? '' : 's'} without individual dates.</p>` : ''}
+      ${history.legacyLastWornAt ? `<p class="muted">Previously recorded last worn: ${esc(fmtDate(history.legacyLastWornAt))}.</p>` : ''}
+      ${history.events.length ? `<ol class="wear-history__list">${[...history.events].sort((a, b) => b.wornAt - a.wornAt)
+        .map(event => `<li class="wear-history__row" data-id="${esc(event.id)}">
+          <span><time datetime="${esc(todayDateStr(event.wornAt))}">${esc(fmtDate(event.wornAt))}</time>${inOutfit.has(event.wornAt) ? ' <span class="muted">· outfit</span>' : ''}</span>
+          <button type="button" class="btn btn--tiny btn--ghost btn--icon wear-history__remove" aria-label="Remove the wear on ${esc(fmtDate(event.wornAt))}" title="Remove this wear">${statIconSvg('trash', 16)}</button>
+        </li>`).join('')}</ol>`
+        : '<p class="muted">No individually dated wears yet.</p>'}
+      <p class="muted">Remove a wrong wear with its bin button. If it came from an outfit log, the item leaves that log too.</p>`;
+    qsa('.wear-history__remove', body).forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.closest('li').dataset.id;
+      const date = fmtDate(WearHistory.ensure(item).events.find(e => e.id === id)?.wornAt);
+      const putBack = takeOutWear(item, id);
+      if (!putBack) return;
+      Store.save();
+      fill(); render();
+      undoToast(`Removed the wear on ${date}`, () => { putBack(); Store.save(); if (body.isConnected) fill(); render(); });
+    }));
+  };
+  fill();
   Modal.open('Wear history', body);
 }
 
@@ -3656,7 +3695,7 @@ function renderOutfitSummary(matches, refresh) {
     Store.state.outfitHistory.push(entry);
     Store.save();
     outfitSelectedIds.clear();
-    toast(`Outfit logged — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`);
+    undoToast(`Outfit logged — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`, () => undoOutfitLogged(entry));
     pulseOutfitId = entry.id; refresh(); pulseOutfitId = null;
   });
   box.appendChild(actions);
@@ -3698,7 +3737,7 @@ function openOutfitPastModal(selected, onDone) {
         Store.save();
         Modal.close();
         outfitSelectedIds.clear();
-        toast(`Outfit logged for ${fmtDate(ts)} — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`);
+        undoToast(`Outfit logged for ${fmtDate(ts)} — ${worn.length} clothing item${worn.length === 1 ? '' : 's'} marked worn`, () => undoOutfitLogged(entry));
         pulseOutfitId = entry.id; onDone(); pulseOutfitId = null;
       });
     },
@@ -3715,6 +3754,27 @@ function outfitLogDate(ts) {
   return new Date(ts).toLocaleString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
+}
+
+/* Takes an outfit log out together with the wears it recorded; returns a function that puts both back. */
+function takeOutOutfitLog(entry) {
+  const index = Store.state.outfitHistory.findIndex(log => log.id === entry.id);
+  if (index < 0) return null;
+  const wears = [];
+  entry.itemIds.forEach(id => { const item = G.item(id); const taken = item && WearHistory.removeAt(item, entry.wornAt); if (taken) wears.push({ id, taken }); });
+  Store.state.outfitHistory.splice(index, 1);
+  return () => {
+    wears.forEach(({ id, taken }) => { const item = G.item(id); if (item) WearHistory.restore(item, taken); });
+    const now = Store.state.outfitHistory;
+    now.splice(Math.min(index, now.length), 0, entry);
+  };
+}
+/* Undo for a just-logged outfit: removes the log and its wears and puts the items back in the builder to fix and re-log. */
+function undoOutfitLogged(entry) {
+  if (!takeOutOutfitLog(entry)) return;
+  Store.save();
+  outfitSelectedIds = new Set(entry.itemIds.filter(id => G.item(id)));
+  render();
 }
 
 function renderOutfitHistory() {
@@ -3756,17 +3816,12 @@ function renderOutfitHistory() {
       }).join('')}</ul></li>`);
     if (entry.id === pulseOutfitId) row.classList.add('is-pulse');
     qs('button', row).addEventListener('click', () => {
-      const index = Store.state.outfitHistory.findIndex(log => log.id === entry.id);
-      if (index < 0) return;
-      const wears = [];
-      entry.itemIds.forEach(id => { const item = G.item(id); const taken = item && WearHistory.removeAt(item, entry.wornAt); if (taken) wears.push({ id, taken }); });
-      Store.state.outfitHistory.splice(index, 1);
+      const putBack = takeOutOutfitLog(entry);
+      if (!putBack) return;
       Store.save();
       render();
       undoToast('Outfit log removed', () => {
-        wears.forEach(({ id, taken }) => { const item = G.item(id); if (item) WearHistory.restore(item, taken); });
-        const now = Store.state.outfitHistory;
-        now.splice(Math.min(index, now.length), 0, entry);
+        putBack();
         Store.save();
         pulseOutfitId = entry.id; render(); pulseOutfitId = null;
       });

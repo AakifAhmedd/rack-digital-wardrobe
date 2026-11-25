@@ -1420,8 +1420,6 @@ function renderDashboard() {
     chartCols.appendChild(retiredPanel);
   }
 
-  wrap.appendChild(chartCols);
-
   /* ---- lists ---- */
   const cols = el(`<div class="dash-cols"></div>`);
   const quietCols = el(`<div class="dash-cols"></div>`);
@@ -1471,6 +1469,7 @@ function renderDashboard() {
     wrap.appendChild(donate);
   }
 
+  wrap.appendChild(chartCols);   // charts are the browse section: the short, actionable lists come first
   return wrap;
 }
 

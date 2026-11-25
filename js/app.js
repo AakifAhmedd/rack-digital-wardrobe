@@ -251,6 +251,7 @@ const STAT_ICONS = {
   crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
   trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   'arrow-left-right': '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+  'arrow-up-down': '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
   'trending-down': '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
   funnel: '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
   list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
@@ -490,6 +491,15 @@ function setCpwMode(mode) {
 /* ---------------- tiny SVG chart helpers ----------------
    Hand-rolled, dependency-free, styled with our own tokens
    rather than a generic charting library's default look. */
+/* Category names sit beside the chart icons on wider screens; phones keep the icons alone. */
+function chartShowsNames() {
+  return !!window.matchMedia && window.matchMedia('(min-width: 641px)').matches;
+}
+function chartTextWidth(text, size) {
+  const ctx = (chartTextWidth.ctx ||= document.createElement('canvas').getContext('2d'));
+  ctx.font = `${size}px ${getComputedStyle(document.body).fontFamily}`;
+  return ctx.measureText(text).width;
+}
 function svgHBarChart(rows, opts = {}) {
   // rows: [{ label, value, color, iconKey }]  — value assumed >= 0
   const width = opts.width || 560;
@@ -497,7 +507,9 @@ function svgHBarChart(rows, opts = {}) {
   const gap = 10;
   const tickH = 20; // reserved space at top for gridline tick labels
   const useIcons = !!opts.useIcons;
-  const labelW = opts.labelW || (useIcons ? 34 : 132);
+  const showNames = useIcons && chartShowsNames();
+  const nameW = showNames ? Math.ceil(Math.max(0, ...rows.map(r => chartTextWidth(r.label, 12)))) + 10 : 0;
+  const labelW = opts.labelW || (useIcons ? 34 + nameW : 132);
   const fmt = opts.format || (v => Math.round(v).toLocaleString());
   const longestValue = Math.max(...rows.map(r => fmt(r.value).length), 3);
   const valueW = Math.max(56, longestValue * 7.2 + 14);
@@ -525,6 +537,7 @@ function svgHBarChart(rows, opts = {}) {
     const color = r.color || 'var(--accent)';
     const labelMarkup = useIcons
       ? `<svg x="4" y="${y + rowH / 2 - 10}" width="20" height="20" viewBox="0 0 24 24" class="chart-icon"><title>${esc(r.label)}</title>${iconMarkup(r.iconKey)}</svg>`
+        + (showNames ? `<text x="32" y="${y + rowH / 2 + 4}" class="chart-label">${esc(r.label)}</text>` : '')
       : `<text x="0" y="${y + rowH / 2 + 4}" class="chart-label">${esc(r.label)}</text>`;
     return `
       ${labelMarkup}
@@ -539,7 +552,9 @@ function svgHBarChart(rows, opts = {}) {
 function svgSankey(rows, tiers, opts = {}) {
   // viewBox follows the screen on phones so text stays near its real size instead of shrinking with the svg
   const width = Math.max(300, Math.min(560, (window.innerWidth || 560) - 80));
-  const height = 280, labelW = 34, nodeW = 12, gap = 8;
+  const showNames = chartShowsNames();
+  const labelW = 34 + (showNames ? Math.ceil(Math.max(0, ...rows.map(r => chartTextWidth(r.label, 12)))) + 8 : 0);
+  const height = 280, nodeW = 12, gap = 8;
   const spread = (cys, minGap) => { let prev = -Infinity; return cys.map(c => (prev = Math.max(c, prev + minGap))); };
   const total = rows.reduce((s, r) => s + r.count, 0);
   const tierTotals = tiers.map((_, t) => rows.reduce((s, r) => s + r.flows[t], 0));
@@ -547,10 +562,10 @@ function svgSankey(rows, tiers, opts = {}) {
   // the label column is sized to the text itself, so the flows get all the width the labels don't need
   const ctx = (svgSankey.ctx ||= document.createElement('canvas').getContext('2d'));
   const textW = (text, size, family) => { ctx.font = `${size}px ${family}`; return ctx.measureText(text).width; };
-  const bodyFont = getComputedStyle(document.body).fontFamily, monoFont = getComputedStyle(document.documentElement).getPropertyValue('--font-mono');
+  const bodyFont = getComputedStyle(document.body).fontFamily;
   const rightW = Math.ceil(Math.max(0, ...liveTiers.map(t => Math.max(
     textW(tiers[t].label, 12, bodyFont),
-    textW(`${tierTotals[t]} items`, 11, monoFont)
+    textW(`${tierTotals[t]} items`, 11, bodyFont)
   )))) + 8 + 4;   // 8 = gap after the node, 4 = slack for fonts that load after this measurement
   const leftX = labelW, rightX = width - rightW - nodeW;
   const scale = Math.min(
@@ -578,7 +593,8 @@ function svgSankey(rows, tiers, opts = {}) {
       links += `<path d="M${leftX + nodeW},${y0} C${mid},${y0} ${mid},${y1} ${rightX},${y1}" fill="none" stroke="${tiers[t].color}" stroke-opacity=".38" stroke-width="${Math.max(1, h)}"><title>${esc(ln.r.label)} → ${esc(tiers[t].label)}: ${n}</title></path>`;
     });
     nodes += `<rect x="${leftX}" y="${ln.y}" width="${nodeW}" height="${Math.max(2, ln.h)}" rx="2" fill="var(--ink-soft)"></rect>`;
-    labels += `<svg x="6" y="${iconY[i] - 8}" width="16" height="16" viewBox="0 0 24 24" class="chart-icon"><title>${esc(ln.r.label)}</title>${iconMarkup(ln.r.iconKey)}</svg>`;
+    labels += `<svg x="6" y="${iconY[i] - 8}" width="16" height="16" viewBox="0 0 24 24" class="chart-icon"><title>${esc(ln.r.label)}</title>${iconMarkup(ln.r.iconKey)}</svg>`
+      + (showNames ? `<text x="28" y="${iconY[i] + 4}" class="chart-label">${esc(ln.r.label)}</text>` : '');
   });
   const labelY = spread(liveTiers.map(t => rNodes[t].y + rNodes[t].h / 2), 30);
   liveTiers.forEach((t, i) => {
@@ -1363,7 +1379,7 @@ function renderDashboard() {
   chartCols.appendChild(el(`
     <div class="panel">
       <h3>Cost per wear by category</h3>
-      ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', useIcons: true, format: v => fmtMoney(v), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
+      ${cpwRows.length ? svgHBarChart(cpwRows, { color: 'var(--thread)', useIcons: true, format: v => fmtMoney(Math.round(v)), aria: 'Average cost per wear by category' }) : chartEmpty('Add cost and log wears to see this.')}
     </div>`));
 
   const TIERS = [
@@ -1859,6 +1875,10 @@ function openReadingSummary() {
   refresh(); Modal.open('Reading summaries', body, { presentation: 'fullscreen' });
 }
 
+const WARDROBE_SORTS = [
+  ['recent', 'Recently added'], ['most', 'Most worn'], ['least', 'Least worn'],
+  ['cpw-asc', 'Best value / wear'], ['cpw-desc', 'Worst value / wear'],
+];
 function renderWardrobe() {
   const wrap = el(`<section class="view-section"></section>`);
   const showPerfumes = perfumesEnabled();
@@ -1878,6 +1898,10 @@ function renderWardrobe() {
         <button type="button" class="btn btn--ghost filters-toggle-btn tb-btn" id="filters-toggle-btn" aria-label="Filters" title="Filters" aria-expanded="false" aria-controls="toolbar-filters">
           ${statIconSvg('funnel', 18)}<span class="tb-btn__label">Filters</span><span class="filter-count-badge" id="filter-count-badge" hidden></span>
         </button>
+        <label class="btn btn--ghost tb-btn sort-btn" id="sort-btn" title="Sort">
+          ${statIconSvg('arrow-up-down', 18)}<span class="tb-btn__label" id="sort-btn-label"></span>
+          <select id="f-sort" aria-label="Sort">${WARDROBE_SORTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+        </label>
         <div class="toolbar__filters" id="toolbar-filters">
           <select id="f-status">
             <option value="active">Active</option>
@@ -1890,13 +1914,6 @@ function renderWardrobe() {
           <select id="f-color"><option value="">All colors</option></select>
           <select id="f-tag"><option value="">All tags</option></select>
           <select id="f-activity"><option value="">All activities</option></select>
-          <select id="f-sort">
-            <option value="recent">Recently added</option>
-            <option value="most">Most worn</option>
-            <option value="least">Least worn</option>
-            <option value="cpw-asc">Best value / wear</option>
-            <option value="cpw-desc">Worst value / wear</option>
-          </select>
           <div class="form-actions">
             <button type="button" class="btn btn--ghost btn--small" id="filters-reset-btn">Reset filters</button>
             <button type="button" class="btn btn--ghost filters-done-btn" id="filters-done-btn">Done</button>
@@ -1907,14 +1924,14 @@ function renderWardrobe() {
           <button type="button" class="view-toggle__btn tb-btn ${wardrobeViewMode === 'list' ? 'is-active' : ''}" data-mode="list" aria-label="List" title="List">${statIconSvg('list', 18)}<span class="tb-btn__label">List</span></button>
         </div>
         ${wardrobeSegment === 'clothing' ? `<button type="button" class="btn btn--ghost tb-btn" id="wardrobe-history-btn" aria-label="Wear history" title="Wear history">${statIconSvg('history', 18)}<span class="tb-btn__label">Wear history</span></button>` : ''}
-        <button class="btn btn--primary" id="add-item-btn">+ Add item</button>
+        <button class="btn btn--primary" id="add-item-btn" aria-label="Add item">+ Add<span class="tb-btn__label"> item</span></button>
       </div>
       <div class="filters-backdrop" id="filters-backdrop"></div>
       <div class="item-grid" id="item-grid"></div>
     </div>
   `);
   wrap.appendChild(toolbar);
-  const filterLabels = ['Status', 'Category', 'Subcategory', 'Brand', 'Color', 'Tag', 'Activity', 'Sort'];
+  const filterLabels = ['Status', 'Category', 'Subcategory', 'Brand', 'Color', 'Tag', 'Activity'];
   qsa('#toolbar-filters select', toolbar).forEach((select, i) => {
     const label = el(`<label class="wardrobe-filter-field">${filterLabels[i]}</label>`);
     select.before(label); label.appendChild(select);
@@ -1988,7 +2005,16 @@ function renderWardrobe() {
   if (actSel.value !== wardrobeFilters.activity) wardrobeFilters.activity = '';
   saveWardrobeFilters();
 
-  qs('#f-sort', toolbar).value = wardrobeFilters.sort;
+  const sortSel = qs('#f-sort', toolbar);
+  sortSel.value = wardrobeFilters.sort;
+  if (sortSel.value !== wardrobeFilters.sort) sortSel.value = wardrobeFilters.sort = 'recent';
+  const syncSortButton = () => {
+    const label = WARDROBE_SORTS.find(([v]) => v === sortSel.value)?.[1] || 'Sort';
+    qs('#sort-btn-label', toolbar).textContent = label;
+    qs('#sort-btn', toolbar).title = `Sort: ${label}`;
+    qs('#sort-btn', toolbar).classList.toggle('is-sorted', sortSel.value !== 'recent');
+  };
+  syncSortButton();
 
   const badge = qs('#filter-count-badge', toolbar);
   const resetBtn = qs('#filters-reset-btn', toolbar);
@@ -2013,7 +2039,7 @@ function renderWardrobe() {
   colorSel.addEventListener('change', () => { wardrobeFilters.color = colorSel.value; onFilterChanged(); });
   tagSel.addEventListener('change', () => { wardrobeFilters.tag = tagSel.value; onFilterChanged(); });
   actSel.addEventListener('change', () => { wardrobeFilters.activity = actSel.value; onFilterChanged(); });
-  qs('#f-sort', toolbar).addEventListener('change', (e) => { wardrobeFilters.sort = e.target.value; onFilterChanged(); });
+  sortSel.addEventListener('change', (e) => { wardrobeFilters.sort = e.target.value; syncSortButton(); onFilterChanged(); });
   qs('#add-item-btn', toolbar).addEventListener('click', openAddItemModal);
   qs('#wardrobe-history-btn', toolbar)?.addEventListener('click', () => openWardrobeHistoryModal());
 
@@ -2030,7 +2056,7 @@ function renderWardrobe() {
 
   resetBtn.addEventListener('click', () => {
     Modal.close();
-    wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS };
+    wardrobeFilters = { ...DEFAULT_WARDROBE_FILTERS, sort: wardrobeFilters.sort };   /* sort has its own button, so Reset leaves it */
     saveWardrobeFilters();
     render();
     qs('#filters-toggle-btn')?.focus();
@@ -2452,12 +2478,12 @@ function itemListRow(item) {
     <div class="item-row ${isRetired ? 'item-row--retired' : ''}">
       ${leadMarkup}
       <div class="item-row__main">
-        <span class="item-row__title">${esc(itemTitle(item))}</span>
+        <span class="item-row__title" title="${esc(itemTitle(item))}">${midTruncate(itemTitle(item))}</span>
         <span class="item-row__meta">${metaBits.join(' &middot; ')}</span>
       </div>
       ${isRetired
         ? `<button class="btn btn--small btn--ghost" data-act="reactivate">Reactivate</button>`
-        : WearHistory.isClothing(item) ? `<button class="btn btn--small btn--primary" data-act="wear">+1 Worn</button>` : ''}
+        : WearHistory.isClothing(item) ? `<button class="btn btn--small btn--primary item-row__wear" data-act="wear" aria-label="+1 wear: ${esc(itemTitle(item))}">+1</button>` : ''}
       <div class="item-row__overflow">
         <button type="button" class="btn btn--tiny btn--ghost item-row__overflow-btn" data-act="overflow-toggle" aria-label="More actions">&#8942;</button>
         <div class="item-row__menu">
@@ -2698,7 +2724,7 @@ function openWardrobeHistoryModal(initial = new Date()) {
     <div class="wear-month-select">
       <div class="wear-month-controls">
         <button type="button" class="btn btn--ghost" id="wear-prev" aria-label="Previous month">←</button>
-        <div class="wear-month-field"><span id="wear-month-label">Month</span>
+        <div class="wear-month-field"><span id="wear-month-label" hidden>Month</span>
           <button type="button" class="btn btn--ghost wear-month-trigger" id="wear-month" aria-expanded="false" aria-controls="wear-month-picker" aria-labelledby="wear-month-label wear-month-value">
             <span id="wear-month-value"></span>${statIconSvg('calendar')}
           </button>

@@ -1452,6 +1452,9 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline
 .outfit-history__entry { border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface-raised); padding: 1rem; min-width: 0; }
 .outfit-history__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .outfit-history__header time { font-weight: 500; color: var(--ink-soft); font-size: .9rem; }
+.outfit-history__when { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.outfit-history__activity { font-weight: 600; font-size: .85rem; color: var(--text); }
+.outfit-history__activity--none { font-weight: 400; color: var(--ink-soft); }
 .outfit-history__items { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; padding: 0; margin: .5rem 0 0; overflow-wrap: anywhere; }
 .outfit-history__chip { display: inline-flex; align-items: center; gap: .4rem; }
 .outfit-history__chip .swatch { margin-top: 0; }

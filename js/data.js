@@ -196,7 +196,7 @@ function buildDefaultState() {
     tags,
     activities,
     items: [],         // NEVER pre-populated
-    outfitHistory: [], // { id, wornAt, itemIds }; photos stay in IndexedDB
+    outfitHistory: [], // { id, wornAt, itemIds, activityId? }; activityId is the activity picked when logged (absent on older logs); photos stay in IndexedDB
     books: [],         // separate optional collection; never wardrobe items
     appearance: {
       themeId: 'theme_canvas',
@@ -747,7 +747,8 @@ const Store = {
       if (!Array.isArray(s.outfitHistory)) fail();
       for (const log of s.outfitHistory) {
         if (!object(log) || typeof log.id !== 'string' || !Number.isFinite(log.wornAt) || log.wornAt <= 0
-            || !Array.isArray(log.itemIds) || log.itemIds.some(id => typeof id !== 'string')) fail();
+            || !Array.isArray(log.itemIds) || log.itemIds.some(id => typeof id !== 'string')
+            || (log.activityId != null && typeof log.activityId !== 'string')) fail();
       }
     }
     if (s.books !== undefined) {

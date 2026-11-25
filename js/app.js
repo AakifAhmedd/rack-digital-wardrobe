@@ -2689,6 +2689,7 @@ function buildWearExport(year, monthIndex) {
     '## How to read this',
     '- RACK is one person\'s private wardrobe tracker. This file is a snapshot of his clothing and perfumes plus every dated clothing wear in the month named above. It is meant to be understood without any other context.',
     '- A "wear" is one clothing item worn on one day. An outfit of 4 items is 4 wears. Perfumes are not tracked as dated wears.',
+    '- An outfit\u2019s "Activity" is what it was put together for (for example office or gym), chosen when it was logged. "Not recorded" means it was logged before RACK saved activities.',
     `- Cost is the original price paid, in ${cur}, typed in by hand. Blank means unknown. Cost per wear (CPW) = cost / lifetime wears (all-time, not just this month), so it falls the more an item is worn.`,
     '- Lifetime wears = dated wears + undated wears. Undated wears are older or manually entered counts with no date, so they cannot be placed in any month. Months before date tracking began can look empty even though items were worn.',
     '- Item tables show the wardrobe as it is at export time, not as it was at the end of the month. If this is an older month, lifetime wears, last worn and CPW include wears after it.',
@@ -2722,7 +2723,7 @@ function buildWearExport(year, monthIndex) {
 
   const outfits = s.outfitHistory.filter(o => o.wornAt >= start && o.wornAt < end).sort((a, b) => a.wornAt - b.wornAt);
   out.push('## Outfits logged this month (items worn together)');
-  out.push(outfits.length ? table(['Date', 'Items'], outfits.map(o => [day(o.wornAt), o.itemIds.map(named).join('; ')])) : 'None logged.', '');
+  out.push(outfits.length ? table(['Date', 'Activity', 'Items'], outfits.map(o => [day(o.wornAt), outfitLogActivityName(o) || 'Not recorded', o.itemIds.map(named).join('; ')])) : 'None logged.', '');
 
   out.push(`## Clothing items (${clothing.length}; sorted by wears this month, then lifetime wears)`);
   out.push(table(['Ref', 'Category', 'Subcategory', 'Brand', 'Colour', 'Model/notes', 'Tags', `Cost (${cur})`, 'Status', 'Added', 'Wears this month', 'Lifetime wears', 'Undated wears', 'Last worn', `CPW (${cur})`],
@@ -3691,7 +3692,7 @@ function renderOutfitSummary(matches, refresh) {
     wearButton.disabled = true;
     const now = Date.now();
     const worn = selected.filter(item => WearHistory.record(item, now));
-    const entry = { id: uid('outfit'), wornAt: now, itemIds: selected.map(item => item.id) };
+    const entry = { id: uid('outfit'), wornAt: now, itemIds: selected.map(item => item.id), ...outfitActivityField() };
     Store.state.outfitHistory.push(entry);
     Store.save();
     outfitSelectedIds.clear();
@@ -3732,7 +3733,7 @@ function openOutfitPastModal(selected, onDone) {
         if (!Number.isFinite(ts) || todayDateStr(ts) !== dateStr) { toast('Pick a valid date', 'warn'); return; }
         submit.disabled = true;
         const worn = selected.filter(item => WearHistory.record(item, ts));
-        const entry = { id: uid('outfit'), wornAt: ts, itemIds: selected.map(item => item.id) };
+        const entry = { id: uid('outfit'), wornAt: ts, itemIds: selected.map(item => item.id), ...outfitActivityField() };
         Store.state.outfitHistory.push(entry);
         Store.save();
         Modal.close();
@@ -3756,6 +3757,14 @@ function outfitLogDate(ts) {
   });
 }
 
+/* The activity picked in the builder is saved on each outfit log; older logs don't have one. */
+function outfitActivityField() {
+  return outfitActivityId && G.activity(outfitActivityId) ? { activityId: outfitActivityId } : {};
+}
+function outfitLogActivityName(entry) {
+  if (!entry.activityId) return null;
+  return Store.state.activities.find(a => a.id === entry.activityId)?.name || 'Deleted activity';
+}
 /* Takes an outfit log out together with the wears it recorded; returns a function that puts both back. */
 function takeOutOutfitLog(entry) {
   const index = Store.state.outfitHistory.findIndex(log => log.id === entry.id);
@@ -3807,7 +3816,8 @@ function renderOutfitHistory() {
   const list = el('<ol class="outfit-history__list"></ol>');
   entries.forEach(entry => {
     const row = el(`<li class="outfit-history__entry">
-      <div class="outfit-history__header"><time datetime="${esc(new Date(entry.wornAt).toISOString())}">${esc(outfitLogDate(entry.wornAt))}</time>
+      <div class="outfit-history__header"><span class="outfit-history__when"><time datetime="${esc(new Date(entry.wornAt).toISOString())}">${esc(outfitLogDate(entry.wornAt))}</time>
+        ${outfitLogActivityName(entry) ? `<span class="outfit-history__activity">${esc(outfitLogActivityName(entry))}</span>` : '<span class="outfit-history__activity outfit-history__activity--none">Activity not recorded</span>'}</span>
       <button type="button" class="btn btn--ghost btn--small" aria-label="Remove outfit logged ${esc(outfitLogDate(entry.wornAt))}">Remove</button></div>
       <ul class="outfit-history__items">${entry.itemIds.map(id => {
         const item = G.item(id);
